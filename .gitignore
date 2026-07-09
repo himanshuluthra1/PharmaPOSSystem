@@ -1,0 +1,43 @@
+## .NET / Visual Studio
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+publish/
+artifacts/
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+## NuGet
+*.nupkg
+packages/
+.nuget/
+
+## App / secrets (keep template appsettings.json committed)
+appsettings.*.local.json
+secrets.json
+*.pfx
+
+## Logs & databases
+*.log
+*.mdf
+*.ldf

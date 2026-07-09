@@ -1,0 +1,49 @@
+<Window x:Class="PharmaPOS.WPF.Views.BatchPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Select Batch" Height="420" Width="640"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Select Batch / Variant" FontSize="18" FontWeight="Bold" />
+        <TextBlock Grid.Row="1" Text="{Binding MedicineName}" Opacity="0.7" Margin="0,4,0,12" />
+
+        <DataGrid x:Name="BatchGrid" Grid.Row="2"
+                  ItemsSource="{Binding Batches}"
+                  SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                  AutoGenerateColumns="False" CanUserAddRows="False"
+                  IsReadOnly="True" HeadersVisibility="Column"
+                  SelectionMode="Single"
+                  MouseDoubleClick="BatchGrid_MouseDoubleClick">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="*" />
+                <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="Auto" />
+                <DataGridTextColumn Header="Stock" Binding="{Binding QuantityAvailable, StringFormat=0.##}" Width="Auto" />
+                <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="Auto" />
+                <DataGridTextColumn Header="Sale Price" Binding="{Binding SellingPrice, StringFormat=N2}" Width="Auto" />
+                <DataGridTextColumn Header="GST%" Binding="{Binding GstPercent, StringFormat=N2}" Width="Auto" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <TextBlock Text="↑↓ navigate  •  Enter select  •  Esc cancel" Opacity="0.5"
+                       VerticalAlignment="Center" Margin="0,0,16,0" FontSize="11" />
+            <Button Content="Cancel" Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Margin="0,0,8,0" IsCancel="True" />
+            <Button Content="Select" Style="{StaticResource MaterialDesignRaisedButton}"
+                    IsDefault="True" Click="SelectButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

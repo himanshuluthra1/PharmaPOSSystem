@@ -1,0 +1,128 @@
+<Window x:Class="PharmaPOS.WPF.Views.BillSearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Search Bills" Height="560" Width="760"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Search Bills" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
+
+        <ComboBox Grid.Row="1"
+                  ItemsSource="{Binding CriteriaOptions}"
+                  SelectedItem="{Binding SelectedCriteria}"
+                  DisplayMemberPath="Label"
+                  materialDesign:HintAssist.Hint="Search by"
+                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                  Margin="0,0,0,12" />
+
+        <TextBox x:Name="SearchBox" Grid.Row="2"
+                 materialDesign:HintAssist.Hint="Search text"
+                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                 PreviewKeyDown="SearchBox_PreviewKeyDown"
+                 Margin="0,0,0,8" />
+
+        <TextBlock Grid.Row="3" Text="{Binding Hint}" FontSize="12" Opacity="0.7"
+                   Margin="0,0,0,6"
+                   Visibility="{Binding Hint, Converter={StaticResource StringToVisibility}}" />
+
+        <Grid Grid.Row="4" Margin="0,22,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" MaxHeight="140" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Margin="0,0,0,8"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    BorderThickness="1" CornerRadius="4"
+                    Visibility="{Binding ShowPatientSuggestions, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Patient suggestions"
+                               FontSize="11" Opacity="0.6" Margin="8,6,8,4" />
+                    <ListBox x:Name="SuggestionList"
+                             ItemsSource="{Binding PatientSuggestions}"
+                             SelectedIndex="{Binding SelectedSuggestionIndex, Mode=TwoWay}"
+                             MaxHeight="110"
+                             BorderThickness="0"
+                             Focusable="False"
+                             PreviewKeyDown="SuggestionList_PreviewKeyDown"
+                             PreviewMouseLeftButtonUp="SuggestionList_PreviewMouseLeftButtonUp">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Padding="8,4" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <DockPanel Grid.Row="1">
+                <TextBlock DockPanel.Dock="Top" Text="Matching bills"
+                           FontSize="11" Opacity="0.6" Margin="0,0,0,4" />
+                <ListBox x:Name="ResultsList"
+                         ItemsSource="{Binding Results}"
+                         SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         Focusable="False"
+                         PreviewKeyDown="ResultsList_PreviewKeyDown"
+                         MouseDoubleClick="ResultsList_MouseDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="4,6" MinWidth="640">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="155" />
+                                    <ColumnDefinition Width="175" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="*" MinWidth="120" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding InvoiceNumber}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding BillDateLabel}"
+                                           Margin="12,0,0,0"
+                                           Opacity="0.9"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding BillPatientLabel}"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="3"
+                                           Text="{Binding DetailLabel}"
+                                           Margin="12,0,0,0"
+                                           Opacity="0.85"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <TextBlock Text="↑↓ navigate  •  Enter open bill  •  Esc cancel" Opacity="0.5"
+                       VerticalAlignment="Center" Margin="0,0,16,0" FontSize="11" />
+            <Button Content="Cancel" Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Margin="0,0,8,0" IsCancel="True" />
+            <Button Content="Open Bill" Style="{StaticResource MaterialDesignRaisedButton}"
+                    IsDefault="True" Click="OpenBillButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

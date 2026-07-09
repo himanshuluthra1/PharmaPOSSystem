@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\PharmaPOS.Application\PharmaPOS.Application.csproj" />
+    <ProjectReference Include="..\PharmaPOS.Infrastructure\PharmaPOS.Infrastructure.csproj" />
+    <ProjectReference Include="..\PharmaPOS.Persistence\PharmaPOS.Persistence.csproj" />
+    <ProjectReference Include="..\PharmaPOS.Domain\PharmaPOS.Domain.csproj" />
+    <ProjectReference Include="..\PharmaPOS.Shared\PharmaPOS.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MaterialDesignThemes" Version="5.3.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <AssemblyName>PharmaPOS</AssemblyName>
+    <RootNamespace>PharmaPOS.WPF</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

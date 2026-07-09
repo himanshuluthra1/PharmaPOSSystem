@@ -1,0 +1,22 @@
+using Microsoft.Extensions.DependencyInjection;
+using PharmaPOS.Application.Features.Authentication;
+using PharmaPOS.Application.Features.Dashboard;
+using PharmaPOS.Application.Features.Masters;
+using PharmaPOS.Application.Features.Purchases;
+using PharmaPOS.Application.Features.Sales;
+
+namespace PharmaPOS.Application;
+
+/// <summary>Registers Application-layer services into the DI container.</summary>
+public static class DependencyInjection
+{
+    public static IServiceCollection AddApplication(this IServiceCollection services)
+    {
+        services.AddTransient<IAuthService, AuthService>();
+        services.AddTransient<IDashboardService, DashboardService>();
+        services.AddTransient<ISalesService, SalesService>();
+        services.AddTransient<IPurchaseService, PurchaseService>();
+        services.AddTransient<IMastersService, MastersService>();
+        return services;
+    }
+}
