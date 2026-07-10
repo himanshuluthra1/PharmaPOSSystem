@@ -6,6 +6,10 @@
              xmlns:salesVm="clr-namespace:PharmaPOS.WPF.ViewModels.Sales"
              xmlns:purchaseVm="clr-namespace:PharmaPOS.WPF.ViewModels.Purchases"
              xmlns:mastersVm="clr-namespace:PharmaPOS.WPF.ViewModels.Masters"
+             xmlns:invVm="clr-namespace:PharmaPOS.WPF.ViewModels.Inventory"
+             xmlns:acctVm="clr-namespace:PharmaPOS.WPF.ViewModels.Accounting"
+             xmlns:repVm="clr-namespace:PharmaPOS.WPF.ViewModels.Reports"
+             xmlns:settingsVm="clr-namespace:PharmaPOS.WPF.ViewModels.Settings"
              xmlns:conv="clr-namespace:PharmaPOS.WPF.Converters"
              xmlns:views="clr-namespace:PharmaPOS.WPF.Views">
     <Application.Resources>
@@ -24,6 +28,11 @@
             <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
             <conv:CurrencyConverter x:Key="Currency" />
 
+            <!-- DataGridTextColumn defaults to TwoWay; read-only columns must be OneWay. -->
+            <Style TargetType="{x:Type DataGridTextColumn}">
+                <Setter Property="IsReadOnly" Value="True" />
+            </Style>
+
             <!-- View-model to view mappings used by the shell content host. -->
             <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
                 <views:DashboardView />
@@ -34,20 +43,20 @@
             <DataTemplate DataType="{x:Type purchaseVm:PurchaseViewModel}">
                 <views:PurchaseView />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:InventoryViewModel}">
-                <views:PlaceholderView />
+            <DataTemplate DataType="{x:Type invVm:InventoryViewModel}">
+                <views:InventoryView />
             </DataTemplate>
             <DataTemplate DataType="{x:Type mastersVm:MastersViewModel}">
                 <views:MastersView />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:AccountingViewModel}">
-                <views:PlaceholderView />
+            <DataTemplate DataType="{x:Type acctVm:AccountingViewModel}">
+                <views:AccountingView />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ReportsViewModel}">
-                <views:PlaceholderView />
+            <DataTemplate DataType="{x:Type repVm:ReportsViewModel}">
+                <views:ReportsView />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-                <views:PlaceholderView />
+            <DataTemplate DataType="{x:Type settingsVm:SettingsViewModel}">
+                <views:SettingsView />
             </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>

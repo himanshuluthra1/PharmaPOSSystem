@@ -20,6 +20,8 @@ public class Repository<T> : IRepository<T> where T : BaseEntity
 
     public IQueryable<T> Query() => _set.AsQueryable();
 
+    public IQueryable<T> QueryIncludingDeleted() => _set.IgnoreQueryFilters();
+
     public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default)
         => await _set.FirstOrDefaultAsync(e => e.Id == id, ct);
 

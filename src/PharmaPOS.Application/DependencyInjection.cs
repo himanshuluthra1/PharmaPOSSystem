@@ -2,6 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Features.Authentication;
 using PharmaPOS.Application.Features.Dashboard;
 using PharmaPOS.Application.Features.Masters;
+using PharmaPOS.Application.Features.Accounting;
+using PharmaPOS.Application.Features.Inventory;
+using PharmaPOS.Application.Features.Reports;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.Application.Features.Sales;
 
@@ -17,6 +21,10 @@ public static class DependencyInjection
         services.AddTransient<ISalesService, SalesService>();
         services.AddTransient<IPurchaseService, PurchaseService>();
         services.AddTransient<IMastersService, MastersService>();
+        services.AddTransient<IInventoryService, InventoryService>();
+        services.AddTransient<IAccountingService, AccountingService>();
+        services.AddTransient<IReportsService, ReportsService>();
+        services.AddTransient<ISettingsService, SettingsService>();
         return services;
     }
 }

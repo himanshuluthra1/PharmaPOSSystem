@@ -32,7 +32,8 @@ public class MedicinePickerService : IMedicinePickerService
         if (searchWin.ShowDialog() != true || searchVm.SelectedMedicine is not MedicineLookupDto medicine)
             return null;
 
-        var batches = await salesService.GetBatchesAsync(medicine.Id, branchId);        if (batches.Count == 0) return null;
+        var batches = await salesService.GetBatchesAsync(medicine.Id, branchId);
+        if (batches.Count == 0) return null;
 
         BatchLookupDto batch;
         if (batches.Count == 1)
@@ -62,5 +63,23 @@ public class MedicinePickerService : IMedicinePickerService
             batch.SellingPrice > 0 ? batch.SellingPrice : batch.Mrp,
             batch.QuantityAvailable,
             medicine.DefaultDiscountPercent);
+    }
+
+    public Task<MedicineLookupDto?> PickMedicineLookupAsync()
+    {
+        var branchId = _currentUser.CurrentUser?.BranchId;
+        using var scope = _scopeFactory.CreateScope();
+        var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
+
+        var searchVm = new MedicineSearchViewModel(salesService, branchId);
+        var searchWin = new MedicineSearchWindow(searchVm)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+
+        if (searchWin.ShowDialog() != true || searchVm.SelectedMedicine is not MedicineLookupDto medicine)
+            return Task.FromResult<MedicineLookupDto?>(null);
+
+        return Task.FromResult<MedicineLookupDto?>(medicine);
     }
 }

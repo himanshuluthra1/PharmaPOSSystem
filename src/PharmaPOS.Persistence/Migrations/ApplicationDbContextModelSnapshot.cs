@@ -2123,6 +2123,9 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("CurrencySymbol")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("DefaultLowStockThreshold")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2156,6 +2159,9 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("NearExpiryDays")
+                        .HasColumnType("int");
+
                     b.Property<string>("Pan")
                         .HasColumnType("nvarchar(max)");
 
@@ -2163,6 +2169,14 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Pincode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PurchaseInvoicePrefix")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SalesInvoicePrefix")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("State")

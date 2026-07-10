@@ -6,6 +6,10 @@ using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels.Sales;
 using PharmaPOS.WPF.ViewModels.Purchases;
 using PharmaPOS.WPF.ViewModels.Masters;
+using PharmaPOS.WPF.ViewModels.Inventory;
+using PharmaPOS.WPF.ViewModels.Accounting;
+using PharmaPOS.WPF.ViewModels.Reports;
+using PharmaPOS.WPF.ViewModels.Settings;
 using PharmaPOS.Shared.Constants;
 
 namespace PharmaPOS.WPF.ViewModels;
@@ -94,20 +98,26 @@ public class MainViewModel : ObservableObject
     {
         var all = new[]
         {
-            new NavigationItem("Dashboard", "ViewDashboard", typeof(DashboardViewModel), AppConstants.Permissions.DashboardView),
-            new NavigationItem("Sales (F2)", "PointOfSale", typeof(SalesViewModel), AppConstants.Permissions.SalesManage),
-            new NavigationItem("Purchase", "TruckDelivery", typeof(PurchaseViewModel), AppConstants.Permissions.PurchaseManage),
-            new NavigationItem("Inventory", "PackageVariantClosed", typeof(InventoryViewModel), AppConstants.Permissions.InventoryManage),
-            new NavigationItem("Masters", "DatabaseCog", typeof(MastersViewModel), AppConstants.Permissions.MastersManage),
-            new NavigationItem("Accounting", "Calculator", typeof(AccountingViewModel), AppConstants.Permissions.AccountingManage),
-            new NavigationItem("Reports", "ChartBar", typeof(ReportsViewModel), AppConstants.Permissions.ReportsView),
-            new NavigationItem("Settings", "Cog", typeof(SettingsViewModel), AppConstants.Permissions.SettingsManage),
+            new NavigationItem("Dashboard", "ViewDashboard", typeof(DashboardViewModel), "dashboard"),
+            new NavigationItem("Sales (F2)", "PointOfSale", typeof(SalesViewModel), "sales"),
+            new NavigationItem("Purchase", "TruckDelivery", typeof(PurchaseViewModel), "purchase"),
+            new NavigationItem("Inventory", "PackageVariantClosed", typeof(InventoryViewModel), "inventory"),
+            new NavigationItem("Masters", "DatabaseCog", typeof(MastersViewModel), "masters"),
+            new NavigationItem("Accounting", "Calculator", typeof(AccountingViewModel), "accounting"),
+            new NavigationItem("Reports", "ChartBar", typeof(ReportsViewModel), "reports"),
+            new NavigationItem("Settings", "Cog", typeof(SettingsViewModel), "settings"),
         };
 
         foreach (var item in all)
         {
-            // Show the item if the user has the permission, or if no permission is required.
-            if (item.PermissionKey is null || _currentUser.HasPermission(item.PermissionKey))
+            if (item.TargetViewModel == typeof(SettingsViewModel))
+            {
+                if (_currentUser.CanAccessModule("settings") || _currentUser.CanAccessModule("users"))
+                    MenuItems.Add(item);
+                continue;
+            }
+
+            if (_currentUser.CanAccessModule(item.Module))
                 MenuItems.Add(item);
         }
     }

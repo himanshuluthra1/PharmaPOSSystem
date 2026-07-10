@@ -1,0 +1,260 @@
+<UserControl x:Class="PharmaPOS.WPF.Views.InventoryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:invVm="clr-namespace:PharmaPOS.WPF.ViewModels.Inventory"
+             d:DataContext="{d:DesignInstance Type=invVm:InventoryViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+    <UserControl.Resources>
+        <Style x:Key="KpiCard" TargetType="materialDesign:Card">
+            <Setter Property="UniformCornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp1" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="8">
+        <materialDesign:Card UniformCornerRadius="12" Padding="16"
+                             materialDesign:ElevationAssist.Elevation="Dp2">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <TextBlock Text="Inventory" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" />
+                    <Button DockPanel.Dock="Right" Command="{Binding StockOnHand.RefreshCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Refresh" VerticalAlignment="Center" />
+                            <TextBlock Text="Refresh" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Button>
+                </DockPanel>
+
+                <TabControl SelectedIndex="{Binding SelectedTab}">
+                    <!-- STOCK ON HAND -->
+                    <TabItem Header="Stock On Hand">
+                        <Grid DataContext="{Binding StockOnHand}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,12">
+                                <materialDesign:Card Style="{StaticResource KpiCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="Medicines in stock" Opacity="0.6" FontSize="11" />
+                                        <TextBlock Text="{Binding Summary.TotalMedicines}" FontSize="22" FontWeight="Bold" />
+                                    </StackPanel>
+                                </materialDesign:Card>
+                                <materialDesign:Card Style="{StaticResource KpiCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="Total quantity" Opacity="0.6" FontSize="11" />
+                                        <TextBlock Text="{Binding Summary.TotalQuantity, StringFormat=N0}" FontSize="22" FontWeight="Bold" />
+                                    </StackPanel>
+                                </materialDesign:Card>
+                                <materialDesign:Card Style="{StaticResource KpiCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="Stock value" Opacity="0.6" FontSize="11" />
+                                        <TextBlock Text="{Binding Summary.StockValue, Converter={StaticResource Currency}}"
+                                                   FontSize="22" FontWeight="Bold" />
+                                    </StackPanel>
+                                </materialDesign:Card>
+                                <materialDesign:Card Style="{StaticResource KpiCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="Alerts" Opacity="0.6" FontSize="11" />
+                                        <TextBlock Text="{Binding AlertsSummaryText, Mode=OneWay}"
+                                                   Margin="0,4,0,0" FontWeight="Bold" />
+                                    </StackPanel>
+                                </materialDesign:Card>
+                            </UniformGrid>
+
+                            <DockPanel Grid.Row="1" Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Command="{Binding DataContext.ViewLedgerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8,0,0,0"
+                                        ToolTip="View ledger for selected batch">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="BookOpenPageVariant" VerticalAlignment="Center" />
+                                        <TextBlock Text="View Ledger" Margin="6,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <ComboBox DockPanel.Dock="Right" Width="160" Margin="8,0,0,0"
+                                          ItemsSource="{Binding FilterOptions}"
+                                          SelectedItem="{Binding SelectedFilter}"
+                                          DisplayMemberPath="Label"
+                                          materialDesign:HintAssist.Hint="Filter"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                                <TextBox materialDesign:HintAssist.Hint="Search medicine, generic, barcode, batch..."
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="2"
+                                      ItemsSource="{Binding Items}"
+                                      SelectedItem="{Binding SelectedItem}"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
+                                    <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="120" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="95" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding QuantityAvailable}" Width="70" />
+                                    <DataGridTextColumn Header="Med Total" Binding="{Binding MedicineTotalQty}" Width="80" />
+                                    <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
+                                    <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="80" />
+                                    <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
+                                    <DataGridTextColumn Header="Rack" Binding="{Binding RackNumber}" Width="70" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="12" Margin="0,8,0,0"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </Grid>
+                    </TabItem>
+
+                    <!-- STOCK LEDGER -->
+                    <TabItem Header="Stock Ledger">
+                        <Grid DataContext="{Binding StockLedger}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}" ToolTip="Refresh" Margin="4,0,0,0">
+                                    <materialDesign:PackIcon Kind="Refresh" />
+                                </Button>
+                                <Button DockPanel.Dock="Right" Command="{Binding ClearFilterCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Visibility="{Binding HasFilter, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Clear filter" />
+                                </Button>
+                                <TextBox materialDesign:HintAssist.Hint="Search medicine or reference..."
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <TextBlock Grid.Row="1" Text="{Binding FilterLabel}" FontSize="12" Opacity="0.7" Margin="0,0,0,6"
+                                       Visibility="{Binding FilterLabel, Converter={StaticResource StringToVisibility}}" />
+
+                            <DataGrid Grid.Row="2"
+                                      ItemsSource="{Binding Items}"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Date" Binding="{Binding MovementDateLabel}" Width="150" />
+                                    <DataGridTextColumn Header="Type" Binding="{Binding MovementTypeLabel}" Width="120" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
+                                    <DataGridTextColumn Header="Balance" Binding="{Binding BalanceAfter}" Width="80" />
+                                    <DataGridTextColumn Header="Ref #" Binding="{Binding ReferenceNumber}" Width="130" />
+                                    <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="120" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="12" Margin="0,8,0,0"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </Grid>
+                    </TabItem>
+
+                    <!-- STOCK ADJUSTMENT -->
+                    <TabItem Header="Stock Adjustment"
+                             Visibility="{Binding CanAdjustStock, Converter={StaticResource BoolToVisibility}}">
+                        <Grid DataContext="{Binding StockAdjustment}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="2*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Margin="0,0,8,0" IsReadOnly="True"
+                                         materialDesign:HintAssist.Hint="Adjustment #"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding AdjustmentNumber, Mode=OneWay}" />
+                                <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                                            materialDesign:HintAssist.Hint="Date"
+                                            SelectedDate="{Binding AdjustmentDate}" />
+                                <TextBox Grid.Column="2"
+                                         materialDesign:HintAssist.Hint="Reason (physical verification, damage, etc.)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding Reason, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+
+                            <DockPanel Grid.Row="1" Margin="0,0,0,8">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding NewCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0">
+                                        <TextBlock Text="New" />
+                                    </Button>
+                                    <Button Command="{Binding AddLineCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
+                                            <TextBlock Text="Add Line" Margin="4,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
+                                            <TextBlock Text="Save Adjustment" Margin="4,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Text="Pick medicine batches, enter physical counts, then save to post adjustments."
+                                           Opacity="0.6" VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="2"
+                                      ItemsSource="{Binding Lines}"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="System Qty" Binding="{Binding SystemQuantity}" Width="90" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Physical Qty" IsReadOnly="False"
+                                                        Binding="{Binding PhysicalQuantity, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+                                    <DataGridTextColumn Header="Difference" Binding="{Binding Difference}" Width="90" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Remarks" IsReadOnly="False"
+                                                        Binding="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" Width="*" MinWidth="120" />
+                                    <DataGridTemplateColumn Width="50">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                        Command="{Binding DataContext.RemoveLineCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Remove line">
+                                                    <materialDesign:PackIcon Kind="Delete" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="12" Margin="0,8,0,0"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
+        </materialDesign:Card>
+    </Grid>
+</UserControl>

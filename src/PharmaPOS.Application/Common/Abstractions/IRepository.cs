@@ -13,6 +13,9 @@ public interface IRepository<T> where T : BaseEntity
     /// <summary>Composable, no-tracking-agnostic query root for advanced reads.</summary>
     IQueryable<T> Query();
 
+    /// <summary>Query root that includes soft-deleted rows.</summary>
+    IQueryable<T> QueryIncludingDeleted();
+
     Task<T?> GetByIdAsync(int id, CancellationToken ct = default);
     Task<List<T>> ListAsync(CancellationToken ct = default);
     Task<List<T>> FindAsync(Expression<Func<T, bool>> predicate, CancellationToken ct = default);

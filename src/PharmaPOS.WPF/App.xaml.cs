@@ -12,6 +12,10 @@ using PharmaPOS.WPF.ViewModels;
 using PharmaPOS.WPF.ViewModels.Sales;
 using PharmaPOS.WPF.ViewModels.Purchases;
 using PharmaPOS.WPF.ViewModels.Masters;
+using PharmaPOS.WPF.ViewModels.Inventory;
+using PharmaPOS.WPF.ViewModels.Accounting;
+using PharmaPOS.WPF.ViewModels.Reports;
+using PharmaPOS.WPF.ViewModels.Settings;
 using PharmaPOS.WPF.Views;
 
 namespace PharmaPOS.WPF;
@@ -53,6 +57,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IInvoicePrintService, InvoicePrintService>();
         services.AddSingleton<IMedicinePickerService, MedicinePickerService>();
         services.AddSingleton<IBillSearchService, BillSearchService>();
+        services.AddSingleton<IPurchaseSearchService, PurchaseSearchService>();
 
         // View models (transient so each navigation gets fresh data/context).
         services.AddTransient<LoginViewModel>();

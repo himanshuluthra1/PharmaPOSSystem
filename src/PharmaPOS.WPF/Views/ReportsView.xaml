@@ -1,0 +1,257 @@
+<UserControl x:Class="PharmaPOS.WPF.Views.ReportsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:repVm="clr-namespace:PharmaPOS.WPF.ViewModels.Reports"
+             d:DataContext="{d:DesignInstance Type=repVm:ReportsViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+    <UserControl.Resources>
+        <Style x:Key="KpiCard" TargetType="materialDesign:Card">
+            <Setter Property="UniformCornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp1" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="8">
+        <materialDesign:Card UniformCornerRadius="12" Padding="16"
+                             materialDesign:ElevationAssist.Elevation="Dp2">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="240" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <DockPanel Grid.Column="0" Margin="0,0,16,0">
+                    <TextBlock DockPanel.Dock="Top" Text="Reports" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
+                    <ListBox ItemsSource="{Binding ReportOptions}"
+                             SelectedItem="{Binding SelectedReport}"
+                             BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="4,6">
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Description}" FontSize="11" Opacity="0.6"
+                                               TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+
+                <DockPanel Grid.Column="1">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <TextBlock Text="{Binding SelectedReport.Label}" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding SelectedReportDescription}" Opacity="0.6" Margin="0,2,0,8" />
+
+                        <Grid Margin="0,0,0,8"
+                              Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <DatePicker Grid.Column="0" Margin="0,0,8,0"
+                                        materialDesign:HintAssist.Hint="From"
+                                        SelectedDate="{Binding FromDate}" />
+                            <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                                        materialDesign:HintAssist.Hint="To"
+                                        SelectedDate="{Binding ToDate}" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                <Button Command="{Binding ApplyTodayCommand}" Content="Today"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,4,0" Padding="8,4" />
+                                <Button Command="{Binding ApplyThisMonthCommand}" Content="Month"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,4,0" Padding="8,4" />
+                                <Button Command="{Binding ApplyLastMonthCommand}" Content="Last Mo"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Command="{Binding RunReportCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,8,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" />
+                                    <TextBlock Text="Run Report" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding ExportCsvCommand}" IsEnabled="{Binding CanExport}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Download" VerticalAlignment="Center" />
+                                    <TextBlock Text="Export CSV" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8"
+                                 Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Records" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Total amount" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Tax / cost" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Discount / profit" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </UniformGrid>
+
+                    <UniformGrid DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
+                                 Visibility="{Binding ShowGstSummary, Converter={StaticResource BoolToVisibility}}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Output GST (sales)" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding GstSummary.SalesTotalTax, Converter={StaticResource Currency}}"
+                                           FontSize="18" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Input GST (purchases)" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding GstSummary.PurchaseTotalTax, Converter={StaticResource Currency}}"
+                                           FontSize="18" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Net GST payable" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding GstSummary.NetTaxPayable, Converter={StaticResource Currency}}"
+                                           FontSize="18" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </UniformGrid>
+
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="12" Margin="0,8,0,0"
+                                   Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        <Grid>
+                        <DataGrid ItemsSource="{Binding SalesRows}" Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
+                                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="60" />
+                                <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding PurchaseRows}" Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
+                                <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="60" />
+                                <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding GstRows}" Visibility="{Binding ShowGstGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Type" Binding="{Binding DocumentType}" Width="80" />
+                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="120" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="100" />
+                                <DataGridTextColumn Header="Party" Binding="{Binding PartyName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Taxable" Binding="{Binding TaxableAmount, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="CGST" Binding="{Binding CgstAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="SGST" Binding="{Binding SgstAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="IGST" Binding="{Binding IgstAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding ProfitRows}" Visibility="{Binding ShowProfitGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
+                                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Revenue" Binding="{Binding Revenue, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Cost" Binding="{Binding Cost, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Profit" Binding="{Binding GrossProfit, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Margin %" Binding="{Binding MarginPercent}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding MedicineSalesRows}" Visibility="{Binding ShowMedicineGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
+                                <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Qty sold" Binding="{Binding QuantitySold}" Width="80" />
+                                <DataGridTextColumn Header="Revenue" Binding="{Binding Revenue, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Profit" Binding="{Binding GrossProfit, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Margin %" Binding="{Binding MarginPercent}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding StockValuationRows}" Visibility="{Binding ShowStockGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
+                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
+                                <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
+                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
+                                <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding ExpiryRows}" Visibility="{Binding ShowExpiryGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
+                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
+                                <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
+                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
+                                <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding ExpiryStatus}" Width="100" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding LowStockRows}" Visibility="{Binding ShowLowStockGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
+                                <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="On hand" Binding="{Binding QuantityOnHand}" Width="80" />
+                                <DataGridTextColumn Header="Reorder at" Binding="{Binding ReorderLevel}" Width="90" />
+                                <DataGridTextColumn Header="Order qty" Binding="{Binding ReorderQuantity}" Width="80" />
+                                <DataGridTextColumn Header="Shortfall" Binding="{Binding Shortfall}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        </Grid>
+                    </DockPanel>
+                </DockPanel>
+            </Grid>
+        </materialDesign:Card>
+    </Grid>
+</UserControl>

@@ -17,10 +17,10 @@ public class MastersViewModel : ObservableObject
     {
         Suppliers = new SupplierTabViewModel(masters, currentUser, dialog);
         Customers = new CustomerTabViewModel(masters, currentUser, dialog);
-        Doctors = new DoctorTabViewModel(masters, dialog);
-        Manufacturers = new ManufacturerTabViewModel(masters, dialog);
+        Doctors = new DoctorTabViewModel(masters, currentUser, dialog);
+        Manufacturers = new ManufacturerTabViewModel(masters, currentUser, dialog);
         Employees = new EmployeeTabViewModel(masters, currentUser, dialog);
-        Medicines = new MedicineTabViewModel(masters, dialog);
+        Medicines = new MedicineTabViewModel(masters, currentUser, dialog);
     }
 
     public SupplierTabViewModel Suppliers { get; }

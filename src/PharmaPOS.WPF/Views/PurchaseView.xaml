@@ -6,27 +6,119 @@
              d:DataContext="{d:DesignInstance Type=purchaseVm:PurchaseViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             PreviewKeyDown="PurchaseView_PreviewKeyDown">
     <Grid Margin="8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2.6*" />
             <ColumnDefinition Width="1*" />
         </Grid.ColumnDefinitions>
 
-        <!-- LEFT: supplier, entry + lines -->
         <materialDesign:Card Grid.Column="0" Margin="4" UniformCornerRadius="12" Padding="16"
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="Purchase / Goods Receipt" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
+                <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                    <TextBlock Text="Purchase / Goods Receipt" FontSize="20" FontWeight="Bold"
+                               VerticalAlignment="Center" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Command="{Binding SearchPurchasesCommand}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="12,8" Margin="0,0,8,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Search purchases by supplier">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Magnify" Width="18" Height="18"
+                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Search" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Grid Width="320">
+                        <ToggleButton x:Name="PurchaseSelectorToggle"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Padding="10,8"
+                                      Style="{StaticResource MaterialDesignOutlinedButton}"
+                                      Checked="PurchaseSelectorToggle_Checked"
+                                      Unchecked="PurchaseSelectorToggle_Unchecked">
+                            <Grid>
+                                <TextBlock Text="{Binding SelectedPurchase.DisplayLabel, FallbackValue='Select purchase'}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Left"
+                                           Margin="0,0,20,0" TextTrimming="CharacterEllipsis" />
+                                <materialDesign:PackIcon Kind="ChevronDown"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center" Width="18" Height="18" />
+                            </Grid>
+                        </ToggleButton>
+                        <Popup x:Name="PurchasePopup"
+                               PlacementTarget="{Binding ElementName=PurchaseSelectorToggle}"
+                               Placement="Custom"
+                               CustomPopupPlacementCallback="PurchasePopup_PlacementCallback"
+                               StaysOpen="False"
+                               AllowsTransparency="True"
+                               Closed="PurchasePopup_Closed">
+                            <Border Background="{DynamicResource MaterialDesignPaper}"
+                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    BorderThickness="1"
+                                    CornerRadius="4"
+                                    Padding="0,4"
+                                    Width="720"
+                                    MaxHeight="360"
+                                    materialDesign:ElevationAssist.Elevation="Dp4">
+                                <ListBox x:Name="PurchaseListBox"
+                                         ItemsSource="{Binding PurchaseHistory}"
+                                         SelectedItem="{Binding SelectedPurchase, Mode=TwoWay}"
+                                         Width="712"
+                                         HorizontalContentAlignment="Stretch"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                         ScrollViewer.CanContentScroll="False"
+                                         SelectionChanged="PurchaseListBox_SelectionChanged"
+                                         PreviewKeyDown="PurchaseListBox_PreviewKeyDown"
+                                         PreviewMouseLeftButtonUp="PurchaseListBox_PreviewMouseLeftButtonUp">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                            <Setter Property="Padding" Value="0" />
+                                            <Setter Property="MinHeight" Value="36" />
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="12,8" Width="680">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="165" />
+                                                    <ColumnDefinition Width="195" />
+                                                    <ColumnDefinition Width="*" MinWidth="160" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding InvoiceNumber}"
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding BillDateLabel}"
+                                                           Margin="16,0,0,0"
+                                                           Opacity="0.9"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding BillSupplierLabel}"
+                                                           Margin="16,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    </StackPanel>
+                </DockPanel>
 
-                <!-- Supplier + invoice header -->
                 <Grid Grid.Row="1" Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="2*" />
@@ -40,17 +132,22 @@
                                     Command="{Binding ClearSupplierCommand}" ToolTip="Clear supplier">
                                 <materialDesign:PackIcon Kind="Close" />
                             </Button>
-                            <TextBox materialDesign:HintAssist.Hint="Search supplier (name / phone)"
+                            <TextBox x:Name="SupplierSearchBox"
+                                     materialDesign:HintAssist.Hint="Search supplier (name / phone)"
                                      Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                     Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     PreviewKeyDown="SupplierSearchBox_PreviewKeyDown" />
                         </DockPanel>
-                        <ListBox ItemsSource="{Binding SupplierResults}"
-                                 SelectedItem="{Binding SelectedSupplier}"
+                        <ListBox x:Name="SupplierResultsList"
+                                 ItemsSource="{Binding SupplierResults}"
+                                 SelectedIndex="{Binding SupplierSuggestionIndex, Mode=TwoWay}"
                                  MaxHeight="110" Margin="0,4,0,0"
-                                 Visibility="{Binding SupplierResults.Count, Converter={StaticResource BoolToVisibility}}">
+                                 Visibility="{Binding ShowSupplierResults, Converter={StaticResource BoolToVisibility}}"
+                                 PreviewKeyDown="SupplierResultsList_PreviewKeyDown"
+                                 PreviewMouseLeftButtonUp="SupplierResultsList_PreviewMouseLeftButtonUp">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock>
+                                    <TextBlock Padding="4,2">
                                         <Run Text="{Binding Name}" FontWeight="SemiBold" />
                                         <Run Text="{Binding Phone, StringFormat=' ({0})'}" FontSize="11" />
                                     </TextBlock>
@@ -74,62 +171,43 @@
                                 SelectedDate="{Binding InvoiceDate}" />
                 </Grid>
 
-                <!-- Item entry -->
-                <Border Grid.Row="2" Background="{DynamicResource MaterialDesignChipBackground}"
-                        CornerRadius="8" Padding="12" Margin="0,0,0,12">
-                    <StackPanel>
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Command="{Binding AddLineCommand}"
-                                    Style="{StaticResource MaterialDesignRaisedButton}"
-                                    Margin="8,0,0,0" ToolTip="Add item to purchase (Enter)">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                    <TextBlock Text="Add" Margin="4,0,0,0" />
-                                </StackPanel>
-                            </Button>
-                            <TextBox x:Name="SearchBox"
-                                     materialDesign:HintAssist.Hint="Search medicine to add (min 2 chars) — name, generic or barcode (F3)"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding MedicineSearchText, UpdateSourceTrigger=PropertyChanged}" />
-                        </DockPanel>
+                <DockPanel Grid.Row="2">
+                    <TextBlock DockPanel.Dock="Top" Text="Press Enter on Item to search medicine."
+                               FontSize="12" Opacity="0.6" Margin="0,0,0,8" />
 
-                        <TextBlock Text="{Binding SearchHint}" Margin="0,4,0,0" FontSize="12"
-                                   Opacity="0.7" TextWrapping="Wrap"
-                                   Visibility="{Binding SearchHint, Converter={StaticResource StringToVisibility}}" />
-
-                        <ListBox ItemsSource="{Binding MedicineResults}"
-                                 SelectedItem="{Binding SelectedMedicine}"
-                                 MaxHeight="150" Margin="0,6,0,0"
-                                 Visibility="{Binding HasMedicineResults, Converter={StaticResource BoolToVisibility}}"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <DockPanel>
-                                        <TextBlock Text="{Binding PurchasePrice, StringFormat='Cost: ₹{0:N2}'}"
-                                                   DockPanel.Dock="Right" Opacity="0.6" FontSize="11"
-                                                   VerticalAlignment="Center" />
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding GenericName}" FontSize="11" Opacity="0.6" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </StackPanel>
-                </Border>
-
-                <!-- Lines grid -->
-                <DataGrid Grid.Row="3" ItemsSource="{Binding Lines}"
+                    <DataGrid x:Name="PurchaseGrid"
+                          ItemsSource="{Binding Lines}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                           materialDesign:DataGridAssist.CellPadding="8,6"
+                          SelectionMode="Single"
+                          PreviewKeyDown="PurchaseGrid_PreviewKeyDown"
+                          MouseDoubleClick="PurchaseGrid_MouseDoubleClick"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           IsReadOnly="False">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Item" Binding="{Binding MedicineName}" IsReadOnly="True"
-                                            Width="*" MinWidth="150" />
-                        <DataGridTextColumn Header="Batch"
+                        <DataGridTemplateColumn Header="Item" Width="2*" MinWidth="180">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock VerticalAlignment="Center" Padding="2,0"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="{Binding MedicineName}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                                                        <Setter Property="Text" Value="Press Enter to search..." />
+                                                        <Setter Property="Opacity" Value="0.45" />
+                                                        <Setter Property="FontStyle" Value="Italic" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Batch" IsReadOnly="False"
                                             Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
                         <DataGridTemplateColumn Header="Expiry" Width="Auto">
                             <DataGridTemplateColumn.CellTemplate>
@@ -139,19 +217,19 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Qty" Width="Auto"
+                        <DataGridTextColumn Header="Qty" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="Free" Width="Auto"
+                        <DataGridTextColumn Header="Free" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding FreeQuantity, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="Cost" Width="Auto"
+                        <DataGridTextColumn Header="Cost" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="MRP" Width="Auto"
+                        <DataGridTextColumn Header="MRP" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Sale" Width="Auto"
+                        <DataGridTextColumn Header="Sale" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding SellingPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Disc%" Width="Auto"
+                        <DataGridTextColumn Header="Disc%" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="GST%" Width="Auto"
+                        <DataGridTextColumn Header="GST%" Width="Auto" IsReadOnly="False"
                                             Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="Auto"
                                             Binding="{Binding LineTotal, StringFormat=N2}" />
@@ -171,14 +249,13 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+                </DockPanel>
             </Grid>
         </materialDesign:Card>
 
-        <!-- RIGHT: totals, payment, actions -->
         <materialDesign:Card Grid.Column="1" Margin="4" UniformCornerRadius="12" Padding="16"
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <DockPanel>
-                <!-- Actions (bottom) -->
                 <StackPanel DockPanel.Dock="Bottom">
                     <Grid Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
@@ -196,7 +273,7 @@
                                 Style="{StaticResource MaterialDesignRaisedButton}">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                <TextBlock Text="Receive (F9)" Margin="6,0,0,0" />
+                                <TextBlock Text="Save (F9)" Margin="6,0,0,0" />
                             </StackPanel>
                         </Button>
                     </Grid>
@@ -205,7 +282,6 @@
                                Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
                 </StackPanel>
 
-                <!-- Totals + payment -->
                 <StackPanel VerticalAlignment="Top">
                     <TextBlock Text="Purchase Summary" FontWeight="SemiBold" Margin="0,0,0,8" />
 

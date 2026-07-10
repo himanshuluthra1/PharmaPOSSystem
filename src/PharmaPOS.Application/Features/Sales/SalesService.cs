@@ -5,6 +5,7 @@ using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Sales;
@@ -20,11 +21,13 @@ public class SalesService : ISalesService
 
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly ISettingsService _settings;
 
-    public SalesService(IUnitOfWork uow, IDateTimeProvider clock)
+    public SalesService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
     {
         _uow = uow;
         _clock = clock;
+        _settings = settings;
     }
 
     public async Task<List<MedicineLookupDto>> SearchMedicinesAsync(string term, int? branchId, CancellationToken ct = default)
@@ -651,7 +654,9 @@ public class SalesService : ISalesService
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         var todayCount = await q.CountAsync(ct);
-        return $"INV-{today:yyyyMMdd}-{todayCount + 1:D4}";
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        var prefix = string.IsNullOrWhiteSpace(prefs.SalesInvoicePrefix) ? "INV" : prefs.SalesInvoicePrefix.Trim();
+        return $"{prefix}-{today:yyyyMMdd}-{todayCount + 1:D4}";
     }
 
     private async Task<Result<SaleReceiptDto>> BuildReceiptAsync(Sale sale, CancellationToken ct)

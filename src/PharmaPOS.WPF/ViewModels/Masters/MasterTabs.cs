@@ -15,7 +15,7 @@ public class SupplierTabViewModel : MasterTabViewModelBase
     private SupplierDetailDto _editor = new();
 
     public SupplierTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
-        : base(dialog)
+        : base(dialog, currentUser)
     {
         _masters = masters;
         _branchId = () => currentUser.CurrentUser?.BranchId;
@@ -95,7 +95,7 @@ public class CustomerTabViewModel : MasterTabViewModelBase
     private CustomerDetailDto _editor = new();
 
     public CustomerTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
-        : base(dialog)
+        : base(dialog, currentUser)
     {
         _masters = masters;
         _branchId = () => currentUser.CurrentUser?.BranchId;
@@ -174,7 +174,8 @@ public class DoctorTabViewModel : MasterTabViewModelBase
     private DoctorListDto? _selected;
     private DoctorDetailDto _editor = new();
 
-    public DoctorTabViewModel(IMastersService masters, IDialogService dialog) : base(dialog)
+    public DoctorTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
+        : base(dialog, currentUser)
     {
         _masters = masters;
         _ = SearchAsync(string.Empty);
@@ -251,7 +252,8 @@ public class ManufacturerTabViewModel : MasterTabViewModelBase
     private ManufacturerListDto? _selected;
     private ManufacturerDetailDto _editor = new();
 
-    public ManufacturerTabViewModel(IMastersService masters, IDialogService dialog) : base(dialog)
+    public ManufacturerTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
+        : base(dialog, currentUser)
     {
         _masters = masters;
         _ = SearchAsync(string.Empty);
@@ -330,7 +332,7 @@ public class EmployeeTabViewModel : MasterTabViewModelBase
     private EmployeeDetailDto _editor = new();
 
     public EmployeeTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
-        : base(dialog)
+        : base(dialog, currentUser)
     {
         _masters = masters;
         _branchId = () => currentUser.CurrentUser?.BranchId;
@@ -409,7 +411,8 @@ public class MedicineTabViewModel : MasterTabViewModelBase
     private MedicineDetailDto _editor = new();
     private string? _searchHint;
 
-    public MedicineTabViewModel(IMastersService masters, IDialogService dialog) : base(dialog)
+    public MedicineTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
+        : base(dialog, currentUser)
     {
         _masters = masters;
     }

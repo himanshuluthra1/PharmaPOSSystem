@@ -21,4 +21,10 @@ public class CompanyProfile : BaseEntity
     public string? InvoiceFooter { get; set; }
     public string Currency { get; set; } = "INR";
     public string? CurrencySymbol { get; set; } = "\u20B9";
+
+    // Operational preferences (singleton settings row).
+    public int NearExpiryDays { get; set; } = 90;
+    public int DefaultLowStockThreshold { get; set; } = 10;
+    public string SalesInvoicePrefix { get; set; } = "INV";
+    public string PurchaseInvoicePrefix { get; set; } = "PUR";
 }

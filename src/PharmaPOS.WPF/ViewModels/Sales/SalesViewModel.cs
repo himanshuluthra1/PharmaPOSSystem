@@ -3,6 +3,7 @@ using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -59,12 +60,21 @@ public class SalesViewModel : ObservableObject
         _dialog = dialog;
         _printService = printService;
 
+        CanCreate = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesCreate, AppConstants.Permissions.SalesManage);
+        CanSearchBills = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesView, AppConstants.Permissions.SalesManage);
+        CanApplyDiscount = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesDiscount, AppConstants.Permissions.SalesManage);
+        CanPrint = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesPrint, AppConstants.Permissions.SalesManage);
+
         Cart.CollectionChanged += (_, _) => RecalculateTotals();
 
-        RemoveLineCommand = new RelayCommand(p => RemoveLine(p as CartLineViewModel));
-        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => Cart.Any(l => !l.IsEmpty) && !IsBusy);
-        NewBillCommand = new RelayCommand(_ => NewBill());
-        SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => !IsBusy);
+        RemoveLineCommand = new RelayCommand(p => RemoveLine(p as CartLineViewModel), _ => CanCreate);
+        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && Cart.Any(l => !l.IsEmpty) && !IsBusy);
+        NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
+        SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
 
         EnsureTrailingEmptyRow();
         _ = InitializeBillsAsync();
@@ -85,6 +95,11 @@ public class SalesViewModel : ObservableObject
     public ICommand SaveCommand { get; }
     public ICommand NewBillCommand { get; }
     public ICommand SearchBillsCommand { get; }
+
+    public bool CanCreate { get; }
+    public bool CanSearchBills { get; }
+    public bool CanApplyDiscount { get; }
+    public bool CanPrint { get; }
 
     public bool IsEditing => _editingSaleId.HasValue;
 
@@ -517,7 +532,7 @@ public class SalesViewModel : ObservableObject
                 var receipt = result.Value;
                 StatusMessage = $"Saved invoice {receipt.InvoiceNumber}.";
 
-                if (_dialog.Confirm($"Invoice {receipt.InvoiceNumber} saved.\n\nPrint / preview it now?", "Invoice saved"))
+                if (CanPrint && _dialog.Confirm($"Invoice {receipt.InvoiceNumber} saved.\n\nPrint / preview it now?", "Invoice saved"))
                     _printService.ShowPreview(receipt);
 
                 await RefreshBillHistoryCoreAsync(selectNewBill: true);

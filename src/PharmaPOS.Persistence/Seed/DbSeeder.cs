@@ -6,6 +6,7 @@ using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Persistence.Context;
 using PharmaPOS.Shared.Constants;
 
@@ -34,6 +35,8 @@ public class DbSeeder
         await SeedPermissionsAsync(ct);
         var branch = await SeedBranchAsync(ct);
         await SeedRolesAndAdminAsync(branch, ct);
+        await EnsureRolePermissionsAsync(ct);
+        await EnsureSuperAdminHasAllPermissionsAsync(ct);
         await SeedCompanyProfileAsync(ct);
         await SeedAccountsAsync(ct);
         await SeedSampleMastersAsync(branch, ct);
@@ -44,24 +47,11 @@ public class DbSeeder
 
     private async Task SeedPermissionsAsync(CancellationToken ct)
     {
-        var defined = new (string Key, string Name, string Module)[]
-        {
-            (AppConstants.Permissions.DashboardView, "View Dashboard", "Dashboard"),
-            (AppConstants.Permissions.SalesManage, "Manage Sales", "Sales"),
-            (AppConstants.Permissions.PurchaseManage, "Manage Purchases", "Purchase"),
-            (AppConstants.Permissions.InventoryManage, "Manage Inventory", "Inventory"),
-            (AppConstants.Permissions.MastersManage, "Manage Masters", "Masters"),
-            (AppConstants.Permissions.AccountingManage, "Manage Accounting", "Accounting"),
-            (AppConstants.Permissions.ReportsView, "View Reports", "Reports"),
-            (AppConstants.Permissions.SettingsManage, "Manage Settings", "Settings"),
-            (AppConstants.Permissions.UsersManage, "Manage Users", "Security"),
-        };
-
         var existing = await _context.Permissions.Select(p => p.Key).ToListAsync(ct);
-        foreach (var (key, name, module) in defined)
+        foreach (var def in PermissionCatalog.All)
         {
-            if (!existing.Contains(key))
-                _context.Permissions.Add(new Permission { Key = key, Name = name, Module = module });
+            if (!existing.Contains(def.Key))
+                _context.Permissions.Add(new Permission { Key = def.Key, Name = def.Name, Module = def.Module });
         }
         await _context.SaveChangesAsync(ct);
     }
@@ -127,6 +117,59 @@ public class DbSeeder
             });
             await _context.SaveChangesAsync(ct);
         }
+    }
+
+    /// <summary>
+    /// Ensures every role has a permission set. Existing roles with no grants
+    /// (e.g. Cashier, Pharmacist) receive the built-in defaults.
+    /// </summary>
+    private async Task EnsureRolePermissionsAsync(CancellationToken ct)
+    {
+        var permissions = await _context.Permissions.ToListAsync(ct);
+        var permissionByKey = permissions.ToDictionary(p => p.Key, p => p.Id);
+        var roles = await _context.Roles.ToListAsync(ct);
+
+        foreach (var role in roles)
+        {
+            var hasAny = await _context.RolePermissions.AnyAsync(rp => rp.RoleId == role.Id, ct);
+            if (hasAny) continue;
+
+            foreach (var key in RolePermissionDefaults.ForRole(role.Name))
+            {
+                if (!permissionByKey.TryGetValue(key, out var permissionId)) continue;
+                _context.RolePermissions.Add(new RolePermission
+                {
+                    RoleId = role.Id,
+                    PermissionId = permissionId
+                });
+            }
+        }
+
+        await _context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Grants any newly added catalog permissions to SuperAdmin.</summary>
+    private async Task EnsureSuperAdminHasAllPermissionsAsync(CancellationToken ct)
+    {
+        var superAdmin = await _context.Roles.FirstOrDefaultAsync(r => r.Name == AppConstants.Roles.SuperAdmin, ct);
+        if (superAdmin is null) return;
+
+        var allPermissionIds = await _context.Permissions.Select(p => p.Id).ToListAsync(ct);
+        var grantedIds = await _context.RolePermissions
+            .Where(rp => rp.RoleId == superAdmin.Id)
+            .Select(rp => rp.PermissionId)
+            .ToListAsync(ct);
+
+        foreach (var permissionId in allPermissionIds.Except(grantedIds))
+        {
+            _context.RolePermissions.Add(new RolePermission
+            {
+                RoleId = superAdmin.Id,
+                PermissionId = permissionId
+            });
+        }
+
+        await _context.SaveChangesAsync(ct);
     }
 
     private async Task SeedCompanyProfileAsync(CancellationToken ct)

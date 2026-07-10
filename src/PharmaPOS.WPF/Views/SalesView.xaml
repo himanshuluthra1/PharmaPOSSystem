@@ -23,6 +23,7 @@
                                VerticalAlignment="Center" />
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Command="{Binding SearchBillsCommand}"
+                                IsEnabled="{Binding CanSearchBills}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
                                 Padding="12,8" Margin="0,0,8,0"
                                 VerticalAlignment="Center"
@@ -151,10 +152,13 @@
                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" IsReadOnly="True" Width="100" />
                         <DataGridTextColumn Header="Exp" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="80" />
                         <DataGridTextColumn Header="Qty" Width="70"
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="MRP" Width="80"
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding UnitPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
                         <DataGridTextColumn Header="Disc%" Width="65"
+                                            IsReadOnly="{Binding DataContext.CanApplyDiscount, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="GST%" IsReadOnly="True" Width="65"
                                             Binding="{Binding GstPercent, StringFormat=N2}" />
@@ -200,6 +204,7 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" Margin="0,0,4,0" Command="{Binding NewBillCommand}"
+                                IsEnabled="{Binding CanCreate}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="FileDocumentPlusOutline" VerticalAlignment="Center" />
@@ -207,6 +212,7 @@
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding SaveCommand}"
+                                IsEnabled="{Binding CanCreate}"
                                 Style="{StaticResource MaterialDesignRaisedButton}">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />

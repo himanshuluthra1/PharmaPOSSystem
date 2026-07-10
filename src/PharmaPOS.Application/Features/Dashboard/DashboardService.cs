@@ -1,11 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Enums;
-using PharmaPOS.Shared.Constants;
 
 namespace PharmaPOS.Application.Features.Dashboard;
 
@@ -17,18 +17,21 @@ public class DashboardService : IDashboardService
 {
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly ISettingsService _settings;
 
-    public DashboardService(IUnitOfWork uow, IDateTimeProvider clock)
+    public DashboardService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
     {
         _uow = uow;
         _clock = clock;
+        _settings = settings;
     }
 
     public async Task<DashboardDto> GetDashboardAsync(int? branchId = null, CancellationToken ct = default)
     {
         var today = _clock.Today;
         var tomorrow = today.AddDays(1);
-        var nearExpiryDate = today.AddDays(AppConstants.Config.NearExpiryDays);
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        var nearExpiryDate = today.AddDays(prefs.NearExpiryDays);
 
         var sales = _uow.Repository<Sale>().Query()
             .Where(s => s.Status == SaleStatus.Completed);

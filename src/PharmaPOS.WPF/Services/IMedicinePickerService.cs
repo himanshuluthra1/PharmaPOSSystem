@@ -1,3 +1,5 @@
+using PharmaPOS.Application.Features.Sales;
+
 namespace PharmaPOS.WPF.Services;
 
 /// <summary>Result of picking a medicine and batch for a sales line.</summary>
@@ -20,4 +22,7 @@ public record MedicineBatchSelection(
 public interface IMedicinePickerService
 {
     Task<MedicineBatchSelection?> PickMedicineAsync();
+
+    /// <summary>Shows medicine search only (no batch picker) for purchase entry.</summary>
+    Task<MedicineLookupDto?> PickMedicineLookupAsync();
 }

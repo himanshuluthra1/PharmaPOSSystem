@@ -1,3 +1,4 @@
+using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.WPF.Mvvm;
 
 namespace PharmaPOS.WPF.ViewModels.Purchases;
@@ -9,6 +10,9 @@ namespace PharmaPOS.WPF.ViewModels.Purchases;
 /// </summary>
 public class PurchaseLineViewModel : ObservableObject
 {
+    private int _medicineId;
+    private string _medicineName = string.Empty;
+    private string? _genericName;
     private string _batchNumber = string.Empty;
     private DateTime? _manufacturingDate;
     private DateTime? _expiryDate;
@@ -20,12 +24,33 @@ public class PurchaseLineViewModel : ObservableObject
     private decimal _discountPercent;
     private decimal _gstPercent;
 
-    public required int MedicineId { get; init; }
-    public required string MedicineName { get; init; }
-    public string? GenericName { get; init; }
-
-    /// <summary>Raised whenever a value that affects totals changes.</summary>
     public event Action? Changed;
+
+    public static PurchaseLineViewModel CreateEmpty() => new();
+
+    public bool IsEmpty => MedicineId <= 0;
+
+    public int MedicineId
+    {
+        get => _medicineId;
+        private set
+        {
+            if (SetProperty(ref _medicineId, value))
+                OnPropertyChanged(nameof(IsEmpty));
+        }
+    }
+
+    public string MedicineName
+    {
+        get => _medicineName;
+        private set => SetProperty(ref _medicineName, value);
+    }
+
+    public string? GenericName
+    {
+        get => _genericName;
+        private set => SetProperty(ref _genericName, value);
+    }
 
     public string BatchNumber
     {
@@ -92,6 +117,38 @@ public class PurchaseLineViewModel : ObservableObject
     public decimal Taxable => Gross - DiscountAmount;
     public decimal TaxAmount => Math.Round(Taxable * GstPercent / 100m, 2);
     public decimal LineTotal => Taxable + TaxAmount;
+
+    public void ApplyMedicine(PurchaseMedicineDto medicine)
+    {
+        MedicineId = medicine.Id;
+        MedicineName = medicine.Name;
+        GenericName = medicine.GenericName;
+        PurchasePrice = medicine.PurchasePrice;
+        Mrp = medicine.Mrp;
+        SellingPrice = medicine.SellingPrice > 0 ? medicine.SellingPrice : medicine.Mrp;
+        GstPercent = medicine.GstPercent;
+        ExpiryDate ??= DateTime.Today.AddYears(2);
+        Quantity = Quantity <= 0 ? 1 : Quantity;
+        Recalculate();
+    }
+
+    public void LoadFrom(PurchaseLoadLineDto line)
+    {
+        MedicineId = line.MedicineId;
+        MedicineName = line.MedicineName;
+        GenericName = line.GenericName;
+        BatchNumber = line.BatchNumber;
+        ManufacturingDate = line.ManufacturingDate;
+        ExpiryDate = line.ExpiryDate;
+        Quantity = line.Quantity;
+        FreeQuantity = line.FreeQuantity;
+        PurchasePrice = line.PurchasePrice;
+        Mrp = line.Mrp;
+        SellingPrice = line.SellingPrice;
+        DiscountPercent = line.DiscountPercent;
+        GstPercent = line.GstPercent;
+        Recalculate();
+    }
 
     private void Recalculate()
     {

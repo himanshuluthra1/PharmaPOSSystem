@@ -1,14 +1,22 @@
 using Microsoft.Extensions.DependencyInjection;
+using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
+using PharmaPOS.WPF.ViewModels.Settings;
 
 namespace PharmaPOS.WPF.Services;
 
 public class NavigationService : INavigationService
 {
     private readonly IServiceProvider _provider;
+    private readonly ICurrentUserService _currentUser;
     private ObservableObject? _current;
 
-    public NavigationService(IServiceProvider provider) => _provider = provider;
+    public NavigationService(IServiceProvider provider, ICurrentUserService currentUser)
+    {
+        _provider = provider;
+        _currentUser = currentUser;
+    }
 
     public ObservableObject? CurrentViewModel
     {
@@ -23,8 +31,22 @@ public class NavigationService : INavigationService
     public event Action? CurrentChanged;
 
     public void NavigateTo<TViewModel>() where TViewModel : ObservableObject
-        => CurrentViewModel = _provider.GetRequiredService<TViewModel>();
+        => NavigateTo(typeof(TViewModel));
 
     public void NavigateTo(Type viewModelType)
-        => CurrentViewModel = (ObservableObject)_provider.GetRequiredService(viewModelType);
+    {
+        if (viewModelType == typeof(SettingsViewModel))
+        {
+            if (!_currentUser.CanAccessModule("settings") && !_currentUser.CanAccessModule("users"))
+                return;
+        }
+        else
+        {
+            var module = ModulePermissions.For(viewModelType);
+            if (module is not null && !_currentUser.CanAccessModule(module))
+                return;
+        }
+
+        CurrentViewModel = (ObservableObject)_provider.GetRequiredService(viewModelType);
+    }
 }

@@ -15,4 +15,10 @@ public interface ICurrentUserService
     void Clear();
 
     bool HasPermission(string permissionKey);
+
+    /// <summary>True when the user has any of the listed permissions (or module manage).</summary>
+    bool HasAnyPermission(params string[] permissionKeys);
+
+    /// <summary>True when the user has any permission in the module (e.g. sales.* or sales.manage).</summary>
+    bool CanAccessModule(string module);
 }

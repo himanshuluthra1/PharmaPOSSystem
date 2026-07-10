@@ -1,5 +1,6 @@
-using System.Collections.ObjectModel;
 using System.Windows.Input;
+using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
 
@@ -15,13 +16,18 @@ public abstract class MasterTabViewModelBase : ObservableObject
     private string? _statusMessage;
     private CancellationTokenSource? _searchCts;
 
-    protected MasterTabViewModelBase(IDialogService dialog)
+    protected MasterTabViewModelBase(IDialogService dialog, ICurrentUserService currentUser)
     {
         Dialog = dialog;
-        NewCommand = new RelayCommand(_ => BeginNew());
-        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => !IsBusy);
+        CanEdit = currentUser.HasAnyPermission(
+            AppConstants.Permissions.MastersEdit, AppConstants.Permissions.MastersManage);
+
+        NewCommand = new RelayCommand(_ => BeginNew(), _ => CanEdit);
+        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => !IsBusy && CanEdit);
         RefreshCommand = new AsyncRelayCommand(_ => SearchAsync(SearchText));
     }
+
+    public bool CanEdit { get; }
 
     public string SearchText
     {

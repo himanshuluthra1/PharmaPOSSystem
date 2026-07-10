@@ -4,6 +4,7 @@ using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Purchases;
@@ -17,11 +18,13 @@ public class PurchaseService : IPurchaseService
 {
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly ISettingsService _settings;
 
-    public PurchaseService(IUnitOfWork uow, IDateTimeProvider clock)
+    public PurchaseService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
     {
         _uow = uow;
         _clock = clock;
+        _settings = settings;
     }
 
     public async Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
@@ -71,6 +74,108 @@ public class PurchaseService : IPurchaseService
             .ToListAsync(ct);
     }
 
+    public async Task<PurchaseMedicineDto?> GetMedicineAsync(int medicineId, CancellationToken ct = default)
+    {
+        return await _uow.Repository<Medicine>().Query().AsNoTracking()
+            .Where(m => m.Id == medicineId && m.Status == EntityStatus.Active)
+            .Select(m => new PurchaseMedicineDto(
+                m.Id, m.Name, m.GenericName, m.Barcode,
+                m.GstPercent, m.PurchasePrice, m.Mrp, m.SellingPrice))
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public Task<List<PurchaseListItemDto>> ListPurchasesAsync(int? branchId, CancellationToken ct = default)
+    {
+        var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.Status == PurchaseStatus.Received);
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        return q.OrderByDescending(p => p.InvoiceDate)
+            .ThenByDescending(p => p.Id)
+            .Select(p => new PurchaseListItemDto(
+                p.Id,
+                p.InvoiceNumber,
+                p.InvoiceDate,
+                p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
+                p.SupplierInvoiceNumber))
+            .ToListAsync(ct);
+    }
+
+    public Task<string> PreviewNextPurchaseNumberAsync(int? branchId, CancellationToken ct = default)
+        => GenerateInvoiceNumberAsync(branchId, ct);
+
+    public async Task<Result<PurchaseLoadDto>> GetPurchaseForLoadAsync(int purchaseId, int? branchId, CancellationToken ct = default)
+    {
+        var purchase = await _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Include(p => p.Items)
+            .Include(p => p.Supplier)
+            .FirstOrDefaultAsync(p => p.Id == purchaseId && p.Status == PurchaseStatus.Received, ct);
+
+        if (purchase is null)
+            return Result.Failure<PurchaseLoadDto>("Purchase invoice not found.");
+        if (branchId.HasValue && purchase.BranchId != branchId)
+            return Result.Failure<PurchaseLoadDto>("Purchase belongs to another branch.");
+
+        var medIds = purchase.Items.Select(i => i.MedicineId).Distinct().ToList();
+        var medNames = await _uow.Repository<Medicine>().Query().AsNoTracking()
+            .Where(m => medIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.Name, m.GenericName })
+            .ToDictionaryAsync(m => m.Id, m => m, ct);
+
+        return Result.Success(new PurchaseLoadDto
+        {
+            PurchaseId = purchase.Id,
+            InvoiceNumber = purchase.InvoiceNumber,
+            SupplierInvoiceNumber = purchase.SupplierInvoiceNumber,
+            InvoiceDate = purchase.InvoiceDate,
+            SupplierId = purchase.SupplierId,
+            SupplierName = purchase.Supplier?.Name ?? $"Supplier #{purchase.SupplierId}",
+            SupplierPhone = purchase.Supplier?.Phone,
+            PaidAmount = purchase.PaidAmount,
+            PaymentMethod = PaymentMethod.Cash,
+            Lines = purchase.Items.Select(i =>
+            {
+                medNames.TryGetValue(i.MedicineId, out var med);
+                return new PurchaseLoadLineDto
+                {
+                    MedicineId = i.MedicineId,
+                    MedicineName = med?.Name ?? $"Medicine #{i.MedicineId}",
+                    GenericName = med?.GenericName,
+                    BatchNumber = i.BatchNumber,
+                    ManufacturingDate = i.ManufacturingDate,
+                    ExpiryDate = i.ExpiryDate,
+                    Quantity = i.Quantity,
+                    FreeQuantity = i.FreeQuantity,
+                    PurchasePrice = i.PurchasePrice,
+                    Mrp = i.Mrp,
+                    SellingPrice = i.SellingPrice,
+                    DiscountPercent = i.DiscountPercent,
+                    GstPercent = i.GstPercent
+                };
+            }).ToList()
+        });
+    }
+
+    public Task<List<PurchaseSupplierBillDto>> ListPurchasesBySupplierAsync(int? supplierId, int? branchId, CancellationToken ct = default)
+    {
+        var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.Status == PurchaseStatus.Received);
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+        if (supplierId.HasValue) q = q.Where(p => p.SupplierId == supplierId.Value);
+
+        return q.OrderByDescending(p => p.InvoiceDate)
+            .ThenByDescending(p => p.Id)
+            .Select(p => new PurchaseSupplierBillDto(
+                p.Id,
+                p.InvoiceNumber,
+                p.InvoiceDate,
+                p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
+                p.GrandTotal,
+                p.Items.Count,
+                p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m))
+            .ToListAsync(ct);
+    }
+
     public async Task<Result<PurchaseReceiptDto>> CreatePurchaseAsync(CreatePurchaseRequest request, int? branchId, CancellationToken ct = default)
     {
         if (request.SupplierId <= 0)
@@ -95,6 +200,124 @@ public class PurchaseService : IPurchaseService
         }
     }
 
+    public async Task<Result<PurchaseReceiptDto>> UpdatePurchaseAsync(UpdatePurchaseRequest request, int? branchId, CancellationToken ct = default)
+    {
+        if (request.SupplierId <= 0)
+            return Result.Failure<PurchaseReceiptDto>("Select a supplier for the purchase.");
+        if (request.Lines.Count == 0)
+            return Result.Failure<PurchaseReceiptDto>("Add at least one item to the purchase.");
+
+        try
+        {
+            var purchase = await _uow.ExecuteInTransactionAsync(
+                token => UpdateAndPersistPurchaseAsync(request, branchId, token), ct);
+
+            return await BuildReceiptAsync(purchase, ct);
+        }
+        catch (PurchaseException pex)
+        {
+            return Result.Failure<PurchaseReceiptDto>(pex.Message);
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure<PurchaseReceiptDto>($"Could not update the purchase: {ex.Message}");
+        }
+    }
+
+    private async Task<Purchase> UpdateAndPersistPurchaseAsync(UpdatePurchaseRequest request, int? branchId, CancellationToken ct)
+    {
+        var purchase = await _uow.Repository<Purchase>().Query()
+            .Include(p => p.Items)
+            .FirstOrDefaultAsync(p => p.Id == request.PurchaseId && p.Status == PurchaseStatus.Received, ct)
+            ?? throw new PurchaseException("Purchase invoice not found or cannot be edited.");
+
+        if (branchId.HasValue && purchase.BranchId != branchId)
+            throw new PurchaseException("Purchase belongs to another branch.");
+
+        var oldSupplier = await _uow.Repository<Supplier>().GetByIdAsync(purchase.SupplierId, ct)
+            ?? throw new PurchaseException("The original supplier no longer exists.");
+
+        AdjustSupplierBalance(oldSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: true);
+
+        await RestorePurchaseStockAsync(purchase, branchId, ct);
+
+        foreach (var oldItem in purchase.Items.ToList())
+            _uow.Repository<PurchaseItem>().Remove(oldItem);
+        purchase.Items.Clear();
+
+        var newSupplier = purchase.SupplierId == request.SupplierId
+            ? oldSupplier
+            : await _uow.Repository<Supplier>().GetByIdAsync(request.SupplierId, ct)
+              ?? throw new PurchaseException("The selected supplier no longer exists.");
+
+        purchase.SupplierId = request.SupplierId;
+        purchase.SupplierInvoiceNumber = request.SupplierInvoiceNumber;
+        purchase.InvoiceDate = request.InvoiceDate == default ? purchase.InvoiceDate : request.InvoiceDate;
+        purchase.Remarks = request.Remarks;
+
+        var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
+        ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
+
+        AdjustSupplierBalance(newSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: false);
+
+        _uow.Repository<Purchase>().Update(purchase);
+        if (newSupplier.Id != oldSupplier.Id)
+            _uow.Repository<Supplier>().Update(oldSupplier);
+        _uow.Repository<Supplier>().Update(newSupplier);
+        await _uow.SaveChangesAsync(ct);
+        return purchase;
+    }
+
+    private async Task RestorePurchaseStockAsync(Purchase purchase, int? branchId, CancellationToken ct)
+    {
+        foreach (var item in purchase.Items)
+        {
+            var receivedQty = item.Quantity + item.FreeQuantity;
+            if (receivedQty <= 0) continue;
+
+            if (item.MedicineBatchId is not int batchId)
+                continue;
+
+            var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(batchId, ct);
+            if (batch is null) continue;
+
+            if (batch.QuantityAvailable < receivedQty)
+            {
+                var medicine = await _uow.Repository<Medicine>().GetByIdAsync(item.MedicineId, ct);
+                throw new PurchaseException(
+                    $"Cannot edit: insufficient stock to reverse {medicine?.Name ?? "item"} batch {item.BatchNumber}.");
+            }
+
+            batch.QuantityAvailable -= receivedQty;
+            _uow.Repository<MedicineBatch>().Update(batch);
+
+            await _uow.Repository<StockMovement>().AddAsync(new StockMovement
+            {
+                BranchId = branchId,
+                MedicineId = item.MedicineId,
+                MedicineBatchId = batchId,
+                MovementType = StockMovementType.PurchaseReturn,
+                Quantity = receivedQty,
+                BalanceAfter = batch.QuantityAvailable,
+                UnitCost = item.PurchasePrice,
+                ReferenceType = nameof(Purchase),
+                ReferenceId = purchase.Id,
+                ReferenceNumber = purchase.InvoiceNumber,
+                MovementDateUtc = _clock.UtcNow,
+                Remarks = $"Reversal for edit {purchase.InvoiceNumber}"
+            }, ct);
+        }
+    }
+
+    private static void AdjustSupplierBalance(Supplier supplier, decimal grandTotal, decimal paidAmount, bool reverse)
+    {
+        var paid = Math.Min(paidAmount, grandTotal);
+        var due = grandTotal - paid;
+        if (due == 0) return;
+
+        supplier.OutstandingBalance += reverse ? -due : due;
+    }
+
     private async Task<Purchase> BuildAndPersistPurchaseAsync(CreatePurchaseRequest request, int? branchId, CancellationToken ct)
     {
         var supplier = await _uow.Repository<Supplier>().GetByIdAsync(request.SupplierId, ct)
@@ -110,9 +333,27 @@ public class PurchaseService : IPurchaseService
             Status = PurchaseStatus.Received,
         };
 
+        var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
+        ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
+
+        purchase.InvoiceNumber = await GenerateInvoiceNumberAsync(branchId, ct);
+        await _uow.Repository<Purchase>().AddAsync(purchase, ct);
+
+        AdjustSupplierBalance(supplier, purchase.GrandTotal, purchase.PaidAmount, reverse: false);
+        _uow.Repository<Supplier>().Update(supplier);
+
+        await _uow.SaveChangesAsync(ct);
+        return purchase;
+    }
+
+    private sealed record PurchaseTotals(decimal SubTotal, decimal Discount, decimal Taxable, decimal Tax);
+
+    private async Task<PurchaseTotals> ApplyPurchaseLinesAsync(
+        Purchase purchase, IReadOnlyList<PurchaseLineRequest> lines, int? branchId, CancellationToken ct)
+    {
         decimal subTotal = 0m, totalDiscount = 0m, totalTaxable = 0m, totalTax = 0m;
 
-        foreach (var line in request.Lines)
+        foreach (var line in lines)
         {
             if (line.Quantity <= 0)
                 throw new PurchaseException("Quantity must be greater than zero.");
@@ -122,14 +363,13 @@ public class PurchaseService : IPurchaseService
             var medicine = await _uow.Repository<Medicine>().GetByIdAsync(line.MedicineId, ct)
                 ?? throw new PurchaseException("A selected medicine no longer exists.");
 
-            var gross = line.PurchasePrice * line.Quantity;                 // tax-exclusive
+            var gross = line.PurchasePrice * line.Quantity;
             var discountAmount = Math.Round(gross * line.DiscountPercent / 100m, 2);
             var taxable = gross - discountAmount;
             var taxAmount = Math.Round(taxable * line.GstPercent / 100m, 2);
             var lineTotal = taxable + taxAmount;
             var receivedQty = line.Quantity + line.FreeQuantity;
 
-            // Merge into an existing batch (same medicine + branch + number) or create one.
             var batch = await _uow.Repository<MedicineBatch>().Query()
                 .FirstOrDefaultAsync(b => b.MedicineId == line.MedicineId &&
                                           b.BranchId == branchId &&
@@ -151,7 +391,7 @@ public class PurchaseService : IPurchaseService
                     GstPercent = line.GstPercent
                 };
                 await _uow.Repository<MedicineBatch>().AddAsync(batch, ct);
-                await _uow.SaveChangesAsync(ct); // materialize Id for the movement/link
+                await _uow.SaveChangesAsync(ct);
             }
             else
             {
@@ -195,11 +435,12 @@ public class PurchaseService : IPurchaseService
                 BalanceAfter = batch.QuantityAvailable,
                 UnitCost = line.PurchasePrice,
                 ReferenceType = nameof(Purchase),
+                ReferenceId = purchase.Id > 0 ? purchase.Id : null,
+                ReferenceNumber = purchase.InvoiceNumber,
                 MovementDateUtc = _clock.UtcNow,
                 Remarks = medicine.Name
             }, ct);
 
-            // Keep the medicine master's latest costing in sync.
             medicine.PurchasePrice = line.PurchasePrice;
             if (line.Mrp > 0) medicine.Mrp = line.Mrp;
             if (line.SellingPrice > 0) medicine.SellingPrice = line.SellingPrice;
@@ -211,36 +452,25 @@ public class PurchaseService : IPurchaseService
             totalTax += taxAmount;
         }
 
-        var netTotal = totalTaxable + totalTax;
+        return new PurchaseTotals(subTotal, totalDiscount, totalTaxable, totalTax);
+    }
+
+    private static void ApplyPurchaseTotals(Purchase purchase, PurchaseTotals totals, decimal paidAmount)
+    {
+        var netTotal = totals.Taxable + totals.Tax;
         var rounded = Math.Round(netTotal, 0, MidpointRounding.AwayFromZero);
 
-        purchase.SubTotal = subTotal;
-        purchase.DiscountAmount = totalDiscount;
-        purchase.TaxableAmount = totalTaxable;
-        purchase.CgstAmount = Math.Round(totalTax / 2m, 2);
-        purchase.SgstAmount = totalTax - purchase.CgstAmount;
+        purchase.SubTotal = totals.SubTotal;
+        purchase.DiscountAmount = totals.Discount;
+        purchase.TaxableAmount = totals.Taxable;
+        purchase.CgstAmount = Math.Round(totals.Tax / 2m, 2);
+        purchase.SgstAmount = totals.Tax - purchase.CgstAmount;
         purchase.IgstAmount = 0m;
         purchase.RoundOff = rounded - netTotal;
         purchase.GrandTotal = rounded;
-
-        var paid = Math.Min(request.PaidAmount, rounded);
-        purchase.PaidAmount = request.PaidAmount;
-        purchase.PaymentStatus = request.PaidAmount >= rounded ? PaymentStatus.Paid
-            : request.PaidAmount > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
-
-        purchase.InvoiceNumber = await GenerateInvoiceNumberAsync(branchId, ct);
-        await _uow.Repository<Purchase>().AddAsync(purchase, ct);
-
-        // Increase payable by the unpaid portion.
-        var due = rounded - paid;
-        if (due != 0)
-        {
-            supplier.OutstandingBalance += due;
-            _uow.Repository<Supplier>().Update(supplier);
-        }
-
-        await _uow.SaveChangesAsync(ct);
-        return purchase;
+        purchase.PaidAmount = paidAmount;
+        purchase.PaymentStatus = paidAmount >= rounded ? PaymentStatus.Paid
+            : paidAmount > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
     }
 
     /// <summary>Signals a recoverable, user-facing purchase validation failure.</summary>
@@ -258,7 +488,9 @@ public class PurchaseService : IPurchaseService
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
         var todayCount = await q.CountAsync(ct);
-        return $"PUR-{today:yyyyMMdd}-{todayCount + 1:D4}";
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        var prefix = string.IsNullOrWhiteSpace(prefs.PurchaseInvoicePrefix) ? "PUR" : prefs.PurchaseInvoicePrefix.Trim();
+        return $"{prefix}-{today:yyyyMMdd}-{todayCount + 1:D4}";
     }
 
     private async Task<Result<PurchaseReceiptDto>> BuildReceiptAsync(Purchase purchase, CancellationToken ct)

@@ -1,0 +1,335 @@
+<UserControl x:Class="PharmaPOS.WPF.Views.AccountingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:acctVm="clr-namespace:PharmaPOS.WPF.ViewModels.Accounting"
+             d:DataContext="{d:DesignInstance Type=acctVm:AccountingViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+    <UserControl.Resources>
+        <Style x:Key="KpiCard" TargetType="materialDesign:Card">
+            <Setter Property="UniformCornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp1" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="8">
+        <materialDesign:Card UniformCornerRadius="12" Padding="16"
+                             materialDesign:ElevationAssist.Elevation="Dp2">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <TextBlock Text="Accounting" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" />
+                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Refresh" VerticalAlignment="Center" />
+                            <TextBlock Text="Refresh" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Button>
+                </DockPanel>
+
+                <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,12">
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel>
+                            <TextBlock Text="Receivables" Opacity="0.6" FontSize="11" />
+                            <TextBlock Text="{Binding Summary.TotalReceivables, Converter={StaticResource Currency}}"
+                                       FontSize="20" FontWeight="Bold" />
+                            <TextBlock Text="{Binding Summary.ReceivableParties, StringFormat='{}{0} parties'}"
+                                       FontSize="11" Opacity="0.5" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel>
+                            <TextBlock Text="Payables" Opacity="0.6" FontSize="11" />
+                            <TextBlock Text="{Binding Summary.TotalPayables, Converter={StaticResource Currency}}"
+                                       FontSize="20" FontWeight="Bold" />
+                            <TextBlock Text="{Binding Summary.PayableParties, StringFormat='{}{0} parties'}"
+                                       FontSize="11" Opacity="0.5" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel>
+                            <TextBlock Text="Cash in hand" Opacity="0.6" FontSize="11" />
+                            <TextBlock Text="{Binding Summary.CashInHand, Converter={StaticResource Currency}}"
+                                       FontSize="20" FontWeight="Bold" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel>
+                            <TextBlock Text="Bank balance" Opacity="0.6" FontSize="11" />
+                            <TextBlock Text="{Binding Summary.BankBalance, Converter={StaticResource Currency}}"
+                                       FontSize="20" FontWeight="Bold" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                </UniformGrid>
+
+                <TabControl SelectedIndex="{Binding SelectedTab}">
+                    <!-- PARTY LEDGERS -->
+                    <TabItem Header="Party Ledgers">
+                        <Grid DataContext="{Binding PartyLedger}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="1.1*" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding DataContext.RecordPaymentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
+                                            ToolTip="Record supplier payment">
+                                        <TextBlock Text="Record Payment" />
+                                    </Button>
+                                    <Button Command="{Binding DataContext.RecordReceiptCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
+                                            ToolTip="Record customer receipt">
+                                        <TextBlock Text="Record Receipt" />
+                                    </Button>
+                                    <Button Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}">
+                                        <materialDesign:PackIcon Kind="Refresh" />
+                                    </Button>
+                                </StackPanel>
+                                <ComboBox Width="220" Margin="0,0,8,0"
+                                          ItemsSource="{Binding KindOptions}"
+                                          SelectedItem="{Binding SelectedKind}"
+                                          DisplayMemberPath="Label"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                                <TextBox materialDesign:HintAssist.Hint="Search party..."
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Parties}" SelectedItem="{Binding SelectedParty}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="160" />
+                                    <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="120" />
+                                    <DataGridTextColumn Header="Outstanding" Binding="{Binding OutstandingBalance, StringFormat=N2}" Width="120" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="2" Text="Open bills" FontSize="11" Opacity="0.6" Margin="0,10,0,4" />
+
+                            <DataGrid Grid.Row="3" ItemsSource="{Binding Bills}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="140" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="160" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding GrandTotal, StringFormat=N2}" Width="100" />
+                                    <DataGridTextColumn Header="Paid" Binding="{Binding PaidAmount, StringFormat=N2}" Width="100" />
+                                    <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="100" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <!-- VOUCHERS -->
+                    <TabItem Header="Payment / Receipt / Expense"
+                             Visibility="{Binding CanCreateVouchers, Converter={StaticResource BoolToVisibility}}">
+                        <Grid DataContext="{Binding Vouchers}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <ComboBox Grid.Row="0" Margin="0,0,0,12"
+                                      ItemsSource="{Binding KindOptions}"
+                                      SelectedItem="{Binding SelectedKind}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Voucher type"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+
+                            <Grid Grid.Row="1" Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Margin="0,0,8,0" IsReadOnly="True"
+                                         materialDesign:HintAssist.Hint="Voucher #"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding VoucherNumber, Mode=OneWay}" />
+                                <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                                            materialDesign:HintAssist.Hint="Date"
+                                            SelectedDate="{Binding EntryDate}" />
+                                <TextBox Grid.Column="2"
+                                         materialDesign:HintAssist.Hint="Narration"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding Narration, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+
+                            <StackPanel Grid.Row="2" Margin="0,0,0,12"
+                                        Visibility="{Binding ShowPartyFields, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                <TextBox materialDesign:HintAssist.Hint="{Binding PartyHint}"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding PartySearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding PartyOutstandingLabel}" FontSize="12" Opacity="0.7" Margin="0,0,0,4"
+                                           Visibility="{Binding PartyOutstandingLabel, Mode=OneWay, Converter={StaticResource StringToVisibility}}" />
+                                <Border BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="1"
+                                        CornerRadius="4" MaxHeight="120"
+                                        Visibility="{Binding ShowPartySuggestions, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                    <ListBox ItemsSource="{Binding PartySuggestions}"
+                                             PreviewMouseLeftButtonUp="PartySuggestionList_MouseLeftButtonUp">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" Margin="8,4">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding OutstandingBalance, StringFormat=' — Due {0:N2}'}"
+                                                               Margin="8,0,0,0" Opacity="0.7" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+                            </StackPanel>
+
+                            <Grid Grid.Row="3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" Margin="0,0,8,0"
+                                          ItemsSource="{Binding ExpenseAccounts}"
+                                          SelectedItem="{Binding SelectedExpenseAccount}"
+                                          DisplayMemberPath="DisplayLabel"
+                                          materialDesign:HintAssist.Hint="Expense account"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                          Visibility="{Binding ShowExpenseFields, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                                <ComboBox Grid.Column="1" Margin="0,0,8,0"
+                                          ItemsSource="{Binding CashAccounts}"
+                                          SelectedItem="{Binding SelectedCashAccount}"
+                                          DisplayMemberPath="DisplayLabel"
+                                          materialDesign:HintAssist.Hint="Cash / Bank account"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                                <DockPanel Grid.Column="2">
+                                    <Button DockPanel.Dock="Right" Command="{Binding SaveCommand}"
+                                            Style="{StaticResource MaterialDesignRaisedButton}" Margin="8,0,0,0">
+                                        <TextBlock Text="Save Voucher" />
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}">
+                                        <TextBlock Text="Clear" />
+                                    </Button>
+                                    <TextBox materialDesign:HintAssist.Hint="Amount"
+                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                             Text="{Binding Amount, UpdateSourceTrigger=PropertyChanged}" />
+                                </DockPanel>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+
+                    <!-- CASH BOOK -->
+                    <TabItem Header="Cash Book">
+                        <Grid DataContext="{Binding CashBook}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}">
+                                    <materialDesign:PackIcon Kind="Refresh" />
+                                </Button>
+                                <TextBlock Text="Cash In Hand account movements" Opacity="0.6" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding Items}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Date" Binding="{Binding EntryDateLabel}" Width="100" />
+                                    <DataGridTextColumn Header="Voucher #" Binding="{Binding VoucherNumber}" Width="140" />
+                                    <DataGridTextColumn Header="Narration" Binding="{Binding Narration}" Width="2*" MinWidth="160" />
+                                    <DataGridTextColumn Header="Debit" Binding="{Binding Debit, StringFormat=N2}" Width="90" />
+                                    <DataGridTextColumn Header="Credit" Binding="{Binding Credit, StringFormat=N2}" Width="90" />
+                                    <DataGridTextColumn Header="Balance" Binding="{Binding RunningBalance, StringFormat=N2}" Width="100" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="12" Margin="0,8,0,0" />
+                        </Grid>
+                    </TabItem>
+
+                    <!-- JOURNAL -->
+                    <TabItem Header="Journal &amp; Trial Balance"
+                             Visibility="{Binding CanViewJournal, Converter={StaticResource BoolToVisibility}}">
+                        <Grid DataContext="{Binding Journal}" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="180" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8">
+                                <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}">
+                                    <materialDesign:PackIcon Kind="Refresh" />
+                                </Button>
+                                <TextBox materialDesign:HintAssist.Hint="Search voucher # or narration..."
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="1" Grid.Column="0" Margin="0,0,8,0"
+                                      ItemsSource="{Binding Entries}" SelectedItem="{Binding SelectedEntry}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Voucher #" Binding="{Binding VoucherNumber}" Width="130" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding EntryDateLabel}" Width="100" />
+                                    <DataGridTextColumn Header="Type" Binding="{Binding ReferenceType}" Width="90" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding TotalAmount, StringFormat=N2}" Width="90" />
+                                    <DataGridTextColumn Header="Narration" Binding="{Binding Narration}" Width="*" MinWidth="120" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <DataGrid Grid.Row="1" Grid.Column="1"
+                                      ItemsSource="{Binding Lines}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Account" Binding="{Binding AccountName}" Width="*" MinWidth="120" />
+                                    <DataGridTextColumn Header="Dr/Cr" Binding="{Binding EntryTypeLabel}" Width="50" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding Amount, StringFormat=N2}" Width="90" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <DockPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="0,12,0,4">
+                                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+                                           Text="{Binding TrialTotalsText, Mode=OneWay}" FontWeight="Bold" />
+                                <TextBlock Text="Trial Balance" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="3" Grid.ColumnSpan="2"
+                                      ItemsSource="{Binding TrialBalance}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                      HeadersVisibility="Column">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="70" />
+                                    <DataGridTextColumn Header="Account" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="90" />
+                                    <DataGridTextColumn Header="Debit" Binding="{Binding Debit, StringFormat=N2}" Width="100" />
+                                    <DataGridTextColumn Header="Credit" Binding="{Binding Credit, StringFormat=N2}" Width="100" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
+        </materialDesign:Card>
+    </Grid>
+</UserControl>
