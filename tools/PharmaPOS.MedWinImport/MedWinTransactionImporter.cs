@@ -399,6 +399,146 @@ internal static class MedWinTransactionImporter
         return null;
     }
 
+    /// <summary>
+    /// Repairs expiry dates on imported sale lines and batches from MedWin month/year fields.
+    /// MedWin stores two-digit years (e.g. 29 = 2029) which the first import pass skipped.
+    /// </summary>
+    public static async Task BackfillExpiryAsync(MedWinImportContext ctx, SqlConnection target)
+    {
+        Console.WriteLine("\n[backfill-expiry] Backfilling expiry dates from MedWin stock and sale lines...");
+        if (ctx.MedicineMap.Count == 0)
+            await MedWinMasterImporter.LoadExistingMedicineMapAsync(ctx, target);
+
+        using var med = ctx.OpenMedWin();
+        med.Open();
+
+        var batchRows = 0;
+        var saleRows = 0;
+        var skipped = 0;
+
+        using (var stockCmd = new OleDbCommand(
+                   "SELECT stkcode, stkbatch, stkexyr, stkexmn FROM stockmas WHERE stkexyr > 0 AND stkexmn BETWEEN 1 AND 12", med))
+        using (var reader = stockCmd.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var medWinId = ImportHelpers.Int(reader["stkcode"]);
+                if (!ctx.MedicineMap.TryGetValue(medWinId, out var medicineId)) continue;
+
+                var batchNo = ImportHelpers.Trunc(Convert.ToString(reader["stkbatch"]), 60) ?? "BATCH";
+                var expiry = ImportHelpers.ParseExpiryMonthYear(
+                    ImportHelpers.Int(reader["stkexyr"]), ImportHelpers.Int(reader["stkexmn"]));
+                if (expiry is null) continue;
+
+                batchRows += await UpdateBatchExpiryAsync(target, medicineId, batchNo, expiry.Value, ctx.NowUtc);
+            }
+        }
+
+        using (var saleCmd = new OleDbCommand(
+                   "SELECT dpurblno, dpmedcod, dpbatch, dpexmon, dpexyear FROM dsalemaster WHERE dpexyear > 0 AND dpexmon BETWEEN 1 AND 12", med))
+        using (var reader = saleCmd.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var billNo = ImportHelpers.Int(reader["dpurblno"]);
+                var medWinId = ImportHelpers.Int(reader["dpmedcod"]);
+                if (medWinId <= 0)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                var batchNo = ImportHelpers.Trunc(Convert.ToString(reader["dpbatch"]), 60) ?? "BATCH";
+                var expiry = ImportHelpers.ParseExpiryMonthYear(
+                    ImportHelpers.Int(reader["dpexyear"]), ImportHelpers.Int(reader["dpexmon"]));
+                if (expiry is null)
+                {
+                    skipped++;
+                    continue;
+                }
+
+                saleRows += await UpdateSaleItemExpiryAsync(target, billNo, medWinId, batchNo, expiry.Value);
+                batchRows += await UpdateBatchExpiryByMedWinIdAsync(target, medWinId, batchNo, expiry.Value, ctx.NowUtc);
+            }
+        }
+
+        Console.WriteLine($"  Sale lines updated: {saleRows:N0}");
+        Console.WriteLine($"  Batch rows updated: {batchRows:N0}");
+        Console.WriteLine($"  Skipped (unmapped): {skipped:N0}");
+    }
+
+    private static async Task<int> UpdateSaleItemExpiryAsync(
+        SqlConnection target, int billNo, int medWinId, string batchNo, DateTime expiry)
+    {
+        await using var cmd = new SqlCommand("""
+            UPDATE si
+            SET si.ExpiryDate = @Expiry
+            FROM SaleItems si
+            INNER JOIN Sales s ON s.Id = si.SaleId
+            INNER JOIN Medicines m ON m.Id = si.MedicineId
+            WHERE s.InvoiceNumber = @Invoice
+              AND si.BatchNumber = @Batch
+              AND si.IsDeleted = 0
+              AND (
+                    m.Notes LIKE @MedWinNote
+                    OR EXISTS (
+                        SELECT 1 FROM MedicineMedWinMappings mm
+                        WHERE mm.OneMgMedicineId = m.Id AND mm.MedWinMedicineId = @MedWinId)
+                  )
+              AND (si.ExpiryDate IS NULL OR si.ExpiryDate <> @Expiry)
+            """, target);
+        cmd.Parameters.AddWithValue("@Invoice", $"MW-S-{billNo}");
+        cmd.Parameters.AddWithValue("@Batch", batchNo);
+        cmd.Parameters.AddWithValue("@MedWinNote", $"%MedWinId:{medWinId}%");
+        cmd.Parameters.AddWithValue("@MedWinId", medWinId);
+        cmd.Parameters.AddWithValue("@Expiry", expiry);
+        return await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int> UpdateBatchExpiryByMedWinIdAsync(
+        SqlConnection target, int medWinId, string batchNo, DateTime expiry, DateTime nowUtc)
+    {
+        await using var cmd = new SqlCommand("""
+            UPDATE mb
+            SET mb.ExpiryDate = @Expiry, mb.ModifiedAtUtc = @Now
+            FROM MedicineBatches mb
+            INNER JOIN Medicines m ON m.Id = mb.MedicineId
+            WHERE mb.BatchNumber = @Batch
+              AND mb.IsDeleted = 0
+              AND (
+                    m.Notes LIKE @MedWinNote
+                    OR EXISTS (
+                        SELECT 1 FROM MedicineMedWinMappings mm
+                        WHERE mm.OneMgMedicineId = m.Id AND mm.MedWinMedicineId = @MedWinId)
+                  )
+              AND (mb.ExpiryDate IS NULL OR mb.ExpiryDate <> @Expiry)
+            """, target);
+        cmd.Parameters.AddWithValue("@Batch", batchNo);
+        cmd.Parameters.AddWithValue("@MedWinNote", $"%MedWinId:{medWinId}%");
+        cmd.Parameters.AddWithValue("@MedWinId", medWinId);
+        cmd.Parameters.AddWithValue("@Expiry", expiry);
+        cmd.Parameters.AddWithValue("@Now", nowUtc);
+        return await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int> UpdateBatchExpiryAsync(
+        SqlConnection target, int medicineId, string batchNo, DateTime expiry, DateTime nowUtc)
+    {
+        await using var cmd = new SqlCommand("""
+            UPDATE MedicineBatches
+            SET ExpiryDate = @Expiry, ModifiedAtUtc = @Now
+            WHERE MedicineId = @MedicineId
+              AND BatchNumber = @Batch
+              AND IsDeleted = 0
+              AND (ExpiryDate IS NULL OR ExpiryDate <> @Expiry)
+            """, target);
+        cmd.Parameters.AddWithValue("@MedicineId", medicineId);
+        cmd.Parameters.AddWithValue("@Batch", batchNo);
+        cmd.Parameters.AddWithValue("@Expiry", expiry);
+        cmd.Parameters.AddWithValue("@Now", nowUtc);
+        return await cmd.ExecuteNonQueryAsync();
+    }
+
     private static async Task RecalculateImportedSaleHeaderAsync(SqlConnection target, int saleId)
     {
         await using var cmd = new SqlCommand("""
