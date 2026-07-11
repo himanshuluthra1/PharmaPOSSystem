@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
@@ -63,12 +64,13 @@ public class InventoryService : IInventoryService
 
         if (!string.IsNullOrWhiteSpace(term))
         {
+            var normalized = SearchQueryExtensions.NormalizeTerm(term);
             batches = batches.Where(b =>
-                b.BatchNumber.Contains(term) ||
+                b.BatchNumber.Replace(" ", "").Contains(normalized) ||
                 (b.Medicine != null && (
-                    b.Medicine.Name.Contains(term) ||
-                    (b.Medicine.GenericName != null && b.Medicine.GenericName.Contains(term)) ||
-                    (b.Medicine.Barcode != null && b.Medicine.Barcode.Contains(term)))));
+                    b.Medicine.NameSearchKey.Contains(normalized) ||
+                    (b.Medicine.GenericNameSearchKey != "" && b.Medicine.GenericNameSearchKey.Contains(normalized)) ||
+                    (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(normalized)))));
         }
 
         if (filter == StockFilterKind.LowStock)
@@ -170,10 +172,11 @@ public class InventoryService : IInventoryService
 
         if (!string.IsNullOrWhiteSpace(term))
         {
+            var normalized = SearchQueryExtensions.NormalizeTerm(term);
             q = q.Where(m =>
-                (m.Medicine != null && m.Medicine.Name.Contains(term)) ||
-                (m.ReferenceNumber != null && m.ReferenceNumber.Contains(term)) ||
-                (m.Remarks != null && m.Remarks.Contains(term)));
+                (m.Medicine != null && m.Medicine.NameSearchKey.Contains(normalized)) ||
+                (m.ReferenceNumber != null && m.ReferenceNumber.Replace(" ", "").Contains(normalized)) ||
+                (m.Remarks != null && m.Remarks.Replace(" ", "").Contains(normalized)));
         }
 
         return await q

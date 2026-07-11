@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Accounting;
 using PharmaPOS.Domain.Entities.Masters;
@@ -63,7 +64,10 @@ public class AccountingService : IAccountingService
                 .Where(s => s.Status == EntityStatus.Active);
             if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
             if (!string.IsNullOrWhiteSpace(term))
-                q = q.Where(s => s.Name.Contains(term) || (s.Phone != null && s.Phone.Contains(term)));
+            {
+                var normalized = SearchQueryExtensions.NormalizeTerm(term);
+                q = q.WhereSupplierMatches(normalized);
+            }
 
             return await q
                 .OrderByDescending(s => s.OutstandingBalance)

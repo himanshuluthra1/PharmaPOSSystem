@@ -6,7 +6,7 @@ namespace PharmaPOS.WPF.ViewModels.Sales;
 
 /// <summary>
 /// A single editable line in the billing cart. Prices are MRP / GST-inclusive;
-/// the line derives taxable, GST and total amounts to mirror the server-side math.
+/// discount is derived from MRP vs sale price (unit price).
 /// </summary>
 public class CartLineViewModel : ObservableObject
 {
@@ -66,7 +66,12 @@ public class CartLineViewModel : ObservableObject
     public decimal Mrp
     {
         get => _mrp;
-        private set => SetProperty(ref _mrp, value);
+        set
+        {
+            if (!SetProperty(ref _mrp, value)) return;
+            UpdateDiscountFromPrices();
+            Recalculate();
+        }
     }
 
     public decimal GstPercent
@@ -92,26 +97,37 @@ public class CartLineViewModel : ObservableObject
         get => _unitPrice;
         set
         {
-            if (SetProperty(ref _unitPrice, value))
-            {
-                _mrp = value;
-                OnPropertyChanged(nameof(Mrp));
-                Recalculate();
-            }
+            if (!SetProperty(ref _unitPrice, value)) return;
+            UpdateDiscountFromPrices();
+            Recalculate();
         }
     }
 
     public decimal DiscountPercent
     {
         get => _discountPercent;
-        set { if (SetProperty(ref _discountPercent, value)) Recalculate(); }
+        set
+        {
+            var clamped = Math.Clamp(value, 0m, 100m);
+            if (!SetProperty(ref _discountPercent, clamped)) return;
+            if (Mrp > 0)
+            {
+                var newUnit = SaleLinePricing.UnitPriceFromDiscount(Mrp, clamped);
+                if (_unitPrice != newUnit)
+                {
+                    _unitPrice = newUnit;
+                    OnPropertyChanged(nameof(UnitPrice));
+                }
+            }
+            Recalculate();
+        }
     }
 
     public bool IsEmpty => MedicineId == 0;
 
-    public decimal Gross => Math.Round(UnitPrice * Quantity, 2);
-    public decimal DiscountAmount => Math.Round(Gross * DiscountPercent / 100m, 2);
-    public decimal NetInclusive => Gross - DiscountAmount;
+    public decimal Gross => SaleLinePricing.GrossAtMrp(Mrp, Quantity);
+    public decimal DiscountAmount => SaleLinePricing.DiscountAmount(Mrp, UnitPrice, Quantity);
+    public decimal NetInclusive => SaleLinePricing.LineTotal(UnitPrice, Quantity);
     public decimal Taxable => Math.Round(NetInclusive / (1 + GstPercent / 100m), 2);
     public decimal TaxAmount => NetInclusive - Taxable;
     public decimal LineTotal => NetInclusive;
@@ -134,11 +150,18 @@ public class CartLineViewModel : ObservableObject
         MedicineName = selection.MedicineName;
         BatchNumber = selection.BatchNumber;
         ExpiryDate = selection.ExpiryDate;
-        Mrp = selection.Mrp;
         GstPercent = selection.GstPercent;
         AvailableStock = selection.AvailableStock;
-        UnitPrice = selection.UnitPrice;
-        DiscountPercent = selection.DefaultDiscountPercent;
+        _mrp = selection.Mrp;
+        _unitPrice = selection.UnitPrice;
+        OnPropertyChanged(nameof(Mrp));
+        OnPropertyChanged(nameof(UnitPrice));
+
+        if (selection.DefaultDiscountPercent > 0 && selection.Mrp > 0)
+            DiscountPercent = selection.DefaultDiscountPercent;
+        else
+            UpdateDiscountFromPrices();
+
         if (Quantity <= 0) Quantity = 1;
         OriginalQuantity = 0;
         Recalculate();
@@ -151,11 +174,13 @@ public class CartLineViewModel : ObservableObject
         MedicineName = line.MedicineName;
         BatchNumber = line.BatchNumber;
         ExpiryDate = line.ExpiryDate;
-        Mrp = line.Mrp;
         GstPercent = line.GstPercent;
         AvailableStock = line.AvailableStock;
-        UnitPrice = line.UnitPrice;
-        DiscountPercent = line.DiscountPercent;
+        _mrp = line.Mrp > 0 ? line.Mrp : line.UnitPrice;
+        _unitPrice = line.UnitPrice;
+        OnPropertyChanged(nameof(Mrp));
+        OnPropertyChanged(nameof(UnitPrice));
+        UpdateDiscountFromPrices();
         Quantity = line.Quantity;
         OriginalQuantity = line.Quantity;
         Recalculate();
@@ -176,6 +201,14 @@ public class CartLineViewModel : ObservableObject
         OriginalQuantity = 0;
         Quantity = 0;
         Recalculate();
+    }
+
+    private void UpdateDiscountFromPrices()
+    {
+        var pct = SaleLinePricing.DiscountPercent(Mrp, UnitPrice);
+        if (_discountPercent == pct) return;
+        _discountPercent = pct;
+        OnPropertyChanged(nameof(DiscountPercent));
     }
 
     private void Recalculate()

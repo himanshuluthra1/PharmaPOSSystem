@@ -1,0 +1,29 @@
+<Window x:Class="PharmaPOS.WPF.Views.StartupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="PharmaPOS"
+        Height="260" Width="420"
+        WindowStartupLocation="CenterScreen"
+        Icon="/Assets/app.ico"
+        ResizeMode="NoResize"
+        ShowInTaskbar="True"
+        Topmost="True"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}">
+    <Border Margin="28" CornerRadius="8">
+        <StackPanel VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <materialDesign:PackIcon Kind="Pill" Width="40" Height="40"
+                                         Foreground="{DynamicResource PrimaryHueMidBrush}" />
+                <TextBlock Text="PharmaPOS" FontSize="28" FontWeight="Bold"
+                           Margin="12,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="StatusText" Margin="0,20,0,0" HorizontalAlignment="Center"
+                       Text="Starting..." TextWrapping="Wrap" TextAlignment="Center" Opacity="0.85" />
+            <ProgressBar Margin="0,18,0,0" Height="4" IsIndeterminate="True"
+                         Style="{StaticResource MaterialDesignLinearProgressBar}" />
+        </StackPanel>
+    </Border>
+</Window>

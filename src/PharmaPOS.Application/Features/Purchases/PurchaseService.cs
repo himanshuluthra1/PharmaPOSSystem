@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
@@ -29,16 +30,14 @@ public class PurchaseService : IPurchaseService
 
     public async Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
     {
-        term = (term ?? string.Empty).Trim();
-        if (term.Length < 2) return new();
+        var normalized = SearchQueryExtensions.NormalizeTerm(term);
+        if (normalized.Length < 2) return new();
 
         var baseQuery = _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Status == EntityStatus.Active);
 
         var results = await baseQuery
-            .Where(m => EF.Functions.Like(m.Name, term + "%") ||
-                        (m.Barcode != null && m.Barcode == term) ||
-                        (m.GenericName != null && EF.Functions.Like(m.GenericName, term + "%")))
+            .WhereMedicineMatches(normalized, prefixOnly: true)
             .OrderBy(m => m.Name)
             .Take(25)
             .Select(m => new PurchaseMedicineDto(
@@ -49,8 +48,7 @@ public class PurchaseService : IPurchaseService
         if (results.Count == 0)
         {
             results = await baseQuery
-                .Where(m => EF.Functions.Like(m.Name, "%" + term + "%") ||
-                            (m.GenericName != null && EF.Functions.Like(m.GenericName, "%" + term + "%")))
+                .WhereMedicineMatches(normalized, prefixOnly: false)
                 .OrderBy(m => m.Name)
                 .Take(25)
                 .Select(m => new PurchaseMedicineDto(
@@ -64,10 +62,10 @@ public class PurchaseService : IPurchaseService
 
     public async Task<List<SupplierLookupDto>> SearchSuppliersAsync(string term, CancellationToken ct = default)
     {
-        term = (term ?? string.Empty).Trim();
+        var normalized = SearchQueryExtensions.NormalizeTerm(term);
         var q = _uow.Repository<Supplier>().Query().Where(s => s.Status == EntityStatus.Active);
-        if (term.Length >= 1)
-            q = q.Where(s => s.Name.Contains(term) || (s.Phone != null && s.Phone.Contains(term)));
+        if (normalized.Length >= 1)
+            q = q.WhereSupplierMatches(normalized);
 
         return await q.OrderBy(s => s.Name).Take(25)
             .Select(s => new SupplierLookupDto(s.Id, s.Name, s.Phone, s.GstNumber, s.OutstandingBalance))

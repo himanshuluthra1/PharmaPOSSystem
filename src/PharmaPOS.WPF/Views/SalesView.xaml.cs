@@ -266,6 +266,17 @@ public partial class SalesView : UserControl
         return false;
     }
 
+    private static Key GetKey(KeyEventArgs e)
+        => e.Key == Key.System ? e.SystemKey : e.Key;
+
+    private async Task TryShowMedicineDetailForSelectedRowAsync()
+    {
+        if (ViewModel is null) return;
+        if (CartGrid.SelectedItem is not CartLineViewModel line) return;
+        CommitGridEdit();
+        await ViewModel.ShowMedicineDetailAsync(line);
+    }
+
     private void BillSelectorToggle_Checked(object sender, RoutedEventArgs e)
     {
         BillPopup.IsOpen = true;
@@ -357,29 +368,31 @@ public partial class SalesView : UserControl
 
     private async void CartGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Handled) return;
         if (ViewModel is null || CartGrid.SelectedItem is not CartLineViewModel line) return;
 
+        var key = GetKey(e);
         var columnHeader = CartGrid.CurrentColumn?.Header?.ToString();
 
-        if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right)
+        if (key is Key.Up or Key.Down or Key.Left or Key.Right)
         {
             e.Handled = true;
             CommitGridEdit();
 
-            var rowDelta = e.Key == Key.Down ? 1 : e.Key == Key.Up ? -1 : 0;
-            var colDelta = e.Key == Key.Right ? 1 : e.Key == Key.Left ? -1 : 0;
+            var rowDelta = key == Key.Down ? 1 : key == Key.Up ? -1 : 0;
+            var colDelta = key == Key.Right ? 1 : key == Key.Left ? -1 : 0;
             NavigateCell(rowDelta, colDelta);
             return;
         }
 
-        if (e.Key == Key.Space && columnHeader == "Item")
+        if (key == Key.Space && columnHeader == "Item")
         {
             e.Handled = true;
             await ViewModel.BeginItemSelectionAsync(line);
             return;
         }
 
-        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Shift)
+        if (key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Shift)
         {
             e.Handled = true;
             CommitGridEdit();
@@ -387,7 +400,7 @@ public partial class SalesView : UserControl
             return;
         }
 
-        if (e.Key != Key.Enter) return;
+        if (key != Key.Enter) return;
 
         e.Handled = true;
         CommitGridEdit();
@@ -409,7 +422,17 @@ public partial class SalesView : UserControl
 
     private async void SalesView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.F3 || ViewModel is null) return;
+        if (ViewModel is null) return;
+        var key = GetKey(e);
+
+        if (key == Key.F4)
+        {
+            e.Handled = true;
+            await TryShowMedicineDetailForSelectedRowAsync();
+            return;
+        }
+
+        if (key != Key.F3) return;
 
         if (IsCustomerSectionFocused())
         {
@@ -427,20 +450,33 @@ public partial class SalesView : UserControl
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        base.OnKeyDown(e);
         var vm = ViewModel;
-        if (vm is null) return;
+        var key = GetKey(e);
 
-        switch (e.Key)
+        if (vm is not null)
         {
-            case Key.F9:
-                if (vm.SaveCommand.CanExecute(null)) vm.SaveCommand.Execute(null);
-                e.Handled = true;
-                break;
-            case Key.Escape:
-                vm.NewBillCommand.Execute(null);
-                e.Handled = true;
-                break;
+            switch (key)
+            {
+                case Key.F4:
+                    e.Handled = true;
+                    CommitGridEdit();
+                    if (CartGrid.SelectedItem is CartLineViewModel line)
+                        _ = vm.ShowMedicineDetailAsync(line);
+                    return;
+                case Key.F9:
+                    if (vm.IsEditing && vm.PrintCommand.CanExecute(null))
+                        vm.PrintCommand.Execute(null);
+                    else if (vm.SaveCommand.CanExecute(null))
+                        vm.SaveCommand.Execute(null);
+                    e.Handled = true;
+                    return;
+                case Key.Escape:
+                    vm.NewBillCommand.Execute(null);
+                    e.Handled = true;
+                    return;
+            }
         }
+
+        base.OnKeyDown(e);
     }
 }

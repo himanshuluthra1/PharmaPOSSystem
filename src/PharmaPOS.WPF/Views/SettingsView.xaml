@@ -238,6 +238,127 @@
                         </StackPanel>
                     </TabItem>
 
+                    <!-- MEDICINE MAPPING -->
+                    <TabItem Header="Medicine Mapping" Visibility="{Binding CanManageMedicineMapping, Converter={StaticResource BoolToVisibility}}">
+                        <Grid DataContext="{Binding MedicineMapping}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Command="{Binding AutoMapCommand}" Style="{StaticResource MaterialDesignOutlinedButton}"
+                                            IsEnabled="{Binding CanAutoMap}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="AutoFix" VerticalAlignment="Center" />
+                                            <TextBlock Text="Auto Map" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding ShowQueueCommand}" Style="{StaticResource MaterialDesignOutlinedButton}"
+                                            Content="{Binding PendingQueueLabel}" Margin="0,0,8,0" />
+                                    <Button Command="{Binding ShowAppliedMappingsCommand}" Style="{StaticResource MaterialDesignOutlinedButton}"
+                                            Content="Applied Mappings" Margin="0,0,8,0" />
+                                    <Button Command="{Binding ApplyMappingsCommand}" Style="{StaticResource MaterialDesignRaisedButton}"
+                                            IsEnabled="{Binding CanApplyMappings}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
+                                            <TextBlock Text="Apply Mappings" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <CheckBox Content="Include already matched medicines"
+                                              IsChecked="{Binding IncludeMatched}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="Select a MedWin medicine, pick the matching OneMG row, then click Map to queue — or use Auto Map to queue confident matches in bulk. Review with View Queue, then Apply Mappings to save."
+                                           Opacity="0.6" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <Grid Grid.Row="1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0" Margin="0,0,8,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                        <Button DockPanel.Dock="Right" Command="{Binding RefreshMedWinCommand}"
+                                                Style="{StaticResource MaterialDesignIconButton}" ToolTip="Refresh" Margin="4,0,0,0">
+                                            <materialDesign:PackIcon Kind="Refresh" />
+                                        </Button>
+                                        <TextBlock Text="MedWin Medicines (unmatched)" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBox Grid.Row="1" materialDesign:HintAssist.Hint="Filter MedWin medicines..."
+                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                             Text="{Binding MedWinSearchText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                                    <DataGrid Grid.Row="2" x:Name="MedWinMappingGrid" ItemsSource="{Binding MedWinItems}"
+                                              SelectedItem="{Binding SelectedMedWin, Mode=TwoWay}"
+                                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                              SelectionUnit="FullRow" HeadersVisibility="Column"
+                                              ScrollViewer.CanContentScroll="False"
+                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                              VerticalAlignment="Stretch">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="140" />
+                                            <DataGridTextColumn Header="Salt" Binding="{Binding GenericName}" Width="120" />
+                                            <DataGridTextColumn Header="MedWin ID" Binding="{Binding ExternalId}" Width="80" />
+                                            <DataGridCheckBoxColumn Header="Matched" Binding="{Binding IsMatched}" Width="70" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Grid>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0">
+                                    <Button Command="{Binding MapCommand}" Style="{StaticResource MaterialDesignRaisedButton}"
+                                            IsEnabled="{Binding CanMap}" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="LinkVariant" VerticalAlignment="Center" />
+                                            <TextBlock Text="Map" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock Text="Queues mapping (instant)" TextAlignment="Center" Opacity="0.5"
+                                               FontSize="11" TextWrapping="Wrap" MaxWidth="90" />
+                                </StackPanel>
+
+                                <Grid Grid.Column="2" Margin="8,0,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="OneMG Catalogue" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <TextBox Grid.Row="1" materialDesign:HintAssist.Hint="Narrow OneMG matches..."
+                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                             Text="{Binding OneMgSearchText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
+                                    <DataGrid Grid.Row="2" ItemsSource="{Binding OneMgItems}" SelectedItem="{Binding SelectedOneMg}"
+                                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                              HeadersVisibility="Column"
+                                              ScrollViewer.CanContentScroll="False"
+                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                              VerticalAlignment="Stretch">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="140" />
+                                            <DataGridTextColumn Header="Salt" Binding="{Binding GenericName}" Width="120" />
+                                            <DataGridTextColumn Header="Pack" Binding="{Binding PackInfo}" Width="120" />
+                                            <DataGridTextColumn Header="OneMG ID" Binding="{Binding ExternalId}" Width="80" />
+                                            <DataGridCheckBoxColumn Header="Matched" Binding="{Binding IsMatched}" Width="70" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Grid>
+                            </Grid>
+
+                            <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,12,0,0"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </Grid>
+                    </TabItem>
+
                     <!-- ROLES & PERMISSIONS -->
                     <TabItem Header="Roles &amp; Permissions" Visibility="{Binding CanManageRoles, Converter={StaticResource BoolToVisibility}}">
                         <Grid DataContext="{Binding RolePermissions}" Margin="0,8,0,0">

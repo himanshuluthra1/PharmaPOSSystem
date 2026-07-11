@@ -21,7 +21,10 @@ public static class DependencyInjection
         // short-lived context - the natural grain for a single-user desktop app.
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(connectionString, sql =>
-                sql.EnableRetryOnFailure()), ServiceLifetime.Transient);
+            {
+                sql.EnableRetryOnFailure();
+                sql.CommandTimeout(180);
+            }), ServiceLifetime.Transient);
 
         services.AddTransient<IUnitOfWork, UnitOfWork>();
         services.AddTransient(typeof(IRepository<>), typeof(Repository<>));

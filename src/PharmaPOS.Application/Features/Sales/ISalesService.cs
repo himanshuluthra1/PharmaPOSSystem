@@ -25,6 +25,15 @@ public interface ISalesService
     /// <summary>All completed bills for the branch, newest first.</summary>
     Task<List<SaleListItemDto>> ListBillsAsync(int? branchId, CancellationToken ct = default);
 
+    /// <summary>Completed bills for a single calendar day, newest first.</summary>
+    Task<List<SaleListItemDto>> ListBillsForDateAsync(DateOnly date, int? branchId, CancellationToken ct = default);
+
+    /// <summary>Today if it has bills; otherwise the most recent date with bills.</summary>
+    Task<DateOnly> GetInitialBillHistoryDateAsync(int? branchId, CancellationToken ct = default);
+
+    /// <summary>The latest calendar day before <paramref name="beforeDate"/> that has bills.</summary>
+    Task<DateOnly?> GetPreviousBillDateAsync(DateOnly beforeDate, int? branchId, CancellationToken ct = default);
+
     /// <summary>Distinct patient names for autosuggest while searching bills.</summary>
     Task<List<string>> SuggestPatientNamesAsync(string term, int? branchId, CancellationToken ct = default);
 
@@ -33,4 +42,10 @@ public interface ISalesService
 
     /// <summary>Load a saved bill into the billing screen for editing.</summary>
     Task<Result<SaleEditDto>> GetSaleForEditAsync(int saleId, int? branchId, CancellationToken ct = default);
+
+    /// <summary>Build a printable receipt from a saved invoice without modifying it.</summary>
+    Task<Result<SaleReceiptDto>> GetSaleReceiptAsync(int saleId, int? branchId, CancellationToken ct = default);
+
+    /// <summary>Medicine details for the billing grid F4 popup.</summary>
+    Task<SaleMedicineDetailDto?> GetMedicineLineDetailAsync(int medicineId, int? batchId, int? branchId, CancellationToken ct = default);
 }

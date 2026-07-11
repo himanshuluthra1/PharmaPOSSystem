@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
@@ -32,17 +33,14 @@ public class SalesService : ISalesService
 
     public async Task<List<MedicineLookupDto>> SearchMedicinesAsync(string term, int? branchId, CancellationToken ct = default)
     {
-        term = (term ?? string.Empty).Trim();
-        if (term.Length < 2) return new();
+        var normalized = SearchQueryExtensions.NormalizeTerm(term);
+        if (normalized.Length < 2) return new();
 
-        // With 280k+ rows, prefix search on the indexed Name column is fast;
-        // fall back to contains only when prefix returns nothing.
         var baseQuery = _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Status == EntityStatus.Active);
 
         var medicines = await baseQuery
-            .Where(m => EF.Functions.Like(m.Name, term + "%") ||
-                        (m.Barcode != null && m.Barcode == term))
+            .WhereMedicineMatches(normalized, prefixOnly: true)
             .OrderBy(m => m.Name)
             .Take(25)
             .Select(m => new MedicineSearchRow(
@@ -53,7 +51,7 @@ public class SalesService : ISalesService
         if (medicines.Count == 0)
         {
             medicines = await baseQuery
-                .Where(m => EF.Functions.Like(m.Name, "%" + term + "%"))
+                .WhereMedicineMatches(normalized, prefixOnly: false)
                 .OrderBy(m => m.Name)
                 .Take(25)
                 .Select(m => new MedicineSearchRow(
@@ -221,10 +219,20 @@ public class SalesService : ISalesService
         }
     }
 
-    public Task<List<SaleListItemDto>> ListBillsAsync(int? branchId, CancellationToken ct = default)
+    public async Task<List<SaleListItemDto>> ListBillsAsync(int? branchId, CancellationToken ct = default)
     {
+        var date = await GetInitialBillHistoryDateAsync(branchId, ct);
+        return await ListBillsForDateAsync(date, branchId, ct);
+    }
+
+    public Task<List<SaleListItemDto>> ListBillsForDateAsync(
+        DateOnly date, int? branchId, CancellationToken ct = default)
+    {
+        var (start, end) = GetDateRange(date);
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed);
+            .Where(s => s.Status == SaleStatus.Completed
+                        && s.InvoiceDate >= start
+                        && s.InvoiceDate < end);
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         return q.OrderByDescending(s => s.InvoiceDate)
@@ -235,6 +243,55 @@ public class SalesService : ISalesService
                 s.InvoiceDate,
                 s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null)))
             .ToListAsync(ct);
+    }
+
+    public async Task<DateOnly> GetInitialBillHistoryDateAsync(int? branchId, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(_clock.Today);
+        if (await HasBillsOnDateAsync(today, branchId, ct))
+            return today;
+
+        var latest = await GetLatestBillDateAsync(branchId, ct);
+        return latest ?? today;
+    }
+
+    public async Task<DateOnly?> GetPreviousBillDateAsync(
+        DateOnly beforeDate, int? branchId, CancellationToken ct = default)
+    {
+        var before = GetDateRange(beforeDate).Start;
+        var q = _uow.Repository<Sale>().Query().AsNoTracking()
+            .Where(s => s.Status == SaleStatus.Completed && s.InvoiceDate < before);
+        if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
+
+        var previous = await q.MaxAsync(s => (DateTime?)s.InvoiceDate, ct);
+        return previous is null ? null : DateOnly.FromDateTime(previous.Value);
+    }
+
+    private async Task<bool> HasBillsOnDateAsync(DateOnly date, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = GetDateRange(date);
+        var q = _uow.Repository<Sale>().Query().AsNoTracking()
+            .Where(s => s.Status == SaleStatus.Completed
+                        && s.InvoiceDate >= start
+                        && s.InvoiceDate < end);
+        if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
+        return await q.AnyAsync(ct);
+    }
+
+    private async Task<DateOnly?> GetLatestBillDateAsync(int? branchId, CancellationToken ct)
+    {
+        var q = _uow.Repository<Sale>().Query().AsNoTracking()
+            .Where(s => s.Status == SaleStatus.Completed);
+        if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
+
+        var latest = await q.MaxAsync(s => (DateTime?)s.InvoiceDate, ct);
+        return latest is null ? null : DateOnly.FromDateTime(latest.Value);
+    }
+
+    private (DateTime Start, DateTime End) GetDateRange(DateOnly date)
+    {
+        var start = new DateTime(date.Year, date.Month, date.Day, 0, 0, 0, _clock.Today.Kind);
+        return (start, start.AddDays(1));
     }
 
     public async Task<List<string>> SuggestPatientNamesAsync(string term, int? branchId, CancellationToken ct = default)
@@ -334,7 +391,8 @@ public class SalesService : ISalesService
 
     private Task<List<BillSearchResultDto>> SearchBillsByMedicineAsync(string term, int? branchId, CancellationToken ct)
     {
-        if (term.Length < 2) return Task.FromResult(new List<BillSearchResultDto>());
+        var normalized = SearchQueryExtensions.NormalizeTerm(term);
+        if (normalized.Length < 2) return Task.FromResult(new List<BillSearchResultDto>());
 
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
             .Where(s => s.Status == SaleStatus.Completed);
@@ -342,8 +400,8 @@ public class SalesService : ISalesService
 
         q = q.Where(s => s.Items.Any(i =>
             i.Medicine != null &&
-            (EF.Functions.Like(i.Medicine.Name, term + "%") ||
-             EF.Functions.Like(i.Medicine.Name, "%" + term + "%"))));
+            (EF.Functions.Like(i.Medicine.NameSearchKey, normalized + "%") ||
+             EF.Functions.Like(i.Medicine.NameSearchKey, "%" + normalized + "%"))));
 
         return q.OrderByDescending(s => s.InvoiceDate)
             .ThenByDescending(s => s.Id)
@@ -356,8 +414,8 @@ public class SalesService : ISalesService
                 s.BillingCustomerPhone ?? (s.Customer != null ? s.Customer.Phone : null),
                 s.Items
                     .Where(i => i.Medicine != null &&
-                                (EF.Functions.Like(i.Medicine.Name, term + "%") ||
-                                 EF.Functions.Like(i.Medicine.Name, "%" + term + "%")))
+                                (EF.Functions.Like(i.Medicine.NameSearchKey, normalized + "%") ||
+                                 EF.Functions.Like(i.Medicine.NameSearchKey, "%" + normalized + "%")))
                     .Select(i => i.Medicine!.Name)
                     .FirstOrDefault()))
             .ToListAsync(ct);
@@ -375,10 +433,9 @@ public class SalesService : ISalesService
         if (branchId.HasValue && sale.BranchId != branchId)
             return Result.Failure<SaleEditDto>("Invoice belongs to another branch.");
 
-        var medIds = sale.Items.Select(i => i.MedicineId).Distinct().ToList();
-        var medNames = await _uow.Repository<Medicine>().Query().AsNoTracking()
-            .Where(m => medIds.Contains(m.Id))
-            .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
+        var preferMedWinNames = sale.InvoiceNumber.StartsWith("MW-S-", StringComparison.OrdinalIgnoreCase);
+        var medNames = await ResolveMedicineDisplayNamesAsync(
+            sale.Items.Select(i => i.MedicineId), preferMedWinNames, ct);
 
         var batchIds = sale.Items
             .Where(i => i.MedicineBatchId.HasValue)
@@ -388,6 +445,7 @@ public class SalesService : ISalesService
         var batches = await _uow.Repository<MedicineBatch>().Query()
             .Where(b => batchIds.Contains(b.Id))
             .ToDictionaryAsync(b => b.Id, ct);
+        var expiryByMedicineBatch = await LoadBatchExpiryLookupAsync(sale.Items, ct);
 
         var dto = new SaleEditDto
         {
@@ -404,24 +462,85 @@ public class SalesService : ISalesService
                 var batchQty = item.MedicineBatchId is int bid && batches.TryGetValue(bid, out var batch)
                     ? batch.QuantityAvailable
                     : 0m;
+
+                var unitPrice = item.UnitPrice;
+                var mrp = item.Mrp;
+                if (mrp <= 0 && item.MedicineBatchId is int batchId && batches.TryGetValue(batchId, out var batchRow) && batchRow.Mrp > 0)
+                    mrp = batchRow.Mrp;
+
+                var discountPercent = SaleLinePricing.DiscountPercent(mrp > 0 ? mrp : unitPrice, unitPrice);
+
                 return new SaleEditLineDto
                 {
                     MedicineId = item.MedicineId,
                     MedicineBatchId = item.MedicineBatchId ?? 0,
                     MedicineName = medNames.TryGetValue(item.MedicineId, out var name) ? name : "Medicine",
                     BatchNumber = item.BatchNumber ?? string.Empty,
-                    ExpiryDate = item.ExpiryDate,
+                    ExpiryDate = ResolveLineExpiry(item, batches, expiryByMedicineBatch),
                     Quantity = item.Quantity,
-                    UnitPrice = item.UnitPrice,
-                    Mrp = item.Mrp,
+                    UnitPrice = unitPrice,
+                    Mrp = mrp > 0 ? mrp : unitPrice,
                     GstPercent = item.GstPercent,
-                    DiscountPercent = item.DiscountPercent,
+                    DiscountPercent = discountPercent,
                     AvailableStock = batchQty + item.Quantity
                 };
             }).ToList()
         };
 
         return Result.Success(dto);
+    }
+
+    public async Task<Result<SaleReceiptDto>> GetSaleReceiptAsync(int saleId, int? branchId, CancellationToken ct = default)
+    {
+        var sale = await _uow.Repository<Sale>().Query()
+            .AsNoTracking()
+            .Include(s => s.Items)
+            .Include(s => s.Payments)
+            .FirstOrDefaultAsync(s => s.Id == saleId && s.Status == SaleStatus.Completed, ct);
+
+        if (sale is null)
+            return Result.Failure<SaleReceiptDto>("Invoice not found.");
+        if (branchId.HasValue && sale.BranchId != branchId)
+            return Result.Failure<SaleReceiptDto>("Invoice belongs to another branch.");
+
+        if (sale.Items.Count == 0)
+        {
+            sale.Items = await _uow.Repository<SaleItem>().Query().AsNoTracking()
+                .Where(i => i.SaleId == sale.Id)
+                .ToListAsync(ct);
+        }
+
+        return await BuildReceiptAsync(sale, ct);
+    }
+
+    /// <summary>
+    /// Finds an existing batch for a sale line, or provisions an OPENING batch when saving.
+    /// </summary>
+    private async Task<MedicineBatch> ResolveBatchForLineAsync(
+        int medicineId, string? batchNumber, int? branchId, CancellationToken ct)
+    {
+        var q = _uow.Repository<MedicineBatch>().Query()
+            .Where(b => b.MedicineId == medicineId);
+        if (branchId.HasValue) q = q.Where(b => b.BranchId == branchId);
+
+        if (!string.IsNullOrWhiteSpace(batchNumber))
+        {
+            var byNumber = await q.FirstOrDefaultAsync(b => b.BatchNumber == batchNumber, ct);
+            if (byNumber is not null) return byNumber;
+        }
+
+        var opening = await q.FirstOrDefaultAsync(b => b.BatchNumber == "OPENING", ct);
+        if (opening is not null) return opening;
+
+        var created = await EnsureOpeningBatchAsync(medicineId, branchId, ct);
+        if (created.Count == 0)
+            throw new BillingException("A selected batch no longer exists.");
+
+        var batchId = created[0].BatchId;
+        var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(batchId, ct);
+        if (batch is null)
+            throw new BillingException("A selected batch no longer exists.");
+        return batch;
     }
 
     private async Task<Sale> UpdateAndPersistSaleAsync(UpdateSaleRequest request, int? branchId, CancellationToken ct)
@@ -545,20 +664,30 @@ public class SalesService : ISalesService
             if (line.Quantity <= 0)
                 throw new BillingException("Quantity must be greater than zero.");
 
-            var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(line.MedicineBatchId, ct);
-            if (batch is null)
-                throw new BillingException("A selected batch no longer exists.");
+            var batch = line.MedicineBatchId > 0
+                ? await _uow.Repository<MedicineBatch>().GetByIdAsync(line.MedicineBatchId, ct)
+                : null;
+            batch ??= await ResolveBatchForLineAsync(line.MedicineId, line.BatchNumber, branchId, ct);
             if (batch.QuantityAvailable < line.Quantity)
                 throw new BillingException($"Insufficient stock for batch {batch.BatchNumber} (available {batch.QuantityAvailable}).");
 
             var medicine = await _uow.Repository<Medicine>().GetByIdAsync(line.MedicineId, ct);
 
+            var mrp = line.Mrp > 0
+                ? line.Mrp
+                : batch.Mrp > 0
+                    ? batch.Mrp
+                    : medicine?.Mrp > 0
+                        ? medicine.Mrp
+                        : line.UnitPrice;
+
             var gstPercent = line.UnitPrice > 0 ? batch.GstPercent : 0m;
-            var gross = line.UnitPrice * line.Quantity;
-            var discountAmount = Math.Round(gross * line.DiscountPercent / 100m, 2);
-            var netInclusive = gross - discountAmount;
-            var taxable = Math.Round(netInclusive / (1 + gstPercent / 100m), 2);
-            var taxAmount = netInclusive - taxable;
+            var grossAtMrp = SaleLinePricing.GrossAtMrp(mrp, line.Quantity);
+            var discountAmount = SaleLinePricing.DiscountAmount(mrp, line.UnitPrice, line.Quantity);
+            var discountPercent = SaleLinePricing.DiscountPercent(mrp, line.UnitPrice);
+            var netInclusive = SaleLinePricing.LineTotal(line.UnitPrice, line.Quantity);
+            var taxable = SaleLinePricing.TaxableAmount(netInclusive, gstPercent);
+            var taxAmount = SaleLinePricing.TaxAmount(netInclusive, gstPercent, taxable);
 
             sale.Items.Add(new SaleItem
             {
@@ -567,9 +696,9 @@ public class SalesService : ISalesService
                 BatchNumber = batch.BatchNumber,
                 ExpiryDate = batch.ExpiryDate,
                 Quantity = line.Quantity,
-                Mrp = line.UnitPrice,
+                Mrp = mrp,
                 UnitPrice = line.UnitPrice,
-                DiscountPercent = line.DiscountPercent,
+                DiscountPercent = discountPercent,
                 DiscountAmount = discountAmount,
                 GstPercent = gstPercent,
                 TaxableAmount = taxable,
@@ -595,7 +724,7 @@ public class SalesService : ISalesService
                 Remarks = medicine?.Name
             }, ct);
 
-            subTotal += gross;
+            subTotal += grossAtMrp;
             totalDiscount += discountAmount;
             totalTaxable += taxable;
             totalTax += taxAmount;
@@ -675,10 +804,21 @@ public class SalesService : ISalesService
         if (sale.DoctorId is int did)
             doctorName = (await _uow.Repository<Doctor>().GetByIdAsync(did, ct))?.Name;
 
-        var medIds = sale.Items.Select(i => i.MedicineId).Distinct().ToList();
-        var medNames = await _uow.Repository<Medicine>().Query()
-            .Where(m => medIds.Contains(m.Id))
-            .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
+        var preferMedWinNames = sale.InvoiceNumber.StartsWith("MW-S-", StringComparison.OrdinalIgnoreCase);
+        var medNames = await ResolveMedicineDisplayNamesAsync(
+            sale.Items.Select(i => i.MedicineId), preferMedWinNames, ct);
+
+        var batchIds = sale.Items
+            .Where(i => i.MedicineBatchId.HasValue)
+            .Select(i => i.MedicineBatchId!.Value)
+            .Distinct()
+            .ToList();
+        var batchesById = batchIds.Count > 0
+            ? await _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+                .Where(b => batchIds.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id, ct)
+            : new Dictionary<int, MedicineBatch>();
+        var expiryByMedicineBatch = await LoadBatchExpiryLookupAsync(sale.Items, ct);
 
         var receipt = new SaleReceiptDto
         {
@@ -696,11 +836,6 @@ public class SalesService : ISalesService
             CustomerName = customerName,
             CustomerPhone = customerPhone,
             DoctorName = doctorName,
-            SubTotal = sale.SubTotal,
-            DiscountAmount = sale.DiscountAmount,
-            TaxableAmount = sale.TaxableAmount,
-            CgstAmount = sale.CgstAmount,
-            SgstAmount = sale.SgstAmount,
             RoundOff = sale.RoundOff,
             GrandTotal = sale.GrandTotal,
             PaidAmount = sale.PaidAmount,
@@ -708,21 +843,209 @@ public class SalesService : ISalesService
             RewardPointsEarned = sale.RewardPointsEarned
         };
 
+        decimal totalTaxable = 0m, totalTax = 0m;
         int sr = 1;
         foreach (var i in sale.Items)
         {
+            var unitPrice = i.UnitPrice;
+            var mrp = i.Mrp > 0 ? i.Mrp : unitPrice;
+            var discountAmount = i.DiscountAmount > 0
+                ? i.DiscountAmount
+                : SaleLinePricing.DiscountAmount(mrp, unitPrice, i.Quantity);
+            var discountPercent = i.DiscountPercent > 0
+                ? i.DiscountPercent
+                : SaleLinePricing.DiscountPercent(mrp, unitPrice);
+            var (lineTaxable, lineTax) = SaleLinePricing.ResolveLineTax(
+                i.LineTotal, i.GstPercent, i.TaxableAmount, i.TaxAmount);
+            totalTaxable += lineTaxable;
+            totalTax += lineTax;
+
             receipt.Lines.Add(new SaleReceiptLineDto(
                 sr++,
                 medNames.TryGetValue(i.MedicineId, out var n) ? n : $"#{i.MedicineId}",
                 i.BatchNumber ?? string.Empty,
-                i.ExpiryDate,
+                ResolveLineExpiry(i, batchesById, expiryByMedicineBatch),
                 i.Quantity,
-                i.Mrp,
-                i.DiscountPercent,
+                mrp,
+                unitPrice,
+                discountPercent,
+                discountAmount,
                 i.GstPercent,
                 i.LineTotal));
         }
 
+        receipt.SubTotal = receipt.Lines.Sum(l => SaleLinePricing.GrossAtMrp(l.Mrp, l.Quantity));
+        receipt.DiscountAmount = receipt.Lines.Sum(l => l.DiscountAmount);
+        receipt.TaxableAmount = totalTaxable;
+        (receipt.CgstAmount, receipt.SgstAmount) = SaleLinePricing.SplitCgstSgst(totalTax);
+        receipt.GrandTotal = sale.GrandTotal > 0
+            ? sale.GrandTotal
+            : receipt.Lines.Sum(l => l.Amount) + sale.RoundOff;
+
         return Result.Success(receipt);
+    }
+
+    /// <summary>
+    /// Resolves medicine names for historical sale lines, including soft-deleted MedWin imports.
+    /// For MedWin-imported invoices, prefers mapped MedWin catalogue names when available.
+    /// </summary>
+    private async Task<Dictionary<int, string>> ResolveMedicineDisplayNamesAsync(
+        IEnumerable<int> medicineIds,
+        bool preferMedWinHistoricalNames,
+        CancellationToken ct)
+    {
+        var ids = medicineIds.Distinct().ToList();
+        if (ids.Count == 0) return new();
+
+        var medicines = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+            .Where(m => ids.Contains(m.Id))
+            .Select(m => new { m.Id, m.Name })
+            .ToListAsync(ct);
+
+        var result = medicines.ToDictionary(m => m.Id, m => m.Name);
+
+        if (preferMedWinHistoricalNames)
+        {
+            var mappings = await _uow.Repository<MedicineMedWinMapping>().Query().AsNoTracking()
+                .Where(m => ids.Contains(m.OneMgMedicineId)
+                            || (m.MedWinMedicineId != null && ids.Contains(m.MedWinMedicineId.Value)))
+                .Select(m => new { m.OneMgMedicineId, m.MedWinMedicineId, m.MedWinMedicineName })
+                .ToListAsync(ct);
+
+            foreach (var map in mappings)
+            {
+                if (map.MedWinMedicineId is int medWinMedicineId
+                    && ids.Contains(medWinMedicineId)
+                    && IsUsableMedWinDisplayName(map.MedWinMedicineName))
+                {
+                    result[medWinMedicineId] = map.MedWinMedicineName;
+                }
+            }
+
+            foreach (var group in mappings.GroupBy(m => m.OneMgMedicineId))
+            {
+                if (!ids.Contains(group.Key)) continue;
+
+                var medWinNames = group
+                    .Select(m => m.MedWinMedicineName)
+                    .Where(IsUsableMedWinDisplayName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (medWinNames.Count == 1)
+                    result[group.Key] = medWinNames[0];
+            }
+        }
+
+        foreach (var id in ids)
+        {
+            if (!result.ContainsKey(id))
+                result[id] = $"Medicine #{id}";
+        }
+
+        return result;
+    }
+
+    private static bool IsUsableMedWinDisplayName(string? name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && !name.StartsWith("MedWinId:", StringComparison.OrdinalIgnoreCase);
+
+    public async Task<SaleMedicineDetailDto?> GetMedicineLineDetailAsync(
+        int medicineId, int? batchId, int? branchId, CancellationToken ct = default)
+    {
+        var medicine = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == medicineId, ct);
+        if (medicine is null) return null;
+
+        decimal qtyAvailable;
+        var costPrice = medicine.PurchasePrice;
+        var mrp = medicine.Mrp;
+        var location = medicine.RackNumber;
+
+        if (batchId is > 0)
+        {
+            var batchQuery = _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+                .Where(b => b.Id == batchId && b.MedicineId == medicineId);
+            if (branchId.HasValue) batchQuery = batchQuery.Where(b => b.BranchId == branchId);
+
+            var batch = await batchQuery.FirstOrDefaultAsync(ct);
+            if (batch is not null)
+            {
+                qtyAvailable = batch.QuantityAvailable;
+                if (batch.PurchasePrice > 0) costPrice = batch.PurchasePrice;
+                if (batch.Mrp > 0) mrp = batch.Mrp;
+                location = batch.RackNumber ?? location;
+            }
+            else
+            {
+                var stockMap = await GetStockByMedicineIdsAsync(new List<int> { medicineId }, branchId, ct);
+                qtyAvailable = stockMap.GetValueOrDefault(medicineId);
+            }
+        }
+        else
+        {
+            var stockMap = await GetStockByMedicineIdsAsync(new List<int> { medicineId }, branchId, ct);
+            qtyAvailable = stockMap.GetValueOrDefault(medicineId);
+        }
+
+        var packingSize = medicine.UnitsPerPack > 0
+            ? $"{medicine.UnitsPerPack} {medicine.UnitOfMeasure ?? "Nos"}".Trim()
+            : "-";
+
+        var packingType = !string.IsNullOrWhiteSpace(medicine.PackInfo)
+            ? medicine.PackInfo
+            : MedicineNotesHelper.ExtractPackInfo(medicine.Notes) ?? "-";
+
+        return new SaleMedicineDetailDto(
+            medicine.Name,
+            string.IsNullOrWhiteSpace(medicine.GenericName) ? medicine.Composition : medicine.GenericName,
+            qtyAvailable,
+            costPrice,
+            mrp,
+            location,
+            packingSize,
+            packingType);
+    }
+
+    private async Task<Dictionary<(int MedicineId, string BatchNumber), DateTime?>> LoadBatchExpiryLookupAsync(
+        IEnumerable<SaleItem> items, CancellationToken ct)
+    {
+        var medicineIds = items.Select(i => i.MedicineId).Distinct().ToList();
+        if (medicineIds.Count == 0) return new();
+
+        var batches = await _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+            .Where(b => medicineIds.Contains(b.MedicineId) && b.ExpiryDate != null)
+            .Select(b => new { b.MedicineId, b.BatchNumber, b.ExpiryDate })
+            .ToListAsync(ct);
+
+        var dict = new Dictionary<(int, string), DateTime?>();
+        foreach (var batch in batches)
+        {
+            if (string.IsNullOrWhiteSpace(batch.BatchNumber)) continue;
+            var key = (batch.MedicineId, batch.BatchNumber.Trim().ToUpperInvariant());
+            dict.TryAdd(key, batch.ExpiryDate);
+        }
+
+        return dict;
+    }
+
+    private static DateTime? ResolveLineExpiry(
+        SaleItem item,
+        Dictionary<int, MedicineBatch> batchesById,
+        Dictionary<(int MedicineId, string BatchNumber), DateTime?> expiryByMedicineBatch)
+    {
+        if (item.ExpiryDate.HasValue) return item.ExpiryDate;
+        if (item.MedicineBatchId is int batchId
+            && batchesById.TryGetValue(batchId, out var linkedBatch)
+            && linkedBatch.ExpiryDate.HasValue)
+            return linkedBatch.ExpiryDate;
+        if (!string.IsNullOrWhiteSpace(item.BatchNumber))
+        {
+            var key = (item.MedicineId, item.BatchNumber.Trim().ToUpperInvariant());
+            if (expiryByMedicineBatch.TryGetValue(key, out var expiry))
+                return expiry;
+        }
+
+        return null;
     }
 }

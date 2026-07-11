@@ -34,6 +34,8 @@ public class SalesViewModel : ObservableObject
     private int? _lastDropdownSaleId;
     private CancellationTokenSource? _billLoadCts;
     private readonly SemaphoreSlim _salesGate = new(1, 1);
+    private DateOnly? _nextOlderBillDate;
+    private bool _isLoadingOlderBills;
 
     public bool SuppressBillLoad
     {
@@ -72,9 +74,11 @@ public class SalesViewModel : ObservableObject
         Cart.CollectionChanged += (_, _) => RecalculateTotals();
 
         RemoveLineCommand = new RelayCommand(p => RemoveLine(p as CartLineViewModel), _ => CanCreate);
-        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && Cart.Any(l => !l.IsEmpty) && !IsBusy);
+        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && !IsEditing && Cart.Any(l => !l.IsEmpty) && !IsBusy);
+        PrintCommand = new AsyncRelayCommand(_ => PrintAsync(), _ => CanPrint && IsEditing && !IsBusy);
         NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
         SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
+        LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
 
         EnsureTrailingEmptyRow();
         _ = InitializeBillsAsync();
@@ -93,13 +97,36 @@ public class SalesViewModel : ObservableObject
 
     public ICommand RemoveLineCommand { get; }
     public ICommand SaveCommand { get; }
+    public ICommand PrintCommand { get; }
     public ICommand NewBillCommand { get; }
     public ICommand SearchBillsCommand { get; }
+    public ICommand LoadOlderBillsCommand { get; }
 
     public bool CanCreate { get; }
     public bool CanSearchBills { get; }
     public bool CanApplyDiscount { get; }
     public bool CanPrint { get; }
+
+    public bool CanLoadOlderBills => _nextOlderBillDate is not null && !IsLoadingOlderBills && !IsBusy;
+
+    public bool IsLoadingOlderBills
+    {
+        get => _isLoadingOlderBills;
+        private set
+        {
+            if (SetProperty(ref _isLoadingOlderBills, value))
+            {
+                OnPropertyChanged(nameof(CanLoadOlderBills));
+                OnPropertyChanged(nameof(LoadOlderBillsLabel));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+    }
+
+    public string? LoadOlderBillsLabel =>
+        _nextOlderBillDate is DateOnly date
+            ? $"Load bills from {date:dd/MM/yyyy}"
+            : null;
 
     public bool IsEditing => _editingSaleId.HasValue;
 
@@ -141,6 +168,32 @@ public class SalesViewModel : ObservableObject
         var focusLine = duplicate ?? line;
         if (!focusLine.IsEmpty)
             RequestItemFocus?.Invoke(focusLine);
+    }
+
+    public async Task ShowMedicineDetailAsync(CartLineViewModel line)
+    {
+        if (line.IsEmpty)
+        {
+            _dialog.ShowInfo("Select a medicine line first.");
+            return;
+        }
+
+        var detail = await _salesService.GetMedicineLineDetailAsync(
+            line.MedicineId,
+            line.BatchId > 0 ? line.BatchId : null,
+            _currentUser.CurrentUser?.BranchId);
+
+        if (detail is null)
+        {
+            _dialog.ShowError("Medicine details could not be loaded.");
+            return;
+        }
+
+        var window = new Views.MedicineDetailPopupWindow(detail)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        window.ShowDialog();
     }
 
     private void EnsureTrailingEmptyRow()
@@ -262,7 +315,14 @@ public class SalesViewModel : ObservableObject
     public bool IsBusy
     {
         get => _isBusy;
-        private set => SetProperty(ref _isBusy, value);
+        private set
+        {
+            if (SetProperty(ref _isBusy, value))
+            {
+                OnPropertyChanged(nameof(CanLoadOlderBills));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
     }
 
     public string? StatusMessage
@@ -294,9 +354,12 @@ public class SalesViewModel : ObservableObject
         try
         {
             var branchId = _currentUser.CurrentUser?.BranchId;
-            var bills = await _salesService.ListBillsAsync(branchId);
+            var initialDate = await _salesService.GetInitialBillHistoryDateAsync(branchId);
+            var bills = await _salesService.ListBillsForDateAsync(initialDate, branchId);
             var preview = await _salesService.PreviewNextInvoiceNumberAsync(branchId);
             var newBill = new SaleListItemDto(0, preview, DateTime.Now);
+
+            _nextOlderBillDate = await _salesService.GetPreviousBillDateAsync(initialDate, branchId);
 
             _suppressBillSelection = true;
             BillHistory.Clear();
@@ -312,10 +375,40 @@ public class SalesViewModel : ObservableObject
                 SelectedBill = BillHistory.FirstOrDefault(b => b.SaleId == editingId) ?? newBill;
 
             _suppressBillSelection = false;
+            OnPropertyChanged(nameof(CanLoadOlderBills));
+            OnPropertyChanged(nameof(LoadOlderBillsLabel));
         }
         catch (Exception ex)
         {
             _dialog.ShowError($"Could not load bill history: {ex.Message}");
+        }
+    }
+
+    private async Task LoadOlderBillsAsync()
+    {
+        if (_nextOlderBillDate is not DateOnly dateToLoad)
+            return;
+
+        IsLoadingOlderBills = true;
+        try
+        {
+            var branchId = _currentUser.CurrentUser?.BranchId;
+            var bills = await _salesService.ListBillsForDateAsync(dateToLoad, branchId);
+
+            foreach (var bill in bills)
+                BillHistory.Add(bill);
+
+            _nextOlderBillDate = await _salesService.GetPreviousBillDateAsync(dateToLoad, branchId);
+            OnPropertyChanged(nameof(CanLoadOlderBills));
+            OnPropertyChanged(nameof(LoadOlderBillsLabel));
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Could not load older bills: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingOlderBills = false;
         }
     }
 
@@ -441,6 +534,7 @@ public class SalesViewModel : ObservableObject
 
         _editingSaleId = sale.SaleId;
         OnPropertyChanged(nameof(IsEditing));
+        CommandManager.InvalidateRequerySuggested();
 
         CustomerName = sale.BillingCustomerName ?? string.Empty;
         CustomerMobile = sale.BillingCustomerPhone;
@@ -480,7 +574,9 @@ public class SalesViewModel : ObservableObject
         {
             MedicineId = l.MedicineId,
             MedicineBatchId = l.BatchId,
+            BatchNumber = l.BatchNumber,
             Quantity = l.Quantity,
+            Mrp = l.Mrp,
             UnitPrice = l.UnitPrice,
             DiscountPercent = l.DiscountPercent
         }).ToList();
@@ -555,6 +651,41 @@ public class SalesViewModel : ObservableObject
         }
     }
 
+    private async Task PrintAsync()
+    {
+        if (_editingSaleId is not int saleId) return;
+
+        IsBusy = true;
+        try
+        {
+            await _salesGate.WaitAsync();
+            try
+            {
+                var result = await _salesService.GetSaleReceiptAsync(saleId, _currentUser.CurrentUser?.BranchId);
+                if (result.IsFailure || result.Value is null)
+                {
+                    _dialog.ShowError(result.Error ?? "Could not load the invoice for printing.");
+                    return;
+                }
+
+                _printService.ShowPreview(result.Value);
+                StatusMessage = $"Printing invoice {result.Value.InvoiceNumber}.";
+            }
+            finally
+            {
+                _salesGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private void NewBill()
     {
         _suppressBillSelection = true;
@@ -571,6 +702,7 @@ public class SalesViewModel : ObservableObject
         _editingSaleId = null;
         _lastDropdownSaleId = null;
         OnPropertyChanged(nameof(IsEditing));
+        CommandManager.InvalidateRequerySuggested();
         EnsureTrailingEmptyRow();
         CustomerName = string.Empty;
         CustomerMobile = null;

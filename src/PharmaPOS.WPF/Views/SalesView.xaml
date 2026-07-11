@@ -7,6 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             Focusable="True"
              PreviewKeyDown="SalesView_PreviewKeyDown">
     <Grid Margin="4">
         <Grid.ColumnDefinitions>
@@ -65,12 +66,19 @@
                                     CornerRadius="4"
                                     Padding="0,4"
                                     Width="720"
-                                    MaxHeight="360"
+                                    MaxHeight="400"
                                     materialDesign:ElevationAssist.Elevation="Dp4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                 <ListBox x:Name="BillListBox"
+                                         Grid.Row="0"
                                          ItemsSource="{Binding BillHistory}"
                                          SelectedItem="{Binding SelectedBill, Mode=TwoWay}"
                                          Width="712"
+                                         MaxHeight="320"
                                          HorizontalContentAlignment="Stretch"
                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                          ScrollViewer.CanContentScroll="False"
@@ -110,12 +118,24 @@
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
+                                <Button Grid.Row="1"
+                                        Margin="8,4,8,4"
+                                        HorizontalAlignment="Stretch"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Command="{Binding LoadOlderBillsCommand}"
+                                        Visibility="{Binding CanLoadOlderBills, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="History" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="{Binding LoadOlderBillsLabel}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                </Grid>
                             </Border>
                         </Popup>
                     </Grid>
                     </StackPanel>
                 </DockPanel>
-                <TextBlock Text="Press Enter on Item to search medicine. Press F3 to go to customer."
+                <TextBlock Text="Press Enter on Item to search medicine. F3 customer. F4 medicine details."
                            FontSize="12" Opacity="0.6" Margin="0,0,0,8" DockPanel.Dock="Top" />
 
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
@@ -156,7 +176,10 @@
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="MRP" Width="80"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
-                                            Binding="{Binding UnitPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
+                                            Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
+                        <DataGridTextColumn Header="Sale" Width="80"
+                                            IsReadOnly="True"
+                                            Binding="{Binding UnitPrice, StringFormat=N2}" />
                         <DataGridTextColumn Header="Disc%" Width="65"
                                             IsReadOnly="{Binding DataContext.CanApplyDiscount, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
@@ -211,9 +234,35 @@
                                 <TextBlock Text="New (Esc)" Margin="6,0,0,0" />
                             </StackPanel>
                         </Button>
+                        <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding PrintCommand}"
+                                IsEnabled="{Binding CanPrint}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Printer" VerticalAlignment="Center" />
+                                <TextBlock Text="Print (F9)" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </Button>
                         <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding SaveCommand}"
-                                IsEnabled="{Binding CanCreate}"
-                                Style="{StaticResource MaterialDesignRaisedButton}">
+                                IsEnabled="{Binding CanCreate}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
                                 <TextBlock Text="Save &amp; Print (F9)" Margin="6,0,0,0" />

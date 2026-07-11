@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Windows;
+﻿using System.Windows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -77,12 +76,19 @@ public partial class App : System.Windows.Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
-        await _host.StartAsync();
-        Services = _host.Services;
+        if (!SingleInstanceService.TryAcquire())
+        {
+            SingleInstanceService.ActivateOtherInstance();
+            Shutdown();
+            return;
+        }
 
-        // We drive login -> shell -> logout ourselves, so opening/closing windows
-        // in between must not auto-terminate the app.
+        var splash = new StartupWindow();
+        MainWindow = splash;
+        splash.Show();
+        splash.SetStatus("Starting PharmaPOS...");
+
+        base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         DispatcherUnhandledException += (_, args) =>
@@ -92,8 +98,36 @@ public partial class App : System.Windows.Application
             args.Handled = true;
         };
 
-        await InitializeDatabaseAsync();
-        ShowLogin();
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                    MessageBox.Show(ex.Message, "Unexpected error",
+                        MessageBoxButton.OK, MessageBoxImage.Error));
+            }
+        };
+
+        try
+        {
+            splash.SetStatus("Starting services...");
+            await _host.StartAsync();
+            Services = _host.Services;
+
+            splash.SetStatus("Connecting to database...");
+            await InitializeDatabaseAsync();
+
+            splash.Close();
+            ShowLogin();
+        }
+        catch (Exception ex)
+        {
+            splash.Close();
+            MessageBox.Show(
+                "PharmaPOS could not start.\n\n" + ex.Message,
+                "Startup failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
     }
 
     private async Task InitializeDatabaseAsync()
@@ -162,6 +196,7 @@ public partial class App : System.Windows.Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        SingleInstanceService.Release();
         await _host.StopAsync();
         _host.Dispose();
         base.OnExit(e);

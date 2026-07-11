@@ -7,6 +7,8 @@ namespace PharmaPOS.Domain.Entities.Masters;
 public class Supplier : BranchEntity
 {
     public string Name { get; set; } = string.Empty;
+    /// <summary>Persisted <see cref="Name"/> without spaces for indexed search.</summary>
+    public string NameSearchKey { get; private set; } = string.Empty;
     public string? GstNumber { get; set; }
     public string? DrugLicenseNumber { get; set; }
     public string? Address { get; set; }
@@ -15,6 +17,8 @@ public class Supplier : BranchEntity
     public string? Pincode { get; set; }
     public string? ContactPerson { get; set; }
     public string? Phone { get; set; }
+    /// <summary>Persisted <see cref="Phone"/> without spaces for indexed search.</summary>
+    public string PhoneSearchKey { get; private set; } = string.Empty;
     public string? Email { get; set; }
 
     public int PaymentTermsDays { get; set; }

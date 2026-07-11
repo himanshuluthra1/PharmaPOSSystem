@@ -12,9 +12,22 @@ public class MedicineConfiguration : IEntityTypeConfiguration<Medicine>
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.GenericName).HasMaxLength(200);
         b.Property(x => x.Barcode).HasMaxLength(64);
+        b.Property(x => x.PackInfo).HasMaxLength(100);
+        b.Property(x => x.NameSearchKey)
+            .HasMaxLength(200)
+            .HasComputedColumnSql("REPLACE([Name], N' ', N'')", stored: true);
+        b.Property(x => x.GenericNameSearchKey)
+            .HasMaxLength(200)
+            .HasComputedColumnSql("REPLACE(ISNULL([GenericName], N''), N' ', N'')", stored: true);
+        b.Property(x => x.BarcodeSearchKey)
+            .HasMaxLength(64)
+            .HasComputedColumnSql("REPLACE(ISNULL([Barcode], N''), N' ', N'')", stored: true);
         b.HasIndex(x => x.Name);
         b.HasIndex(x => x.GenericName);
         b.HasIndex(x => x.Barcode);
+        b.HasIndex(x => x.NameSearchKey);
+        b.HasIndex(x => x.GenericNameSearchKey);
+        b.HasIndex(x => x.BarcodeSearchKey);
 
         b.HasOne(x => x.Category).WithMany(c => c!.Medicines)
             .HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
@@ -40,7 +53,14 @@ public class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
     public void Configure(EntityTypeBuilder<Supplier> b)
     {
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.Property(x => x.NameSearchKey)
+            .HasMaxLength(200)
+            .HasComputedColumnSql("REPLACE([Name], N' ', N'')", stored: true);
+        b.Property(x => x.PhoneSearchKey)
+            .HasMaxLength(64)
+            .HasComputedColumnSql("CAST(REPLACE(ISNULL([Phone], N''), N' ', N'') AS nvarchar(64))", stored: true);
         b.HasIndex(x => x.Name);
+        b.HasIndex(x => x.NameSearchKey);
     }
 }
 
@@ -87,5 +107,24 @@ public class MedicineCategoryConfiguration : IEntityTypeConfiguration<MedicineCa
     {
         b.Property(x => x.Name).HasMaxLength(120).IsRequired();
         b.HasIndex(x => x.Name);
+    }
+}
+
+public class MedicineMedWinMappingConfiguration : IEntityTypeConfiguration<MedicineMedWinMapping>
+{
+    public void Configure(EntityTypeBuilder<MedicineMedWinMapping> b)
+    {
+        b.Property(x => x.MedWinMedicineName).HasMaxLength(200).IsRequired();
+        b.Property(x => x.OneMgMedicineName).HasMaxLength(200).IsRequired();
+        b.Property(x => x.OneMgCatalogId).HasMaxLength(50);
+
+        b.HasIndex(x => x.MedWinId).IsUnique();
+        b.HasIndex(x => x.OneMgMedicineId);
+        b.HasIndex(x => x.MedWinMedicineName);
+
+        b.HasOne(x => x.OneMgMedicine)
+            .WithMany()
+            .HasForeignKey(x => x.OneMgMedicineId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Enums;
@@ -22,8 +23,9 @@ public class MastersService : IMastersService
         var q = _uow.Repository<Supplier>().Query().AsNoTracking();
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId || s.BranchId == null);
         term = (term ?? string.Empty).Trim();
-        if (term.Length >= 1)
-            q = q.Where(s => s.Name.Contains(term) || (s.Phone != null && s.Phone.Contains(term)));
+        var normalized = SearchQueryExtensions.NormalizeTerm(term);
+        if (normalized.Length >= 1)
+            q = q.WhereSupplierMatches(normalized);
         return await q.OrderBy(s => s.Name).Take(DefaultTake)
             .Select(s => new SupplierListDto(s.Id, s.Name, s.Phone, s.GstNumber, s.Status))
             .ToListAsync(ct);
@@ -350,16 +352,14 @@ public class MastersService : IMastersService
 
     public async Task<List<MedicineListDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
     {
-        term = (term ?? string.Empty).Trim();
-        if (term.Length < 2) return new();
+        var normalized = SearchQueryExtensions.NormalizeTerm(term);
+        if (normalized.Length < 2) return new();
 
         var baseQuery = _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Status == EntityStatus.Active);
 
         var results = await baseQuery
-            .Where(m => EF.Functions.Like(m.Name, term + "%") ||
-                        (m.Barcode != null && m.Barcode == term) ||
-                        (m.GenericName != null && EF.Functions.Like(m.GenericName, term + "%")))
+            .WhereMedicineMatches(normalized, prefixOnly: true)
             .OrderBy(m => m.Name).Take(DefaultTake)
             .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
             .ToListAsync(ct);
@@ -367,8 +367,7 @@ public class MastersService : IMastersService
         if (results.Count == 0)
         {
             results = await baseQuery
-                .Where(m => EF.Functions.Like(m.Name, "%" + term + "%") ||
-                            (m.GenericName != null && EF.Functions.Like(m.GenericName, "%" + term + "%")))
+                .WhereMedicineMatches(normalized, prefixOnly: false)
                 .OrderBy(m => m.Name).Take(DefaultTake)
                 .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
                 .ToListAsync(ct);

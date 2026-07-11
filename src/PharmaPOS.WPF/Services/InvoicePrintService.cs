@@ -136,7 +136,7 @@ public class InvoicePrintService : IInvoicePrintService
     private static Block BuildItemsTable(SaleReceiptDto r)
     {
         var table = new Table { CellSpacing = 0, Margin = new Thickness(0, 8, 0, 0), BorderBrush = Brushes.LightGray, BorderThickness = new Thickness(1) };
-        double[] widths = { 0.5, 3.2, 1.2, 1, 0.8, 1, 0.9, 0.9, 1.2 };
+        double[] widths = { 0.4, 2.8, 1.0, 0.7, 0.6, 0.8, 0.8, 0.8, 0.7, 1.0 };
         foreach (var w in widths)
             table.Columns.Add(new TableColumn { Width = new GridLength(w, GridUnitType.Star) });
 
@@ -146,7 +146,8 @@ public class InvoicePrintService : IInvoicePrintService
         {
             ("#", TextAlignment.Center), ("Item", TextAlignment.Left), ("Batch", TextAlignment.Left),
             ("Exp", TextAlignment.Center), ("Qty", TextAlignment.Right), ("MRP", TextAlignment.Right),
-            ("Disc%", TextAlignment.Right), ("GST%", TextAlignment.Right), ("Amount", TextAlignment.Right)
+            ("Sale", TextAlignment.Right), ("Disc", TextAlignment.Right), ("GST%", TextAlignment.Right),
+            ("Amount", TextAlignment.Right)
         })
         {
             hr.Cells.Add(TextCell(text, align, bold: true, foreground: Brushes.White));
@@ -164,7 +165,8 @@ public class InvoicePrintService : IInvoicePrintService
             row.Cells.Add(TextCell(l.ExpiryDate?.ToString("MM/yy") ?? "-", TextAlignment.Center));
             row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
             row.Cells.Add(TextCell(l.Mrp.ToString("N2", Inr), TextAlignment.Right));
-            row.Cells.Add(TextCell(l.DiscountPercent.ToString("0.##"), TextAlignment.Right));
+            row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
+            row.Cells.Add(TextCell(l.DiscountAmount > 0 ? l.DiscountAmount.ToString("N2", Inr) : "-", TextAlignment.Right));
             row.Cells.Add(TextCell(l.GstPercent.ToString("0.##"), TextAlignment.Right));
             row.Cells.Add(TextCell(l.Amount.ToString("N2", Inr), TextAlignment.Right));
             body.Rows.Add(row);
@@ -193,24 +195,25 @@ public class InvoicePrintService : IInvoicePrintService
         AddRow("Sub Total (MRP)", r.SubTotal);
         if (r.DiscountAmount > 0) AddRow("Discount", r.DiscountAmount);
         AddRow("Taxable", r.TaxableAmount);
-        AddRow("CGST", r.CgstAmount);
-        AddRow("SGST", r.SgstAmount);
+        if (r.CgstAmount > 0) AddRow("CGST", r.CgstAmount);
+        if (r.SgstAmount > 0) AddRow("SGST", r.SgstAmount);
         if (r.RoundOff != 0) AddRow("Round Off", r.RoundOff);
         AddRow("Grand Total", r.GrandTotal, bold: true, big: true);
-        AddRow("Paid", r.PaidAmount);
-        if (r.ChangeReturned > 0) AddRow("Change", r.ChangeReturned);
 
         table.RowGroups.Add(rg);
 
         var section = new Section();
         section.Blocks.Add(table);
-        section.Blocks.Add(new Paragraph(new Run($"Reward points earned: {r.RewardPointsEarned}"))
+        if (r.RewardPointsEarned > 0)
         {
-            FontSize = 10,
-            Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 6, 0, 0),
-            TextAlignment = TextAlignment.Right
-        });
+            section.Blocks.Add(new Paragraph(new Run($"Reward points earned: {r.RewardPointsEarned}"))
+            {
+                FontSize = 10,
+                Foreground = Brushes.Gray,
+                Margin = new Thickness(0, 6, 0, 0),
+                TextAlignment = TextAlignment.Right
+            });
+        }
         return section;
     }
 

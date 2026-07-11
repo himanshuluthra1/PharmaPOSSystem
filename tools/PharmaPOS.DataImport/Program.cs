@@ -161,6 +161,7 @@ await using (var src = new SqlConnection(sourceConn))
         row["ReorderLevel"] = 0;
         row["ReorderQuantity"] = 0;
         row["ImagePath"] = (object?)Trunc(imageUrl, 1000) ?? DBNull.Value;
+        row["PackInfo"] = (object?)Trunc(packInfo, 100) ?? DBNull.Value;
         row["Notes"] = string.IsNullOrWhiteSpace(notes) ? DBNull.Value : notes;
         row["Status"] = 1;                     // Active
         row["CreatedAtUtc"] = now;
@@ -208,6 +209,7 @@ static DataTable CreateMedicineTable()
     t.Columns.Add("ReorderLevel", typeof(int));
     t.Columns.Add("ReorderQuantity", typeof(int));
     t.Columns.Add("ImagePath", typeof(string));
+    t.Columns.Add("PackInfo", typeof(string));
     t.Columns.Add("Notes", typeof(string));
     t.Columns.Add("Status", typeof(int));
     t.Columns.Add("CreatedAtUtc", typeof(DateTime));

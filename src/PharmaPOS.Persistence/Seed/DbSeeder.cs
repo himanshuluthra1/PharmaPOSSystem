@@ -30,6 +30,7 @@ public class DbSeeder
 
     public async Task SeedAsync(CancellationToken ct = default)
     {
+        _context.Database.SetCommandTimeout(300);
         await _context.Database.MigrateAsync(ct);
 
         await SeedPermissionsAsync(ct);

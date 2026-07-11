@@ -1214,6 +1214,13 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("BarcodeSearchKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasComputedColumnSql("REPLACE(ISNULL([Barcode], N''), N' ', N'')", true);
+
                     b.Property<string>("Brand")
                         .HasColumnType("nvarchar(max)");
 
@@ -1245,6 +1252,13 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("GenericName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("GenericNameSearchKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasComputedColumnSql("REPLACE(ISNULL([GenericName], N''), N' ', N'')", true);
 
                     b.Property<decimal>("GstPercent")
                         .HasPrecision(18, 2)
@@ -1283,8 +1297,19 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("NameSearchKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasComputedColumnSql("REPLACE([Name], N' ', N'')", true);
+
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PackInfo")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("PrescriptionRequired")
                         .HasColumnType("bit");
@@ -1328,13 +1353,19 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.HasIndex("Barcode");
 
+                    b.HasIndex("BarcodeSearchKey");
+
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("GenericName");
 
+                    b.HasIndex("GenericNameSearchKey");
+
                     b.HasIndex("ManufacturerId");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("NameSearchKey");
 
                     b.ToTable("Medicines");
                 });
@@ -1384,6 +1415,70 @@ namespace PharmaPOS.Persistence.Migrations
                     b.HasIndex("Name");
 
                     b.ToTable("MedicineCategories");
+                });
+
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Masters.MedicineMedWinMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MedWinId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MedWinMedicineId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MedWinMedicineName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OneMgCatalogId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("OneMgMedicineId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OneMgMedicineName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MedWinId")
+                        .IsUnique();
+
+                    b.HasIndex("MedWinMedicineName");
+
+                    b.HasIndex("OneMgMedicineId");
+
+                    b.ToTable("MedicineMedWinMappings");
                 });
 
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Masters.Supplier", b =>
@@ -1441,6 +1536,13 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("NameSearchKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasComputedColumnSql("REPLACE([Name], N' ', N'')", true);
+
                     b.Property<decimal>("OpeningBalance")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1454,6 +1556,13 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneSearchKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasComputedColumnSql("CAST(REPLACE(ISNULL([Phone], N''), N' ', N'') AS nvarchar(64))", true);
 
                     b.Property<string>("Pincode")
                         .HasColumnType("nvarchar(max)");
@@ -1469,6 +1578,8 @@ namespace PharmaPOS.Persistence.Migrations
                     b.HasIndex("BranchId");
 
                     b.HasIndex("Name");
+
+                    b.HasIndex("NameSearchKey");
 
                     b.ToTable("Suppliers");
                 });
@@ -2455,6 +2566,17 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Manufacturer");
+                });
+
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Masters.MedicineMedWinMapping", b =>
+                {
+                    b.HasOne("PharmaPOS.Domain.Entities.Masters.Medicine", "OneMgMedicine")
+                        .WithMany()
+                        .HasForeignKey("OneMgMedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("OneMgMedicine");
                 });
 
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Masters.Supplier", b =>

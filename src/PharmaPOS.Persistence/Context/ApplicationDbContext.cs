@@ -51,6 +51,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Doctor> Doctors => Set<Doctor>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Medicine> Medicines => Set<Medicine>();
+    public DbSet<MedicineMedWinMapping> MedicineMedWinMappings => Set<MedicineMedWinMapping>();
 
     // Inventory
     public DbSet<MedicineBatch> MedicineBatches => Set<MedicineBatch>();

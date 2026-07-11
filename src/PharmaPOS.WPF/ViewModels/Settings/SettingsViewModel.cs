@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Authentication;
 using PharmaPOS.Application.Features.Settings;
@@ -14,6 +15,7 @@ public class SettingsViewModel : ObservableObject
 
     public SettingsViewModel(
         ISettingsService settings,
+        IServiceScopeFactory scopeFactory,
         IAuthService auth,
         ICurrentUserService currentUser,
         IThemeService theme,
@@ -31,11 +33,13 @@ public class SettingsViewModel : ObservableObject
             AppConstants.Permissions.UsersEdit, AppConstants.Permissions.UsersManage);
         CanManageRoles = user.HasAnyPermission(
             AppConstants.Permissions.UsersRoles, AppConstants.Permissions.UsersManage);
+        CanManageMedicineMapping = user.HasAnyPermission(AppConstants.Permissions.SettingsManage);
         CanAccessSettings = user.CanAccessModule("settings") || user.CanAccessModule("users");
 
         Company = new CompanyTabViewModel(settings, dialog);
         Branches = new BranchesTabViewModel(settings, dialog);
         Preferences = new PreferencesTabViewModel(settings, dialog);
+        MedicineMapping = new MedicineMappingTabViewModel(scopeFactory, dialog);
         RolePermissions = new RolePermissionsTabViewModel(settings, currentUser, dialog);
         Users = new UsersTabViewModel(settings, currentUser, dialog);
         ChangePassword = new ChangePasswordTabViewModel(auth, currentUser, dialog);
@@ -62,10 +66,12 @@ public class SettingsViewModel : ObservableObject
     public bool CanManagePreferences { get; }
     public bool CanManageRoles { get; }
     public bool CanManageUsers { get; }
+    public bool CanManageMedicineMapping { get; }
 
     public CompanyTabViewModel Company { get; }
     public BranchesTabViewModel Branches { get; }
     public PreferencesTabViewModel Preferences { get; }
+    public MedicineMappingTabViewModel MedicineMapping { get; }
     public RolePermissionsTabViewModel RolePermissions { get; }
     public UsersTabViewModel Users { get; }
     public ChangePasswordTabViewModel ChangePassword { get; }
@@ -88,8 +94,9 @@ public class SettingsViewModel : ObservableObject
             case 0 when CanManageCompany: await Company.EnsureLoadedAsync(); break;
             case 1 when CanManageBranches: await Branches.EnsureLoadedAsync(); break;
             case 2 when CanManagePreferences: await Preferences.EnsureLoadedAsync(); break;
-            case 3 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
-            case 4 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
+            case 3 when CanManageMedicineMapping: await MedicineMapping.EnsureLoadedAsync(); break;
+            case 4 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
+            case 5 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
         }
     }
 }

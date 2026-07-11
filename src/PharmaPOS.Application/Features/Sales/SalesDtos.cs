@@ -40,7 +40,9 @@ public class SaleLineRequest
 {
     public int MedicineId { get; set; }
     public int MedicineBatchId { get; set; }
+    public string? BatchNumber { get; set; }
     public decimal Quantity { get; set; }
+    public decimal Mrp { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal DiscountPercent { get; set; }
 }
@@ -189,6 +191,19 @@ public record SaleReceiptLineDto(
     DateTime? ExpiryDate,
     decimal Quantity,
     decimal Mrp,
+    decimal UnitPrice,
     decimal DiscountPercent,
+    decimal DiscountAmount,
     decimal GstPercent,
     decimal Amount);
+
+/// <summary>Medicine snapshot shown from the billing grid (F4).</summary>
+public record SaleMedicineDetailDto(
+    string MedicineName,
+    string? Salt,
+    decimal QuantityAvailable,
+    decimal CostPrice,
+    decimal Mrp,
+    string? Location,
+    string PackingSize,
+    string PackingType);

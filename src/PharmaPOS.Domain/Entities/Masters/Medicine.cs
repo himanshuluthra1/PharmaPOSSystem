@@ -12,7 +12,11 @@ namespace PharmaPOS.Domain.Entities.Masters;
 public class Medicine : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
+    /// <summary>Persisted <see cref="Name"/> without spaces for indexed search.</summary>
+    public string NameSearchKey { get; private set; } = string.Empty;
     public string? GenericName { get; set; }
+    /// <summary>Persisted <see cref="GenericName"/> without spaces for indexed search.</summary>
+    public string GenericNameSearchKey { get; private set; } = string.Empty;
     public string? Brand { get; set; }
     public string? Composition { get; set; }
     public string? Strength { get; set; }
@@ -30,6 +34,8 @@ public class Medicine : BaseEntity
     public bool IsBatchEnabled { get; set; } = true;
     public bool IsExpiryEnabled { get; set; } = true;
     public string? Barcode { get; set; }
+    /// <summary>Persisted <see cref="Barcode"/> without spaces for indexed search.</summary>
+    public string BarcodeSearchKey { get; private set; } = string.Empty;
 
     public decimal Mrp { get; set; }
     public decimal PurchasePrice { get; set; }
@@ -49,6 +55,8 @@ public class Medicine : BaseEntity
     public int ReorderQuantity { get; set; }
 
     public string? ImagePath { get; set; }
+    /// <summary>Raw OneMG pack_info text (e.g. "strip of 10 tablets").</summary>
+    public string? PackInfo { get; set; }
     public string? Notes { get; set; }
     public EntityStatus Status { get; set; } = EntityStatus.Active;
 
