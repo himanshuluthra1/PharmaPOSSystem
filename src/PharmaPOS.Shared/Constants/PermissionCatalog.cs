@@ -14,6 +14,10 @@ public static class PermissionCatalog
         new(AppConstants.Permissions.SalesDiscount, "Apply Line Discounts", "Sales"),
         new(AppConstants.Permissions.SalesPrint, "Print Invoices", "Sales"),
         new(AppConstants.Permissions.SalesManage, "Full Sales Access", "Sales"),
+        new(AppConstants.Permissions.SalesReturn, "Process Sale Returns", "Sales"),
+        new(AppConstants.Permissions.SalesReturnHighValue, "High-Value Sale Returns", "Sales"),
+        new(AppConstants.Permissions.SalesReturnOverride, "Override Return Policy", "Sales"),
+        new(AppConstants.Permissions.SalesReturnManage, "Full Sale Return Access", "Sales"),
 
         // Purchase
         new(AppConstants.Permissions.PurchaseView, "View Purchases", "Purchase"),

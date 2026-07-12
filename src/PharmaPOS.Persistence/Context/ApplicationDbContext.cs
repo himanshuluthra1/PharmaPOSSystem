@@ -58,11 +58,17 @@ public class ApplicationDbContext : DbContext
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<StockAdjustment> StockAdjustments => Set<StockAdjustment>();
     public DbSet<StockAdjustmentItem> StockAdjustmentItems => Set<StockAdjustmentItem>();
+    public DbSet<NonSaleableStock> NonSaleableStocks => Set<NonSaleableStock>();
 
     // Sales
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<SalePayment> SalePayments => Set<SalePayment>();
+    public DbSet<SaleReturn> SaleReturns => Set<SaleReturn>();
+    public DbSet<SaleReturnItem> SaleReturnItems => Set<SaleReturnItem>();
+    public DbSet<ReturnRefund> ReturnRefunds => Set<ReturnRefund>();
+    public DbSet<CreditNote> CreditNotes => Set<CreditNote>();
+    public DbSet<ReturnReason> ReturnReasons => Set<ReturnReason>();
 
     // Purchases
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
@@ -78,6 +84,7 @@ public class ApplicationDbContext : DbContext
     // System
     public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

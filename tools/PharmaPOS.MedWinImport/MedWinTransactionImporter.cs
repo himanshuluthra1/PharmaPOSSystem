@@ -221,9 +221,11 @@ internal static class MedWinTransactionImporter
             var taxable = Math.Max(0, grandTotal - taxTotal);
             var cgst = taxTotal / 2m;
             var sgst = taxTotal - cgst;
-            var paid = grandTotal - ImportHelpers.Dec(headers["pcredit"]);
-            if (paid < 0) paid = 0;
-            var paymentStatus = paid >= grandTotal ? 2 : (paid > 0 ? 1 : 0);
+            var paid = ImportHelpers.ResolveMedWinPurchasePaidAmount(
+                grandTotal,
+                ImportHelpers.Dec(headers["pcredit"]),
+                ImportHelpers.Dec(headers["pcheqamt"]));
+            var paymentStatus = ImportHelpers.ResolveMedWinPurchasePaymentStatus(grandTotal, paid);
 
             await using var ins = new SqlCommand("""
                 INSERT INTO Purchases
@@ -367,7 +369,80 @@ internal static class MedWinTransactionImporter
         }
 
         Console.WriteLine($"  Sale payment rows added: {added:N0}.");
-        Console.WriteLine("  Purchase receipts (purrcpt) are reflected in purchase PaidAmount during purchase import.");
+        Console.WriteLine("  Purchase receipts are stored on purchase headers (pcheqamt / pcredit).");
+    }
+
+    /// <summary>
+    /// Repairs PaidAmount / PaymentStatus on imported MW-P purchases from MedWin header fields.
+    /// </summary>
+    public static async Task BackfillPurchasePaymentsAsync(MedWinImportContext ctx, SqlConnection target)
+    {
+        Console.WriteLine("\n[backfill-purchase-payments] Repairing purchase paid amounts from MedWin...");
+        using var med = ctx.OpenMedWin();
+        med.Open();
+
+        using var headerCmd = new OleDbCommand("""
+            SELECT purblno, pactamt, pcheqamt, pcredit
+            FROM purchase
+            WHERE purparty <> 1
+            """, med);
+        using var headers = headerCmd.ExecuteReader();
+
+        int updated = 0, examined = 0;
+        while (headers.Read())
+        {
+            examined++;
+            var billNo = ImportHelpers.Int(headers["purblno"]);
+            var invoice = $"MW-P-{billNo}";
+            var grandTotal = ImportHelpers.Dec(headers["pactamt"]);
+            var paid = ImportHelpers.ResolveMedWinPurchasePaidAmount(
+                grandTotal,
+                ImportHelpers.Dec(headers["pcredit"]),
+                ImportHelpers.Dec(headers["pcheqamt"]));
+            var paymentStatus = ImportHelpers.ResolveMedWinPurchasePaymentStatus(grandTotal, paid);
+
+            await using var upd = new SqlCommand("""
+                UPDATE Purchases
+                SET PaidAmount = @Paid,
+                    PaymentStatus = @PaymentStatus,
+                    ModifiedAtUtc = @Now
+                WHERE InvoiceNumber = @Invoice
+                  AND Status = 3
+                  AND (PaidAmount <> @Paid OR PaymentStatus <> @PaymentStatus)
+                """, target);
+            upd.Parameters.AddWithValue("@Paid", paid);
+            upd.Parameters.AddWithValue("@PaymentStatus", paymentStatus);
+            upd.Parameters.AddWithValue("@Invoice", invoice);
+            upd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            updated += await upd.ExecuteNonQueryAsync();
+        }
+
+        await using (var resetSuppliers = new SqlCommand(
+                         "UPDATE Suppliers SET OutstandingBalance = 0, ModifiedAtUtc = @Now", target))
+        {
+            resetSuppliers.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            await resetSuppliers.ExecuteNonQueryAsync();
+        }
+
+        await using (var syncSuppliers = new SqlCommand("""
+            UPDATE s
+            SET s.OutstandingBalance = x.Due,
+                s.ModifiedAtUtc = @Now
+            FROM Suppliers s
+            INNER JOIN (
+                SELECT SupplierId, SUM(GrandTotal - PaidAmount) AS Due
+                FROM Purchases
+                WHERE Status = 3 AND GrandTotal > PaidAmount
+                GROUP BY SupplierId
+            ) x ON x.SupplierId = s.Id
+            """, target))
+        {
+            syncSuppliers.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            await syncSuppliers.ExecuteNonQueryAsync();
+        }
+
+        Console.WriteLine($"  Purchase payment rows updated: {updated:N0} ({examined - updated:N0} already correct).");
+        Console.WriteLine("  Supplier outstanding balances recalculated from open purchase dues.");
     }
 
     private static async Task<int> InsertSalePaymentIfMissingAsync(

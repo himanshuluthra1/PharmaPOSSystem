@@ -71,7 +71,8 @@ public enum SaleStatus
     Hold = 1,
     Completed = 2,
     Returned = 3,
-    Cancelled = 4
+    Cancelled = 4,
+    PartiallyReturned = 5
 }
 
 public enum PurchaseStatus
@@ -96,7 +97,8 @@ public enum StockMovementType
     TransferOut = 7,
     Damage = 8,
     Expiry = 9,
-    OpeningStock = 10
+    OpeningStock = 10,
+  NonSaleableIn = 11
 }
 
 /// <summary>Batch consumption strategy for stock allocation.</summary>

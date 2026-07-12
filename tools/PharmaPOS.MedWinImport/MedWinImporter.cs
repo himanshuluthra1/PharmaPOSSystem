@@ -36,6 +36,7 @@ internal static class MedWinImporter
         if (set.Contains("payments")) await MedWinTransactionImporter.ImportPaymentsAsync(ctx, target);
         if (set.Contains("users")) await ImportUsersAsync(ctx, target);
         if (set.Contains("backfill-expiry")) await MedWinTransactionImporter.BackfillExpiryAsync(ctx, target);
+        if (set.Contains("backfill-purchase-payments")) await MedWinTransactionImporter.BackfillPurchasePaymentsAsync(ctx, target);
         if (set.Contains("dedupe-onemg")) await OneMgDuplicateCleaner.RunAsync(ctx, target, dryRun: !ctx.Force);
     }
 

@@ -36,6 +36,7 @@ public class PurchaseSearchService : IPurchaseSearchService
                 bill.PurchaseId,
                 bill.InvoiceNumber,
                 bill.InvoiceDate,
-                bill.SupplierName));
+                bill.SupplierName,
+                bill.SupplierInvoiceNumber));
     }
 }

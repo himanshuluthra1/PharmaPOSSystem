@@ -3,6 +3,7 @@ using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Accounting;
 using PharmaPOS.Domain.Entities.Identity;
 using PharmaPOS.Domain.Entities.Inventory;
+using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
@@ -37,9 +38,11 @@ public class DbSeeder
         var branch = await SeedBranchAsync(ct);
         await SeedRolesAndAdminAsync(branch, ct);
         await EnsureRolePermissionsAsync(ct);
+        await EnsureRoleDefaultPermissionsAsync(ct);
         await EnsureSuperAdminHasAllPermissionsAsync(ct);
         await SeedCompanyProfileAsync(ct);
         await SeedAccountsAsync(ct);
+        await SeedReturnReasonsAsync(ct);
         await SeedSampleMastersAsync(branch, ct);
         await EnsureDefaultSupplierAsync(branch, ct);
 
@@ -149,6 +152,35 @@ public class DbSeeder
         await _context.SaveChangesAsync(ct);
     }
 
+    /// <summary>Adds any newly catalogued default permissions to existing roles.</summary>
+    private async Task EnsureRoleDefaultPermissionsAsync(CancellationToken ct)
+    {
+        var permissions = await _context.Permissions.ToListAsync(ct);
+        var permissionByKey = permissions.ToDictionary(p => p.Key, p => p.Id);
+        var roles = await _context.Roles.ToListAsync(ct);
+        var existing = await _context.RolePermissions
+            .Include(rp => rp.Permission)
+            .Select(rp => new { rp.RoleId, rp.Permission!.Key })
+            .ToListAsync(ct);
+
+        foreach (var role in roles)
+        {
+            var granted = existing.Where(e => e.RoleId == role.Id).Select(e => e.Key).ToHashSet();
+            foreach (var key in RolePermissionDefaults.ForRole(role.Name))
+            {
+                if (granted.Contains(key)) continue;
+                if (!permissionByKey.TryGetValue(key, out var permissionId)) continue;
+                _context.RolePermissions.Add(new RolePermission
+                {
+                    RoleId = role.Id,
+                    PermissionId = permissionId
+                });
+            }
+        }
+
+        await _context.SaveChangesAsync(ct);
+    }
+
     /// <summary>Grants any newly added catalog permissions to SuperAdmin.</summary>
     private async Task EnsureSuperAdminHasAllPermissionsAsync(CancellationToken ct)
     {
@@ -185,6 +217,26 @@ public class DbSeeder
             CurrencySymbol = "\u20B9",
             InvoiceFooter = "Thank you for your purchase. Get well soon!"
         });
+        await _context.SaveChangesAsync(ct);
+    }
+
+    private async Task SeedReturnReasonsAsync(CancellationToken ct)
+    {
+        if (await _context.ReturnReasons.AnyAsync(ct)) return;
+
+        var reasons = new[]
+        {
+            new ReturnReason { Code = "WRONG_MED", Name = "Wrong medicine supplied", SortOrder = 1 },
+            new ReturnReason { Code = "RX_CHANGED", Name = "Doctor changed prescription", SortOrder = 2 },
+            new ReturnReason { Code = "DUPLICATE", Name = "Duplicate purchase", SortOrder = 3 },
+            new ReturnReason { Code = "CHANGED_MIND", Name = "Customer changed mind", SortOrder = 4 },
+            new ReturnReason { Code = "DAMAGED", Name = "Damaged medicine", SortOrder = 5 },
+            new ReturnReason { Code = "EXPIRED", Name = "Expired medicine", SortOrder = 6 },
+            new ReturnReason { Code = "BILLING_ERR", Name = "Billing mistake", SortOrder = 7 },
+            new ReturnReason { Code = "RECALL", Name = "Manufacturer recall", SortOrder = 8 },
+            new ReturnReason { Code = "OTHER", Name = "Other", SortOrder = 99, RequiresRemarks = true }
+        };
+        _context.ReturnReasons.AddRange(reasons);
         await _context.SaveChangesAsync(ct);
     }
 

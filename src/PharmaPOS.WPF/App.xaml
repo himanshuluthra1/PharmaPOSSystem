@@ -40,6 +40,9 @@
             <DataTemplate DataType="{x:Type salesVm:SalesViewModel}">
                 <views:SalesView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type salesVm:SaleReturnViewModel}">
+                <views:SaleReturnView />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type purchaseVm:PurchaseViewModel}">
                 <views:PurchaseView />
             </DataTemplate>

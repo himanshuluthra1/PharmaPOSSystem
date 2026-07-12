@@ -105,7 +105,7 @@ static void PrintHelp()
 
         Phases:
           company, gst, medicines, suppliers, customers, stock,
-          purchases, sales, payments, users, backfill-expiry, dedupe-onemg, all
+          purchases, sales, payments, users, backfill-expiry, backfill-purchase-payments, dedupe-onemg, all
 
         Notes:
           - Medicines imported only if in stock or sold at least once in MedWin.

@@ -81,6 +81,7 @@ public record StockLedgerRowDto(
         StockMovementType.Damage => "Damage",
         StockMovementType.Expiry => "Expiry",
         StockMovementType.OpeningStock => "Opening Stock",
+        StockMovementType.NonSaleableIn => "Non-Saleable In",
         _ => MovementType.ToString()
     };
 

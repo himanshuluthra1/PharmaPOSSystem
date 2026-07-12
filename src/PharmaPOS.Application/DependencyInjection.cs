@@ -8,6 +8,7 @@ using PharmaPOS.Application.Features.Reports;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.SaleReturns;
 
 namespace PharmaPOS.Application;
 
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddTransient<IAuthService, AuthService>();
         services.AddTransient<IDashboardService, DashboardService>();
         services.AddTransient<ISalesService, SalesService>();
+        services.AddTransient<ISaleReturnService, SaleReturnService>();
         services.AddTransient<IPurchaseService, PurchaseService>();
         services.AddTransient<IMastersService, MastersService>();
         services.AddTransient<IMedicineMappingService, MedicineMappingService>();

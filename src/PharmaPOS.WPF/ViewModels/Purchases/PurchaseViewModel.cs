@@ -31,6 +31,7 @@ public class PurchaseViewModel : ObservableObject
 
     private PaymentMethod _paymentMethod = PaymentMethod.Cash;
     private decimal _paidAmount;
+    private decimal _headerGrandTotal;
     private bool _isBusy;
     private string? _statusMessage;
 
@@ -351,6 +352,7 @@ public class PurchaseViewModel : ObservableObject
         _editingPurchaseId = purchase.PurchaseId;
         OnPropertyChanged(nameof(IsEditing));
 
+        _headerGrandTotal = purchase.GrandTotal;
         SelectedSupplier = new SupplierLookupDto(
             purchase.SupplierId,
             purchase.SupplierName,
@@ -431,7 +433,16 @@ public class PurchaseViewModel : ObservableObject
     public decimal RoundOff { get => _roundOff; private set => SetProperty(ref _roundOff, value); }
     public decimal GrandTotal { get => _grandTotal; private set => SetProperty(ref _grandTotal, value); }
 
-    public decimal BalanceDue => GrandTotal > PaidAmount ? GrandTotal - PaidAmount : 0m;
+    public decimal BalanceDue
+    {
+        get
+        {
+            var total = _editingPurchaseId.HasValue && _headerGrandTotal > 0
+                ? _headerGrandTotal
+                : GrandTotal;
+            return total > PaidAmount ? total - PaidAmount : 0m;
+        }
+    }
     public int ItemCount => Lines.Count(l => !l.IsEmpty);
 
     public PaymentMethod PaymentMethod
@@ -627,6 +638,7 @@ public class PurchaseViewModel : ObservableObject
         InvoiceDate = DateTime.Today;
         PaymentMethod = PaymentMethod.Cash;
         PaidAmount = 0;
+        _headerGrandTotal = 0;
         _editingPurchaseId = null;
         _lastDropdownPurchaseId = 0;
         OnPropertyChanged(nameof(IsEditing));

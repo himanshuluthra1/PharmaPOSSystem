@@ -248,6 +248,31 @@
                                 <DataGridTextColumn Header="Shortfall" Binding="{Binding Shortfall}" Width="80" />
                             </DataGrid.Columns>
                         </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding SaleReturnRows}" Visibility="{Binding ShowSaleReturnGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Return #" Binding="{Binding ReturnNumber}" Width="120" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding ReturnDate, StringFormat=dd/MM/yyyy}" Width="100" />
+                                <DataGridTextColumn Header="Invoice" Binding="{Binding OriginalInvoiceNumber}" Width="110" />
+                                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="140" />
+                                <DataGridTextColumn Header="Refund" Binding="{Binding RefundAmount, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Mode" Binding="{Binding RefundMode}" Width="90" />
+                                <DataGridTextColumn Header="Cashier" Binding="{Binding CashierName}" Width="100" />
+                                <DataGridCheckBoxColumn Header="Full" Binding="{Binding IsFullReturn}" Width="50" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding MedicineReturnRows}" Visibility="{Binding ShowMedicineReturnGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
+                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
+                                <DataGridTextColumn Header="Qty returned" Binding="{Binding ReturnedQuantity, StringFormat=N2}" Width="100" />
+                                <DataGridTextColumn Header="Refund" Binding="{Binding RefundAmount, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Return count" Binding="{Binding ReturnCount}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
                         </Grid>
                     </DockPanel>
                 </DockPanel>

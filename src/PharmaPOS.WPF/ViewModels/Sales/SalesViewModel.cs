@@ -19,6 +19,7 @@ public class SalesViewModel : ObservableObject
     private readonly ISalesService _salesService;
     private readonly IMedicinePickerService _picker;
     private readonly IBillSearchService _billSearch;
+    private readonly INavigationService _navigation;
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
@@ -51,6 +52,7 @@ public class SalesViewModel : ObservableObject
         ISalesService salesService,
         IMedicinePickerService picker,
         IBillSearchService billSearch,
+        INavigationService navigation,
         ICurrentUserService currentUser,
         IDialogService dialog,
         IInvoicePrintService printService)
@@ -58,6 +60,7 @@ public class SalesViewModel : ObservableObject
         _salesService = salesService;
         _picker = picker;
         _billSearch = billSearch;
+        _navigation = navigation;
         _currentUser = currentUser;
         _dialog = dialog;
         _printService = printService;
@@ -70,6 +73,8 @@ public class SalesViewModel : ObservableObject
             AppConstants.Permissions.SalesDiscount, AppConstants.Permissions.SalesManage);
         CanPrint = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesPrint, AppConstants.Permissions.SalesManage);
+        CanReturn = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesReturn, AppConstants.Permissions.SalesReturnManage);
 
         Cart.CollectionChanged += (_, _) => RecalculateTotals();
 
@@ -78,6 +83,7 @@ public class SalesViewModel : ObservableObject
         PrintCommand = new AsyncRelayCommand(_ => PrintAsync(), _ => CanPrint && IsEditing && !IsBusy);
         NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
         SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
+        OpenSaleReturnCommand = new RelayCommand(_ => _navigation.NavigateTo<SaleReturnViewModel>(), _ => CanReturn);
         LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
 
         EnsureTrailingEmptyRow();
@@ -100,12 +106,14 @@ public class SalesViewModel : ObservableObject
     public ICommand PrintCommand { get; }
     public ICommand NewBillCommand { get; }
     public ICommand SearchBillsCommand { get; }
+    public ICommand OpenSaleReturnCommand { get; }
     public ICommand LoadOlderBillsCommand { get; }
 
     public bool CanCreate { get; }
     public bool CanSearchBills { get; }
     public bool CanApplyDiscount { get; }
     public bool CanPrint { get; }
+    public bool CanReturn { get; }
 
     public bool CanLoadOlderBills => _nextOlderBillDate is not null && !IsLoadingOlderBills && !IsBusy;
 

@@ -14,11 +14,23 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.F2) return;
-        if (DataContext is MainViewModel vm)
+        if (e.Key == Key.F2)
         {
-            vm.NavigateToSales();
-            e.Handled = true;
+            if (DataContext is MainViewModel vm)
+            {
+                vm.NavigateToSales();
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (e.Key == Key.F8)
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.NavigateToSaleReturn();
+                e.Handled = true;
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.SaleReturns;
 using PharmaPOS.WPF.Views;
 
 namespace PharmaPOS.WPF.Services;
@@ -68,6 +69,117 @@ public class InvoicePrintService : IInvoicePrintService
         doc.ColumnWidth = dialog.PrintableAreaWidth;
         IDocumentPaginatorSource source = doc;
         dialog.PrintDocument(source.DocumentPaginator, $"Invoice {receipt.InvoiceNumber}");
+    }
+
+    public FlowDocument BuildReturnDocument(SaleReturnReceiptDto r)
+    {
+        var doc = new FlowDocument
+        {
+            PageWidth = A4Width,
+            ColumnWidth = A4Width,
+            PagePadding = new Thickness(40),
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 12,
+            Background = Brushes.White,
+            Foreground = Brushes.Black
+        };
+
+        var header = new Section();
+        header.Blocks.Add(new Paragraph(new Run(r.CompanyName))
+        {
+            FontSize = 20, FontWeight = FontWeights.Bold, TextAlignment = TextAlignment.Center
+        });
+        header.Blocks.Add(new Paragraph(new Run("SALE RETURN / CREDIT MEMO"))
+        {
+            FontSize = 14, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 4, 0, 12)
+        });
+        if (!string.IsNullOrWhiteSpace(r.CompanyAddress))
+            header.Blocks.Add(new Paragraph(new Run(r.CompanyAddress)) { TextAlignment = TextAlignment.Center, FontSize = 10 });
+        if (!string.IsNullOrWhiteSpace(r.CompanyGst))
+            header.Blocks.Add(new Paragraph(new Run($"GSTIN: {r.CompanyGst}")) { TextAlignment = TextAlignment.Center, FontSize = 10 });
+        doc.Blocks.Add(header);
+
+        var meta = new Paragraph();
+        meta.Inlines.Add(new Run($"Return #: {r.ReturnNumber}\n"));
+        meta.Inlines.Add(new Run($"Original Invoice: {r.OriginalInvoiceNumber}\n"));
+        meta.Inlines.Add(new Run($"Date: {r.ReturnDate:dd/MM/yyyy hh:mm tt}\n"));
+        meta.Inlines.Add(new Run($"Customer: {r.CustomerName}\n"));
+        if (!string.IsNullOrWhiteSpace(r.CustomerPhone))
+            meta.Inlines.Add(new Run($"Phone: {r.CustomerPhone}\n"));
+        meta.Inlines.Add(new Run($"Cashier: {r.CashierName}\n"));
+        meta.Inlines.Add(new Run($"Refund: {r.RefundMode} — {r.RefundAmount:N2}"));
+        if (!string.IsNullOrWhiteSpace(r.CreditNoteNumber))
+            meta.Inlines.Add(new Run($"\nCredit Note: {r.CreditNoteNumber} (valid till {r.CreditNoteExpiry:dd/MM/yyyy})"));
+        meta.Margin = new Thickness(0, 0, 0, 16);
+        doc.Blocks.Add(meta);
+
+        var table = new Table { CellSpacing = 0, Margin = new Thickness(0, 0, 0, 12) };
+        for (var i = 0; i < 7; i++) table.Columns.Add(new TableColumn());
+        var rg = new TableRowGroup();
+        var hr = new TableRow();
+        foreach (var h in new[] { "#", "Medicine", "Batch", "Qty", "MRP", "Amount", "Reason" })
+            hr.Cells.Add(TextCell(h, TextAlignment.Center, bold: true));
+        rg.Rows.Add(hr);
+
+        foreach (var line in r.Lines)
+        {
+            var row = new TableRow();
+            row.Cells.Add(TextCell(line.SrNo.ToString(), TextAlignment.Center));
+            row.Cells.Add(TextCell(line.MedicineName, TextAlignment.Left));
+            row.Cells.Add(TextCell(line.BatchNumber, TextAlignment.Center));
+            row.Cells.Add(TextCell(line.ReturnedQuantity.ToString("N0"), TextAlignment.Right));
+            row.Cells.Add(TextCell(line.Mrp.ToString("N2", Inr), TextAlignment.Right));
+            row.Cells.Add(TextCell(line.LineTotal.ToString("N2", Inr), TextAlignment.Right));
+            row.Cells.Add(TextCell(line.ReasonName, TextAlignment.Left));
+            rg.Rows.Add(row);
+        }
+        table.RowGroups.Add(rg);
+        doc.Blocks.Add(table);
+
+        var totals = new Paragraph
+        {
+            TextAlignment = TextAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        totals.Inlines.Add(new Run($"Discount Reversal: {r.DiscountAmount:N2}\n"));
+        totals.Inlines.Add(new Run($"GST Reversal (CGST): {r.CgstAmount:N2}  SGST: {r.SgstAmount:N2}\n"));
+        totals.Inlines.Add(new Run($"Refund Total: {r.GrandTotal:N2}") { FontWeight = FontWeights.Bold, FontSize = 14 });
+        doc.Blocks.Add(totals);
+
+        if (!string.IsNullOrWhiteSpace(r.Remarks))
+            doc.Blocks.Add(new Paragraph(new Run($"Reason / Remarks: {r.Remarks}"))
+            {
+                Margin = new Thickness(0, 16, 0, 0), FontStyle = FontStyles.Italic
+            });
+
+        doc.Blocks.Add(new Paragraph(new Run($"Return Ref: {r.ReturnNumber} | Invoice: {r.OriginalInvoiceNumber}"))
+        {
+            FontSize = 9, Foreground = Brushes.Gray, TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 24, 0, 0)
+        });
+
+        return doc;
+    }
+
+    public void ShowReturnPreview(SaleReturnReceiptDto receipt)
+    {
+        var window = new ReturnReceiptPreviewWindow(this, receipt)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    public void PrintReturn(SaleReturnReceiptDto receipt)
+    {
+        var dialog = new PrintDialog();
+        if (dialog.ShowDialog() != true) return;
+        var doc = BuildReturnDocument(receipt);
+        doc.PageWidth = dialog.PrintableAreaWidth;
+        doc.ColumnWidth = dialog.PrintableAreaWidth;
+        IDocumentPaginatorSource source = doc;
+        dialog.PrintDocument(source.DocumentPaginator, $"Return {receipt.ReturnNumber}");
     }
 
     private static Block BuildHeader(SaleReceiptDto r)

@@ -74,6 +74,30 @@ internal static class ImportHelpers
 
     public static string MedWinMedicineNote(int medWinId) => $"MedWinId:{medWinId}";
 
+    /// <summary>
+    /// MedWin purchase header: <c>pcredit</c> is the amount still due on credit;
+    /// <c>pcheqamt</c> is the amount paid. When both are zero the bill is unpaid
+    /// (do not treat <c>pcredit = 0</c> alone as fully paid).
+    /// </summary>
+    public static decimal ResolveMedWinPurchasePaidAmount(decimal grandTotal, decimal creditDue, decimal chequePaid)
+    {
+        if (grandTotal <= 0) return 0m;
+        if (creditDue > 0)
+            return Math.Clamp(grandTotal - creditDue, 0m, grandTotal);
+        if (chequePaid > 0)
+            return Math.Min(grandTotal, chequePaid);
+        return 0m;
+    }
+
+    public static int ResolveMedWinPurchasePaymentStatus(decimal grandTotal, decimal paidAmount)
+    {
+        if (grandTotal <= 0) return 2;
+        paidAmount = Math.Clamp(paidAmount, 0m, grandTotal);
+        if (paidAmount >= grandTotal) return 2;
+        if (paidAmount > 0) return 1;
+        return 0;
+    }
+
     public static int? ParseMedWinMedicineId(string? notes)
     {
         if (string.IsNullOrWhiteSpace(notes)) return null;

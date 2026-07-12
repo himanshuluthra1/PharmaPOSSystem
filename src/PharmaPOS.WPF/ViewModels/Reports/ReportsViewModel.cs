@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Microsoft.Win32;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Reports;
+using PharmaPOS.Application.Features.SaleReturns;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -12,6 +13,7 @@ namespace PharmaPOS.WPF.ViewModels.Reports;
 public class ReportsViewModel : ObservableObject
 {
     private readonly IReportsService _reports;
+    private readonly ISaleReturnService _saleReturns;
     private readonly int? _branchId;
     private readonly IDialogService _dialog;
 
@@ -26,10 +28,12 @@ public class ReportsViewModel : ObservableObject
 
     public ReportsViewModel(
         IReportsService reports,
+        ISaleReturnService saleReturns,
         ICurrentUserService currentUser,
         IDialogService dialog)
     {
         _reports = reports;
+        _saleReturns = saleReturns;
         _branchId = currentUser.CurrentUser?.BranchId;
         _dialog = dialog;
 
@@ -45,7 +49,9 @@ public class ReportsViewModel : ObservableObject
             new(ReportKind.SalesByMedicine, "Sales by Medicine", "Quantity and revenue ranked by medicine."),
             new(ReportKind.StockValuation, "Stock Valuation", "Current stock value at purchase cost."),
             new(ReportKind.Expiry, "Expiry Report", "Expired and near-expiry batches."),
-            new(ReportKind.LowStock, "Low Stock", "Medicines at or below reorder level.")
+            new(ReportKind.LowStock, "Low Stock", "Medicines at or below reorder level."),
+            new(ReportKind.SaleReturns, "Sale Returns", "Return transactions for the selected period."),
+            new(ReportKind.MedicineReturns, "Medicine-wise Returns", "Returned quantities grouped by medicine and batch.")
         ];
         _selectedReport = ReportOptions[0];
 
@@ -77,6 +83,8 @@ public class ReportsViewModel : ObservableObject
     public ObservableCollection<StockValuationReportRowDto> StockValuationRows { get; } = new();
     public ObservableCollection<ExpiryReportRowDto> ExpiryRows { get; } = new();
     public ObservableCollection<LowStockReportRowDto> LowStockRows { get; } = new();
+    public ObservableCollection<SaleReturnSummaryRowDto> SaleReturnRows { get; } = new();
+    public ObservableCollection<MedicineReturnReportRowDto> MedicineReturnRows { get; } = new();
 
     public ReportKindOption SelectedReport
     {
@@ -133,6 +141,8 @@ public class ReportsViewModel : ObservableObject
     public bool ShowStockGrid => ActiveGrid == "Stock";
     public bool ShowExpiryGrid => ActiveGrid == "Expiry";
     public bool ShowLowStockGrid => ActiveGrid == "LowStock";
+    public bool ShowSaleReturnGrid => ActiveGrid == "SaleReturns";
+    public bool ShowMedicineReturnGrid => ActiveGrid == "MedicineReturns";
 
     public bool IsBusy
     {
@@ -233,6 +243,30 @@ public class ReportsViewModel : ObservableObject
                     foreach (var r in low.Rows) LowStockRows.Add(r);
                     SetActiveGrid("LowStock");
                     break;
+
+                case ReportKind.SaleReturns:
+                    var returns = await _saleReturns.ListReturnsAsync(FromDate, ToDate, _branchId);
+                    Summary = new ReportSummaryDto
+                    {
+                        RecordCount = returns.Count,
+                        TotalAmount = returns.Sum(r => r.RefundAmount),
+                        FooterNote = $"{returns.Count} return(s)"
+                    };
+                    foreach (var r in returns) SaleReturnRows.Add(r);
+                    SetActiveGrid("SaleReturns");
+                    break;
+
+                case ReportKind.MedicineReturns:
+                    var medRet = await _saleReturns.GetMedicineReturnReportAsync(FromDate, ToDate, _branchId);
+                    Summary = new ReportSummaryDto
+                    {
+                        RecordCount = medRet.Count,
+                        TotalAmount = medRet.Sum(r => r.RefundAmount),
+                        FooterNote = $"{medRet.Count} medicine/batch group(s)"
+                    };
+                    foreach (var r in medRet) MedicineReturnRows.Add(r);
+                    SetActiveGrid("MedicineReturns");
+                    break;
             }
 
             StatusMessage = Summary.FooterNote ??
@@ -263,6 +297,8 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowStockGrid));
         OnPropertyChanged(nameof(ShowExpiryGrid));
         OnPropertyChanged(nameof(ShowLowStockGrid));
+        OnPropertyChanged(nameof(ShowSaleReturnGrid));
+        OnPropertyChanged(nameof(ShowMedicineReturnGrid));
     }
 
     private void ClearAllRows()
@@ -275,6 +311,8 @@ public class ReportsViewModel : ObservableObject
         StockValuationRows.Clear();
         ExpiryRows.Clear();
         LowStockRows.Clear();
+        SaleReturnRows.Clear();
+        MedicineReturnRows.Clear();
         Summary = new ReportSummaryDto();
     }
 
@@ -299,6 +337,8 @@ public class ReportsViewModel : ObservableObject
                 case "Stock": ReportCsvExporter.Export(dialog.FileName, StockValuationRows); break;
                 case "Expiry": ReportCsvExporter.Export(dialog.FileName, ExpiryRows); break;
                 case "LowStock": ReportCsvExporter.Export(dialog.FileName, LowStockRows); break;
+                case "SaleReturns": ReportCsvExporter.Export(dialog.FileName, SaleReturnRows); break;
+                case "MedicineReturns": ReportCsvExporter.Export(dialog.FileName, MedicineReturnRows); break;
             }
             _dialog.ShowInfo($"Exported to {dialog.FileName}");
         }

@@ -16,6 +16,7 @@ public static class ModulePermissions
     {
         [typeof(DashboardViewModel)] = "dashboard",
         [typeof(SalesViewModel)] = "sales",
+        [typeof(SaleReturnViewModel)] = "sales",
         [typeof(PurchaseViewModel)] = "purchase",
         [typeof(InventoryViewModel)] = "inventory",
         [typeof(MastersViewModel)] = "masters",

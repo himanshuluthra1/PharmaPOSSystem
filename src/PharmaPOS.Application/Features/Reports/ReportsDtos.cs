@@ -9,7 +9,9 @@ public enum ReportKind
     SalesByMedicine,
     StockValuation,
     Expiry,
-    LowStock
+    LowStock,
+    SaleReturns,
+    MedicineReturns
 }
 
 public sealed class ReportKindOption(ReportKind kind, string label, string description)

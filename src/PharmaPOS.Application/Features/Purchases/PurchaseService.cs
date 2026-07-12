@@ -115,10 +115,12 @@ public class PurchaseService : IPurchaseService
             return Result.Failure<PurchaseLoadDto>("Purchase belongs to another branch.");
 
         var medIds = purchase.Items.Select(i => i.MedicineId).Distinct().ToList();
-        var medNames = await _uow.Repository<Medicine>().Query().AsNoTracking()
+        var preferMedWinNames = purchase.InvoiceNumber.StartsWith("MW-P-", StringComparison.OrdinalIgnoreCase);
+        var medNames = await ResolveMedicineDisplayNamesAsync(medIds, preferMedWinNames, ct);
+        var medDetails = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
             .Where(m => medIds.Contains(m.Id))
-            .Select(m => new { m.Id, m.Name, m.GenericName })
-            .ToDictionaryAsync(m => m.Id, m => m, ct);
+            .Select(m => new { m.Id, m.GenericName })
+            .ToDictionaryAsync(m => m.Id, m => m.GenericName, ct);
 
         return Result.Success(new PurchaseLoadDto
         {
@@ -129,16 +131,18 @@ public class PurchaseService : IPurchaseService
             SupplierId = purchase.SupplierId,
             SupplierName = purchase.Supplier?.Name ?? $"Supplier #{purchase.SupplierId}",
             SupplierPhone = purchase.Supplier?.Phone,
+            GrandTotal = purchase.GrandTotal,
             PaidAmount = purchase.PaidAmount,
             PaymentMethod = PaymentMethod.Cash,
             Lines = purchase.Items.Select(i =>
             {
-                medNames.TryGetValue(i.MedicineId, out var med);
+                medNames.TryGetValue(i.MedicineId, out var medicineName);
+                medDetails.TryGetValue(i.MedicineId, out var genericName);
                 return new PurchaseLoadLineDto
                 {
                     MedicineId = i.MedicineId,
-                    MedicineName = med?.Name ?? $"Medicine #{i.MedicineId}",
-                    GenericName = med?.GenericName,
+                    MedicineName = medicineName ?? $"Medicine #{i.MedicineId}",
+                    GenericName = genericName,
                     BatchNumber = i.BatchNumber,
                     ManufacturingDate = i.ManufacturingDate,
                     ExpiryDate = i.ExpiryDate,
@@ -154,25 +158,101 @@ public class PurchaseService : IPurchaseService
         });
     }
 
-    public Task<List<PurchaseSupplierBillDto>> ListPurchasesBySupplierAsync(int? supplierId, int? branchId, CancellationToken ct = default)
+    public async Task<List<PurchaseSupplierBillDto>> ListPurchasesBySupplierAsync(int? supplierId, int? branchId, CancellationToken ct = default)
     {
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
             .Where(p => p.Status == PurchaseStatus.Received);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
         if (supplierId.HasValue) q = q.Where(p => p.SupplierId == supplierId.Value);
 
-        return q.OrderByDescending(p => p.InvoiceDate)
+        var rows = await q.OrderByDescending(p => p.InvoiceDate)
             .ThenByDescending(p => p.Id)
-            .Select(p => new PurchaseSupplierBillDto(
+            .Select(p => new
+            {
                 p.Id,
                 p.InvoiceNumber,
+                p.SupplierInvoiceNumber,
                 p.InvoiceDate,
-                p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
+                SupplierName = p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
                 p.GrandTotal,
-                p.Items.Count,
-                p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m))
+                p.PaidAmount,
+                ItemCount = p.Items.Count
+            })
             .ToListAsync(ct);
+
+        return rows.Select(p => new PurchaseSupplierBillDto(
+            p.Id,
+            p.InvoiceNumber,
+            p.SupplierInvoiceNumber,
+            p.InvoiceDate,
+            p.SupplierName,
+            p.GrandTotal,
+            p.PaidAmount,
+            p.ItemCount)).ToList();
     }
+
+    private async Task<Dictionary<int, string>> ResolveMedicineDisplayNamesAsync(
+        IEnumerable<int> medicineIds,
+        bool preferMedWinHistoricalNames,
+        CancellationToken ct)
+    {
+        var ids = medicineIds.Distinct().ToList();
+        if (ids.Count == 0) return new();
+
+        var medicines = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+            .Where(m => ids.Contains(m.Id))
+            .Select(m => new { m.Id, m.Name })
+            .ToListAsync(ct);
+
+        var result = medicines.ToDictionary(m => m.Id, m => m.Name);
+
+        if (preferMedWinHistoricalNames)
+        {
+            var mappings = await _uow.Repository<MedicineMedWinMapping>().Query().AsNoTracking()
+                .Where(m => ids.Contains(m.OneMgMedicineId)
+                            || (m.MedWinMedicineId != null && ids.Contains(m.MedWinMedicineId.Value)))
+                .Select(m => new { m.OneMgMedicineId, m.MedWinMedicineId, m.MedWinMedicineName, m.OneMgMedicineName })
+                .ToListAsync(ct);
+
+            foreach (var map in mappings)
+            {
+                if (map.MedWinMedicineId is int medWinMedicineId
+                    && ids.Contains(medWinMedicineId))
+                {
+                    if (IsUsableMedWinDisplayName(map.OneMgMedicineName))
+                        result[medWinMedicineId] = map.OneMgMedicineName;
+                    else if (IsUsableMedWinDisplayName(map.MedWinMedicineName))
+                        result[medWinMedicineId] = map.MedWinMedicineName;
+                }
+            }
+
+            foreach (var group in mappings.GroupBy(m => m.OneMgMedicineId))
+            {
+                if (!ids.Contains(group.Key)) continue;
+
+                var medWinNames = group
+                    .Select(m => m.MedWinMedicineName)
+                    .Where(IsUsableMedWinDisplayName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (medWinNames.Count == 1)
+                    result[group.Key] = medWinNames[0];
+            }
+        }
+
+        foreach (var id in ids)
+        {
+            if (!result.ContainsKey(id))
+                result[id] = $"Medicine #{id}";
+        }
+
+        return result;
+    }
+
+    private static bool IsUsableMedWinDisplayName(string? name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && !name.StartsWith("MedWinId:", StringComparison.OrdinalIgnoreCase);
 
     public async Task<Result<PurchaseReceiptDto>> CreatePurchaseAsync(CreatePurchaseRequest request, int? branchId, CancellationToken ct = default)
     {

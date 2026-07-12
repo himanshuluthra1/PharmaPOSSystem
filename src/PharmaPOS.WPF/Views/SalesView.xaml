@@ -35,6 +35,18 @@
                                 <TextBlock Text="Search" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
+                        <Button Command="{Binding OpenSaleReturnCommand}"
+                                IsEnabled="{Binding CanReturn}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="12,8" Margin="0,0,8,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Sale Return (F8)">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="KeyboardReturn" Width="18" Height="18"
+                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Return" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Grid Width="320">
                         <ToggleButton x:Name="BillSelectorToggle"
                                       HorizontalAlignment="Stretch"

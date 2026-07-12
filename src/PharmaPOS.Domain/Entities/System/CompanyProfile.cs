@@ -27,4 +27,15 @@ public class CompanyProfile : BaseEntity
     public int DefaultLowStockThreshold { get; set; } = 10;
     public string SalesInvoicePrefix { get; set; } = "INV";
     public string PurchaseInvoicePrefix { get; set; } = "PUR";
+    public string SaleReturnPrefix { get; set; } = "SR";
+    public string CreditNotePrefix { get; set; } = "CN";
+
+    // Sale return policy (configurable).
+    public int SaleReturnAllowedDays { get; set; } = 30;
+    public decimal SaleReturnHighValueThreshold { get; set; } = 5000m;
+    public bool SaleReturnBlockExpired { get; set; } = true;
+    public bool SaleReturnBlockScheduleDrugs { get; set; } = false;
+    public bool SaleReturnBlockRefrigerated { get; set; } = false;
+    public bool SaleReturnRefundOriginalPaymentMode { get; set; } = true;
+    public int CreditNoteValidityDays { get; set; } = 90;
 }

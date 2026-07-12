@@ -18,6 +18,9 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.SalesCreate,
             AppConstants.Permissions.SalesDiscount,
             AppConstants.Permissions.SalesPrint,
+            AppConstants.Permissions.SalesReturn,
+            AppConstants.Permissions.SalesReturnHighValue,
+            AppConstants.Permissions.SalesReturnOverride,
             AppConstants.Permissions.PurchaseView,
             AppConstants.Permissions.PurchaseCreate,
             AppConstants.Permissions.PurchaseSearch,
@@ -35,6 +38,7 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.SalesCreate,
             AppConstants.Permissions.SalesDiscount,
             AppConstants.Permissions.SalesPrint,
+            AppConstants.Permissions.SalesReturn,
             AppConstants.Permissions.InventoryView,
             AppConstants.Permissions.MastersView,
         ],
@@ -44,6 +48,7 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.SalesView,
             AppConstants.Permissions.SalesCreate,
             AppConstants.Permissions.SalesPrint,
+            AppConstants.Permissions.SalesReturn,
         ],
         [AppConstants.Roles.Accountant] =
         [

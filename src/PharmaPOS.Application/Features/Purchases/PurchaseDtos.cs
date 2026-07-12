@@ -116,6 +116,7 @@ public class PurchaseLoadDto
     public int SupplierId { get; set; }
     public string SupplierName { get; set; } = string.Empty;
     public string? SupplierPhone { get; set; }
+    public decimal GrandTotal { get; set; }
     public decimal PaidAmount { get; set; }
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
     public List<PurchaseLoadLineDto> Lines { get; set; } = new();
@@ -142,12 +143,15 @@ public class PurchaseLoadLineDto
 public record PurchaseSupplierBillDto(
     int PurchaseId,
     string InvoiceNumber,
+    string? SupplierInvoiceNumber,
     DateTime InvoiceDate,
     string SupplierName,
     decimal GrandTotal,
-    int ItemCount,
-    decimal PaymentDue)
+    decimal PaidAmount,
+    int ItemCount)
 {
+    public decimal PaymentDue => Math.Max(0m, GrandTotal - PaidAmount);
+
     public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
 }
 

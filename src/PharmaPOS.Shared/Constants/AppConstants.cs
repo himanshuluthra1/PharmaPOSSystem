@@ -37,6 +37,10 @@ public static class AppConstants
         public const string SalesDiscount = "sales.discount";
         public const string SalesPrint = "sales.print";
         public const string SalesManage = "sales.manage";
+        public const string SalesReturn = "sales.return";
+        public const string SalesReturnHighValue = "sales.return.highvalue";
+        public const string SalesReturnOverride = "sales.return.override";
+        public const string SalesReturnManage = "sales.return.manage";
 
         // Purchase
         public const string PurchaseView = "purchase.view";
