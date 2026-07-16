@@ -13,6 +13,18 @@ public record MedicineLookupDto(
     bool PrescriptionRequired,
     decimal TotalStock);
 
+/// <summary>Substitute medicine row for same-salt picker (F5).</summary>
+public record SubstituteMedicineDto(
+    int Id,
+    string Name,
+    string? GenericName,
+    string? Brand,
+    decimal Mrp,
+    decimal GstPercent,
+    decimal DefaultDiscountPercent,
+    bool PrescriptionRequired,
+    decimal TotalStock);
+
 /// <summary>A sellable batch of a medicine (manual batch selection).</summary>
 public record BatchLookupDto(
     int BatchId,
@@ -72,13 +84,26 @@ public class CreateSaleRequest
 }
 
 /// <summary>A row in the fast-billing bill history dropdown.</summary>
-public record SaleListItemDto(int SaleId, string InvoiceNumber, DateTime InvoiceDate, string? PatientName = null)
+public record SaleListItemDto(
+    int SaleId,
+    string InvoiceNumber,
+    DateTime InvoiceDate,
+    string? PatientName = null,
+    SaleStatus Status = SaleStatus.Completed)
 {
+    public string StatusSuffix => Status switch
+    {
+        SaleStatus.PartiallyReturned => " [Partial Return]",
+        SaleStatus.Returned => " [Returned]",
+        _ => string.Empty
+    };
+
     public string DisplayLabel => SaleId == 0
         ? $"{InvoiceNumber} (New)"
-        : $"{InvoiceNumber} - {InvoiceDate:dd/MM/yyyy hh:mm tt} - {PatientName ?? "Walk-in"}";
+        : $"{InvoiceNumber} - {InvoiceDate:dd/MM/yyyy hh:mm tt} - {PatientName ?? "Walk-in"}{StatusSuffix}";
 
     public bool IsNewBill => SaleId == 0;
+    public bool CanEdit => SaleId != 0 && Status == SaleStatus.Completed;
 
     public string BillDateLabel => SaleId == 0
         ? "(New)"
@@ -104,7 +129,8 @@ public record BillSearchResultDto(
     DateTime InvoiceDate,
     string? PatientName,
     string? Mobile,
-    string? MatchedMedicine = null)
+    string? MatchedMedicine = null,
+    SaleStatus Status = SaleStatus.Completed)
 {
     public string BillDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
 
@@ -144,6 +170,10 @@ public class SaleEditLineDto
     public decimal GstPercent { get; set; }
     public decimal DiscountPercent { get; set; }
     public decimal AvailableStock { get; set; }
+
+    /// <summary>True when this row is a sale-return deduction (negative quantity).</summary>
+    public bool IsReturnLine { get; set; }
+    public string? ReturnNumber { get; set; }
 }
 
 /// <summary>Update an existing invoice (same bill number, revised lines/totals).</summary>
@@ -195,7 +225,8 @@ public record SaleReceiptLineDto(
     decimal DiscountPercent,
     decimal DiscountAmount,
     decimal GstPercent,
-    decimal Amount);
+    decimal Amount,
+    bool IsReturnLine = false);
 
 /// <summary>Medicine snapshot shown from the billing grid (F4).</summary>
 public record SaleMedicineDetailDto(

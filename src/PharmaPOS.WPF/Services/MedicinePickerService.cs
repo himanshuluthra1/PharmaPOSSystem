@@ -32,37 +32,29 @@ public class MedicinePickerService : IMedicinePickerService
         if (searchWin.ShowDialog() != true || searchVm.SelectedMedicine is not MedicineLookupDto medicine)
             return null;
 
-        var batches = await salesService.GetBatchesAsync(medicine.Id, branchId);
-        if (batches.Count == 0) return null;
+        return await PickBatchForMedicineAsync(salesService, medicine, branchId);
+    }
 
-        BatchLookupDto batch;
-        if (batches.Count == 1)
-        {
-            batch = batches[0];
-        }
-        else
-        {
-            var batchVm = new BatchPickerViewModel(batches, medicine.Name);
-            var batchWin = new BatchPickerWindow(batchVm)
-            {
-                Owner = System.Windows.Application.Current.MainWindow
-            };
-            if (batchWin.ShowDialog() != true || batchVm.SelectedBatch is null)
-                return null;
-            batch = batchVm.SelectedBatch;
-        }
+    public async Task<MedicineBatchSelection?> PickSubstituteAsync(
+        IReadOnlyList<SubstituteMedicineDto> substitutes, int medicineId)
+    {
+        if (substitutes.Count == 0)
+            return null;
 
-        return new MedicineBatchSelection(
-            medicine.Id,
-            batch.BatchId,
-            medicine.Name,
-            batch.BatchNumber,
-            batch.ExpiryDate,
-            batch.Mrp,
-            batch.GstPercent,
-            batch.SellingPrice > 0 ? batch.SellingPrice : batch.Mrp,
-            batch.QuantityAvailable,
-            medicine.DefaultDiscountPercent);
+        var branchId = _currentUser.CurrentUser?.BranchId;
+        using var scope = _scopeFactory.CreateScope();
+        var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
+
+        var vm = new SubstituteMedicineViewModel(substitutes, medicineId);
+        var window = new SubstituteMedicineWindow(vm)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+
+        if (window.ShowDialog() != true || vm.SelectedMedicine is not SubstituteMedicineDto medicine)
+            return null;
+
+        return await PickBatchForMedicineAsync(salesService, medicine, branchId);
     }
 
     public Task<MedicineLookupDto?> PickMedicineLookupAsync()
@@ -81,5 +73,59 @@ public class MedicinePickerService : IMedicinePickerService
             return Task.FromResult<MedicineLookupDto?>(null);
 
         return Task.FromResult<MedicineLookupDto?>(medicine);
+    }
+
+    private static async Task<MedicineBatchSelection?> PickBatchForMedicineAsync(
+        ISalesService salesService, MedicineLookupDto medicine, int? branchId)
+        => await PickBatchForMedicineAsync(
+            salesService,
+            medicine.Id,
+            medicine.Name,
+            medicine.DefaultDiscountPercent,
+            branchId);
+
+    private static async Task<MedicineBatchSelection?> PickBatchForMedicineAsync(
+        ISalesService salesService, SubstituteMedicineDto medicine, int? branchId)
+        => await PickBatchForMedicineAsync(
+            salesService,
+            medicine.Id,
+            medicine.Name,
+            medicine.DefaultDiscountPercent,
+            branchId);
+
+    private static async Task<MedicineBatchSelection?> PickBatchForMedicineAsync(
+        ISalesService salesService, int medicineId, string medicineName, decimal defaultDiscountPercent, int? branchId)
+    {
+        var batches = await salesService.GetBatchesAsync(medicineId, branchId);
+        if (batches.Count == 0) return null;
+
+        BatchLookupDto batch;
+        if (batches.Count == 1)
+        {
+            batch = batches[0];
+        }
+        else
+        {
+            var batchVm = new BatchPickerViewModel(batches, medicineName);
+            var batchWin = new BatchPickerWindow(batchVm)
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+            if (batchWin.ShowDialog() != true || batchVm.SelectedBatch is null)
+                return null;
+            batch = batchVm.SelectedBatch;
+        }
+
+        return new MedicineBatchSelection(
+            medicineId,
+            batch.BatchId,
+            medicineName,
+            batch.BatchNumber,
+            batch.ExpiryDate,
+            batch.Mrp,
+            batch.GstPercent,
+            batch.SellingPrice > 0 ? batch.SellingPrice : batch.Mrp,
+            batch.QuantityAvailable,
+            defaultDiscountPercent);
     }
 }

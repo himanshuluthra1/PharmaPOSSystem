@@ -14,7 +14,13 @@ public static class SaleLinePricing
         => Math.Round(mrp * quantity, 2);
 
     public static decimal DiscountAmount(decimal mrp, decimal unitPrice, decimal quantity)
-        => Math.Round(Math.Max(0m, (mrp - unitPrice) * quantity), 2);
+    {
+        var raw = (mrp - unitPrice) * quantity;
+        // Positive sales never show a negative discount; return lines reverse discount signed.
+        return quantity < 0
+            ? Math.Round(raw, 2)
+            : Math.Round(Math.Max(0m, raw), 2);
+    }
 
     public static decimal LineTotal(decimal unitPrice, decimal quantity)
         => Math.Round(unitPrice * quantity, 2);
@@ -34,7 +40,7 @@ public static class SaleLinePricing
 
     public static (decimal Cgst, decimal Sgst) SplitCgstSgst(decimal totalTax)
     {
-        if (totalTax <= 0) return (0m, 0m);
+        if (totalTax == 0m) return (0m, 0m);
         var cgst = Math.Round(totalTax / 2m, 2, MidpointRounding.AwayFromZero);
         return (cgst, totalTax - cgst);
     }
@@ -43,7 +49,26 @@ public static class SaleLinePricing
     public static (decimal Taxable, decimal Tax) ResolveLineTax(
         decimal lineTotal, decimal gstPercent, decimal storedTaxable = 0m, decimal storedTax = 0m)
     {
-        if (lineTotal <= 0) return (0m, 0m);
+        if (lineTotal == 0m) return (0m, 0m);
+
+        // Signed totals (sale return deduction lines) must reverse tax proportionally.
+        if (lineTotal < 0)
+        {
+            if (gstPercent > 0)
+            {
+                var taxable = TaxableAmount(lineTotal, gstPercent);
+                return (taxable, lineTotal - taxable);
+            }
+
+            if (storedTaxable != 0 || storedTax != 0)
+            {
+                var signedTaxable = storedTaxable != 0 ? -Math.Abs(storedTaxable) : lineTotal - (-Math.Abs(storedTax));
+                var signedTax = storedTax != 0 ? -Math.Abs(storedTax) : lineTotal - signedTaxable;
+                return (signedTaxable, signedTax);
+            }
+
+            return (lineTotal, 0m);
+        }
 
         if (gstPercent > 0)
         {
@@ -61,6 +86,29 @@ public static class SaleLinePricing
         return (lineTotal, 0m);
     }
 
+    /// <summary>
+    /// Bill summary used by Sales UI and print so returned invoices stay consistent.
+    /// </summary>
+    public static BillSummaryTotals ComputeBillSummary(
+        IEnumerable<(decimal Mrp, decimal Quantity, decimal UnitPrice, decimal GstPercent)> lines)
+    {
+        decimal subTotal = 0m, discount = 0m, taxable = 0m, tax = 0m;
+        foreach (var line in lines)
+        {
+            subTotal += GrossAtMrp(line.Mrp, line.Quantity);
+            discount += DiscountAmount(line.Mrp, line.UnitPrice, line.Quantity);
+            var lineTotal = LineTotal(line.UnitPrice, line.Quantity);
+            var (lineTaxable, lineTax) = ResolveLineTax(lineTotal, line.GstPercent);
+            taxable += lineTaxable;
+            tax += lineTax;
+        }
+
+        var (cgst, sgst) = SplitCgstSgst(tax);
+        var net = taxable + tax;
+        var rounded = Math.Round(net, 0, MidpointRounding.AwayFromZero);
+        return new BillSummaryTotals(subTotal, discount, taxable, cgst, sgst, rounded - net, rounded);
+    }
+
     public static (decimal SubTotalMrp, decimal Discount, decimal Taxable, decimal Cgst, decimal Sgst) ComputeReceiptTotals(
         IEnumerable<(decimal Mrp, decimal Quantity, decimal UnitPrice, decimal LineTotal, decimal GstPercent, decimal StoredTaxable, decimal StoredTax, decimal StoredDiscount)> lines)
     {
@@ -68,7 +116,7 @@ public static class SaleLinePricing
         foreach (var line in lines)
         {
             subTotalMrp += GrossAtMrp(line.Mrp, line.Quantity);
-            discount += line.StoredDiscount > 0
+            discount += line.StoredDiscount != 0
                 ? line.StoredDiscount
                 : DiscountAmount(line.Mrp, line.UnitPrice, line.Quantity);
             var (lineTaxable, lineTax) = ResolveLineTax(
@@ -81,3 +129,12 @@ public static class SaleLinePricing
         return (subTotalMrp, discount, taxable, cgst, sgst);
     }
 }
+
+public readonly record struct BillSummaryTotals(
+    decimal SubTotalMrp,
+    decimal Discount,
+    decimal Taxable,
+    decimal Cgst,
+    decimal Sgst,
+    decimal RoundOff,
+    decimal GrandTotal);

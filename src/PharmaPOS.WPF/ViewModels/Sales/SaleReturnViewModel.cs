@@ -34,6 +34,7 @@ public class SaleReturnViewModel : ObservableObject
     private DateTime? _invoiceDate;
     private string? _invoiceStatus;
     private int? _loadedSaleId;
+    private SaleReturnLineViewModel? _selectedLine;
     private RefundMode _refundMode = RefundMode.Cash;
     private string? _remarks;
     private bool _managerOverride;
@@ -79,11 +80,18 @@ public class SaleReturnViewModel : ObservableObject
         ClearCommand = new RelayCommand(_ => ClearInvoice(), _ => HasLoadedInvoice);
         PrintLastCommand = new RelayCommand(_ => PrintLastReceipt(), _ => _lastReceipt is not null);
 
-        _ = InitializeAsync();
+        _initializeTask = InitializeAsync();
     }
 
     private SaleReturnReceiptDto? _lastReceipt;
     private SaleReturnPolicyDto _policy = new();
+    private Task? _initializeTask;
+    private bool _isDialogMode;
+
+    /// <summary>Raised when a return is posted successfully in dialog mode.</summary>
+    public event Action? ReturnCompleted;
+
+    public SaleReturnReceiptDto? LastReceipt => _lastReceipt;
 
     public IReadOnlyList<SaleReturnSearchCriteriaOption> CriteriaOptions { get; }
     public ObservableCollection<SaleReturnSearchResultDto> SearchResults { get; } = new();
@@ -150,6 +158,17 @@ public class SaleReturnViewModel : ObservableObject
     }
 
     public bool HasLoadedInvoice => _loadedSaleId is not null;
+    public bool HasSelectedLine => SelectedLine is not null;
+
+    public SaleReturnLineViewModel? SelectedLine
+    {
+        get => _selectedLine;
+        set
+        {
+            if (!SetProperty(ref _selectedLine, value)) return;
+            OnPropertyChanged(nameof(HasSelectedLine));
+        }
+    }
 
     public string? InvoiceNumber
     {
@@ -266,10 +285,18 @@ public class SaleReturnViewModel : ObservableObject
         CommandManager.InvalidateRequerySuggested();
     }
 
+    public void ConfigureAsDialog() => _isDialogMode = true;
+
     public async Task LoadInvoiceByIdAsync(int saleId)
     {
         SelectedSearchIndex = -1;
         await LoadInvoiceCoreAsync(saleId);
+    }
+
+    private async Task EnsureInitializedAsync()
+    {
+        if (_initializeTask is not null)
+            await _initializeTask;
     }
 
     private async Task InitializeAsync()
@@ -280,6 +307,8 @@ public class SaleReturnViewModel : ObservableObject
             var reasons = await _saleReturnService.ListReturnReasonsAsync();
             ReturnReasons.Clear();
             foreach (var r in reasons) ReturnReasons.Add(r);
+            if (ReturnReasons.Count == 0)
+                StatusMessage = "Warning: no return reasons found. Restart the app after migration.";
         }
         catch (Exception ex)
         {
@@ -289,6 +318,7 @@ public class SaleReturnViewModel : ObservableObject
 
     private async Task SearchAsync()
     {
+        await EnsureInitializedAsync();
         _searchCts?.Cancel();
         _searchCts = new CancellationTokenSource();
         var token = _searchCts.Token;
@@ -323,6 +353,7 @@ public class SaleReturnViewModel : ObservableObject
 
     private async Task LoadInvoiceCoreAsync(int saleId)
     {
+        await EnsureInitializedAsync();
         IsBusy = true;
         StatusMessage = "Loading invoice...";
         try
@@ -349,6 +380,7 @@ public class SaleReturnViewModel : ObservableObject
             };
 
             Lines.Clear();
+            SelectedLine = null;
             foreach (var line in sale.Lines.Where(l => l.AvailableReturnQuantity > 0))
             {
                 var vm = new SaleReturnLineViewModel(line, ReturnReasons);
@@ -356,9 +388,12 @@ public class SaleReturnViewModel : ObservableObject
                 Lines.Add(vm);
             }
 
+            SelectedLine = Lines.FirstOrDefault();
             OnPropertyChanged(nameof(HasLoadedInvoice));
             OnLineChanged();
-            StatusMessage = $"Loaded {sale.InvoiceNumber} — {Lines.Count} returnable line(s).";
+            StatusMessage = ReturnReasons.Count == 0
+                ? $"Loaded {sale.InvoiceNumber} — return reasons not seeded. Restart app or check Settings."
+                : $"Loaded {sale.InvoiceNumber} — {Lines.Count} returnable line(s).";
         }
         catch (Exception ex)
         {
@@ -398,10 +433,26 @@ public class SaleReturnViewModel : ObservableObject
             return;
         }
 
+        if (ReturnReasons.Count == 0)
+        {
+            _dialog.ShowError("Return reasons are not loaded. Restart the application and try again.");
+            return;
+        }
+
         foreach (var line in selected)
         {
+            if (line.ReturnReasonId <= 0)
+            {
+                line.ReturnReasonId = ReturnReasons[0].Id;
+            }
+
             var reason = ReturnReasons.FirstOrDefault(r => r.Id == line.ReturnReasonId);
-            if (reason?.RequiresRemarks == true && string.IsNullOrWhiteSpace(line.ReasonRemarks))
+            if (reason is null)
+            {
+                _dialog.ShowInfo($"Select a return reason for {line.MedicineName}.", "Validation");
+                return;
+            }
+            if (reason.RequiresRemarks && string.IsNullOrWhiteSpace(line.ReasonRemarks))
             {
                 _dialog.ShowInfo($"Remarks required for: {reason.Name}", "Validation");
                 return;
@@ -460,6 +511,12 @@ public class SaleReturnViewModel : ObservableObject
             if (_dialog.Confirm("Print return receipt?"))
                 _printService.ShowReturnPreview(_lastReceipt);
 
+            if (_isDialogMode)
+            {
+                ReturnCompleted?.Invoke();
+                return;
+            }
+
             ClearInvoice();
         }
         catch (Exception ex)
@@ -481,6 +538,7 @@ public class SaleReturnViewModel : ObservableObject
     private void ClearInvoice()
     {
         _loadedSaleId = null;
+        SelectedLine = null;
         Lines.Clear();
         InvoiceNumber = null;
         CustomerName = null;

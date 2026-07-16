@@ -161,3 +161,50 @@ public class BatchPickerViewModel : ObservableObject
             SelectedIndex = Math.Clamp(SelectedIndex + delta, 0, Batches.Count - 1);
     }
 }
+
+/// <summary>View model for the same-salt substitute medicine picker (F5).</summary>
+public class SubstituteMedicineViewModel : ObservableObject
+{
+    private int _selectedIndex;
+
+    public SubstituteMedicineViewModel(IReadOnlyList<SubstituteMedicineDto> medicines, int currentMedicineId)
+    {
+        CurrentMedicineId = currentMedicineId;
+        foreach (var medicine in medicines)
+            Medicines.Add(new SubstituteMedicineItem(medicine, medicine.Id == currentMedicineId));
+        SelectedIndex = medicines.Count > 0 ? 0 : -1;
+    }
+
+    public int CurrentMedicineId { get; }
+
+    public ObservableCollection<SubstituteMedicineItem> Medicines { get; } = new();
+
+    public int SelectedIndex
+    {
+        get => _selectedIndex;
+        set
+        {
+            if (SetProperty(ref _selectedIndex, value))
+                OnPropertyChanged(nameof(SelectedMedicine));
+        }
+    }
+
+    public SubstituteMedicineDto? SelectedMedicine =>
+        SelectedIndex >= 0 && SelectedIndex < Medicines.Count ? Medicines[SelectedIndex].Medicine : null;
+
+    public void MoveSelection(int delta)
+    {
+        if (Medicines.Count == 0)
+        {
+            SelectedIndex = -1;
+            return;
+        }
+
+        if (SelectedIndex < 0)
+            SelectedIndex = 0;
+        else
+            SelectedIndex = Math.Clamp(SelectedIndex + delta, 0, Medicines.Count - 1);
+    }
+}
+
+public record SubstituteMedicineItem(SubstituteMedicineDto Medicine, bool IsCurrent);

@@ -23,6 +23,9 @@ public interface IMedicinePickerService
 {
     Task<MedicineBatchSelection?> PickMedicineAsync();
 
+    /// <summary>Shows medicines with the same salt and strength; returns batch selection for replacement.</summary>
+    Task<MedicineBatchSelection?> PickSubstituteAsync(IReadOnlyList<SubstituteMedicineDto> substitutes, int medicineId);
+
     /// <summary>Shows medicine search only (no batch picker) for purchase entry.</summary>
     Task<MedicineLookupDto?> PickMedicineLookupAsync();
 }

@@ -145,6 +145,9 @@ public class VoucherTabViewModel : ObservableObject
     public ICommand SaveCommand { get; }
     public ICommand NewCommand { get; }
 
+    /// <summary>Raised after a payment, receipt, or expense voucher is saved.</summary>
+    public event Func<Task>? VoucherSaved;
+
     public void PrefillPayment(int supplierId, string supplierName, decimal outstanding)
     {
         SelectedKind = KindOptions[0];
@@ -317,6 +320,8 @@ public class VoucherTabViewModel : ObservableObject
                 $"{SelectedKind.Label} {result.Value.VoucherNumber} saved for {result.Value.Amount:N2}.");
             ResetForm();
             await PreviewVoucherAsync();
+            if (VoucherSaved is not null)
+                await VoucherSaved.Invoke();
         }
         catch (Exception ex)
         {

@@ -278,7 +278,7 @@ public class InvoicePrintService : IInvoicePrintService
             row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
             row.Cells.Add(TextCell(l.Mrp.ToString("N2", Inr), TextAlignment.Right));
             row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
-            row.Cells.Add(TextCell(l.DiscountAmount > 0 ? l.DiscountAmount.ToString("N2", Inr) : "-", TextAlignment.Right));
+            row.Cells.Add(TextCell(l.DiscountAmount != 0 ? l.DiscountAmount.ToString("N2", Inr) : "-", TextAlignment.Right));
             row.Cells.Add(TextCell(l.GstPercent.ToString("0.##"), TextAlignment.Right));
             row.Cells.Add(TextCell(l.Amount.ToString("N2", Inr), TextAlignment.Right));
             body.Rows.Add(row);
@@ -305,10 +305,10 @@ public class InvoicePrintService : IInvoicePrintService
         }
 
         AddRow("Sub Total (MRP)", r.SubTotal);
-        if (r.DiscountAmount > 0) AddRow("Discount", r.DiscountAmount);
+        if (r.DiscountAmount != 0) AddRow("Discount", r.DiscountAmount);
         AddRow("Taxable", r.TaxableAmount);
-        if (r.CgstAmount > 0) AddRow("CGST", r.CgstAmount);
-        if (r.SgstAmount > 0) AddRow("SGST", r.SgstAmount);
+        if (r.CgstAmount != 0) AddRow("CGST", r.CgstAmount);
+        if (r.SgstAmount != 0) AddRow("SGST", r.SgstAmount);
         if (r.RoundOff != 0) AddRow("Round Off", r.RoundOff);
         AddRow("Grand Total", r.GrandTotal, bold: true, big: true);
 

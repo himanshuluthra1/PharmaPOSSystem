@@ -21,6 +21,8 @@ public class CartLineViewModel : ObservableObject
     private decimal _quantity;
     private decimal _unitPrice;
     private decimal _discountPercent;
+    private bool _isReturnLine;
+    private string? _returnNumber;
 
     /// <summary>Raised whenever a value that affects totals changes.</summary>
     public event Action? Changed;
@@ -124,6 +126,9 @@ public class CartLineViewModel : ObservableObject
     }
 
     public bool IsEmpty => MedicineId == 0;
+    public bool IsReturnLine => _isReturnLine;
+    public bool IsEditable => !IsEmpty && !IsReturnLine;
+    public string? ReturnNumber => _returnNumber;
 
     public decimal Gross => SaleLinePricing.GrossAtMrp(Mrp, Quantity);
     public decimal DiscountAmount => SaleLinePricing.DiscountAmount(Mrp, UnitPrice, Quantity);
@@ -176,13 +181,18 @@ public class CartLineViewModel : ObservableObject
         ExpiryDate = line.ExpiryDate;
         GstPercent = line.GstPercent;
         AvailableStock = line.AvailableStock;
+        _isReturnLine = line.IsReturnLine;
+        _returnNumber = line.ReturnNumber;
+        OnPropertyChanged(nameof(IsReturnLine));
+        OnPropertyChanged(nameof(IsEditable));
+        OnPropertyChanged(nameof(ReturnNumber));
         _mrp = line.Mrp > 0 ? line.Mrp : line.UnitPrice;
         _unitPrice = line.UnitPrice;
         OnPropertyChanged(nameof(Mrp));
         OnPropertyChanged(nameof(UnitPrice));
         UpdateDiscountFromPrices();
         Quantity = line.Quantity;
-        OriginalQuantity = line.Quantity;
+        OriginalQuantity = line.IsReturnLine ? 0 : line.Quantity;
         Recalculate();
     }
 
@@ -199,6 +209,11 @@ public class CartLineViewModel : ObservableObject
         UnitPrice = 0;
         DiscountPercent = 0;
         OriginalQuantity = 0;
+        _isReturnLine = false;
+        _returnNumber = null;
+        OnPropertyChanged(nameof(IsReturnLine));
+        OnPropertyChanged(nameof(IsEditable));
+        OnPropertyChanged(nameof(ReturnNumber));
         Quantity = 0;
         Recalculate();
     }

@@ -19,7 +19,7 @@ public class SalesViewModel : ObservableObject
     private readonly ISalesService _salesService;
     private readonly IMedicinePickerService _picker;
     private readonly IBillSearchService _billSearch;
-    private readonly INavigationService _navigation;
+    private readonly ISaleReturnDialogService _saleReturnDialog;
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
@@ -52,7 +52,7 @@ public class SalesViewModel : ObservableObject
         ISalesService salesService,
         IMedicinePickerService picker,
         IBillSearchService billSearch,
-        INavigationService navigation,
+        ISaleReturnDialogService saleReturnDialog,
         ICurrentUserService currentUser,
         IDialogService dialog,
         IInvoicePrintService printService)
@@ -60,7 +60,7 @@ public class SalesViewModel : ObservableObject
         _salesService = salesService;
         _picker = picker;
         _billSearch = billSearch;
-        _navigation = navigation;
+        _saleReturnDialog = saleReturnDialog;
         _currentUser = currentUser;
         _dialog = dialog;
         _printService = printService;
@@ -83,7 +83,8 @@ public class SalesViewModel : ObservableObject
         PrintCommand = new AsyncRelayCommand(_ => PrintAsync(), _ => CanPrint && IsEditing && !IsBusy);
         NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
         SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
-        OpenSaleReturnCommand = new RelayCommand(_ => _navigation.NavigateTo<SaleReturnViewModel>(), _ => CanReturn);
+        OpenSaleReturnCommand = new AsyncRelayCommand(_ => OpenInlineReturnAsync(),
+            _ => CanReturn && IsEditing && !IsBusy);
         LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
 
         EnsureTrailingEmptyRow();
@@ -150,6 +151,8 @@ public class SalesViewModel : ObservableObject
 
     public async Task BeginItemSelectionAsync(CartLineViewModel line)
     {
+        if (line.IsReturnLine) return;
+
         var selection = await _picker.PickMedicineAsync();
         if (selection is null) return;
 
@@ -204,6 +207,31 @@ public class SalesViewModel : ObservableObject
         window.ShowDialog();
     }
 
+    public async Task ReplaceWithSubstituteAsync(CartLineViewModel line)
+    {
+        if (line.IsEmpty || line.IsReturnLine)
+        {
+            _dialog.ShowInfo("Select a medicine line first.");
+            return;
+        }
+
+        var substitutes = await _salesService.ListSameSaltMedicinesAsync(
+            line.MedicineId, _currentUser.CurrentUser?.BranchId);
+        if (substitutes.Count == 0)
+        {
+            _dialog.ShowInfo("No medicines found with the same salt and strength.", "Substitute");
+            return;
+        }
+
+        var selection = await _picker.PickSubstituteAsync(substitutes, line.MedicineId);
+        if (selection is null) return;
+
+        line.ApplySelection(selection);
+        EnsureTrailingEmptyRow();
+        RecalculateTotals();
+        RequestItemFocus?.Invoke(line);
+    }
+
     private void EnsureTrailingEmptyRow()
     {
         if (Cart.Count == 0 || !Cart[^1].IsEmpty)
@@ -216,7 +244,7 @@ public class SalesViewModel : ObservableObject
 
     private void RemoveLine(CartLineViewModel? line)
     {
-        if (line is null || line.IsEmpty) return;
+        if (line is null || line.IsEmpty || line.IsReturnLine) return;
         line.Changed -= RecalculateTotals;
         Cart.Remove(line);
         EnsureTrailingEmptyRow();
@@ -301,17 +329,16 @@ public class SalesViewModel : ObservableObject
     private void RecalculateTotals()
     {
         var lines = Cart.Where(l => !l.IsEmpty).ToList();
-        SubTotal = lines.Sum(l => l.Gross);
-        DiscountTotal = lines.Sum(l => l.DiscountAmount);
-        TaxableTotal = lines.Sum(l => l.Taxable);
-        var tax = lines.Sum(l => l.TaxAmount);
-        Cgst = Math.Round(tax / 2m, 2);
-        Sgst = tax - Cgst;
+        var summary = SaleLinePricing.ComputeBillSummary(
+            lines.Select(l => (l.Mrp, l.Quantity, l.UnitPrice, l.GstPercent)));
 
-        var net = TaxableTotal + tax;
-        var rounded = Math.Round(net, 0, MidpointRounding.AwayFromZero);
-        RoundOff = rounded - net;
-        GrandTotal = rounded;
+        SubTotal = summary.SubTotalMrp;
+        DiscountTotal = summary.Discount;
+        TaxableTotal = summary.Taxable;
+        Cgst = summary.Cgst;
+        Sgst = summary.Sgst;
+        RoundOff = summary.RoundOff;
+        GrandTotal = summary.GrandTotal;
 
         OnPropertyChanged(nameof(ItemCount));
         OnPropertyChanged(nameof(HasItems));
@@ -440,7 +467,10 @@ public class SalesViewModel : ObservableObject
             }
 
             LoadSale(result.Value);
-            StatusMessage = $"Editing invoice {result.Value.InvoiceNumber}.";
+            var returnCount = result.Value.Lines.Count(l => l.IsReturnLine);
+            StatusMessage = returnCount > 0
+                ? $"Invoice {result.Value.InvoiceNumber} — {returnCount} return line(s) applied."
+                : $"Editing invoice {result.Value.InvoiceNumber}.";
         }
         catch (Exception ex)
         {
@@ -462,8 +492,53 @@ public class SalesViewModel : ObservableObject
         await LoadBillFromDropdownAsync(bill, focusGridAfterLoad: true);
     }
 
-    /// <summary>Loads a bill from the dropdown as soon as it is highlighted (no Enter needed).</summary>
-    public async Task LoadBillFromDropdownAsync(SaleListItemDto bill, bool focusGridAfterLoad = false)
+    private async Task OpenInlineReturnAsync()
+    {
+        if (_editingSaleId is not int saleId)
+        {
+            _dialog.ShowInfo("Open a saved invoice first, then click Return.", "Sale Return");
+            return;
+        }
+
+        if (SelectedBill?.Status == SaleStatus.Returned)
+        {
+            _dialog.ShowInfo("This invoice is already fully returned.", "Sale Return");
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var dialogResult = await _saleReturnDialog.ShowForSaleAsync(saleId);
+            if (!dialogResult.DialogShown) return;
+
+            await RefreshInvoiceAfterReturnDialogAsync(saleId, dialogResult);
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RefreshInvoiceAfterReturnDialogAsync(int saleId, SaleReturnDialogResult dialogResult)
+    {
+        if (dialogResult.ReturnPosted && dialogResult.Receipt is not null)
+            StatusMessage = $"Return {dialogResult.Receipt.ReturnNumber} posted.";
+
+        await RefreshBillHistoryAsync(selectNewBill: false, selectSaleId: saleId);
+        var bill = BillHistory.FirstOrDefault(b => b.SaleId == saleId);
+        if (bill is null) return;
+
+        _lastDropdownSaleId = null;
+        await LoadBillFromDropdownAsync(bill, focusGridAfterLoad: false, forceReload: true);
+    }
+
+    /// <summary>Loads a bill from the dropdown (invoice-number click or Enter).</summary>
+    public async Task LoadBillFromDropdownAsync(SaleListItemDto bill, bool focusGridAfterLoad = false, bool forceReload = false)
     {
         if (_suppressBillSelection) return;
 
@@ -477,7 +552,7 @@ public class SalesViewModel : ObservableObject
             return;
         }
 
-        if (_lastDropdownSaleId == bill.SaleId)
+        if (!forceReload && _lastDropdownSaleId == bill.SaleId)
         {
             if (focusGridAfterLoad)
                 RequestItemFocus?.Invoke(Cart.FirstOrDefault());
@@ -510,7 +585,10 @@ public class SalesViewModel : ObservableObject
                 _selectedBill = bill;
                 OnPropertyChanged(nameof(SelectedBill));
                 LoadSale(result.Value, focusGridAfterLoad);
-                StatusMessage = $"Editing invoice {result.Value.InvoiceNumber}.";
+                var returnCount = result.Value.Lines.Count(l => l.IsReturnLine);
+                StatusMessage = returnCount > 0
+                    ? $"Invoice {result.Value.InvoiceNumber} — {returnCount} return line(s) applied."
+                    : $"Editing invoice {result.Value.InvoiceNumber}.";
             }
             finally
             {
@@ -566,7 +644,7 @@ public class SalesViewModel : ObservableObject
 
     private async Task SaveAsync()
     {
-        var lines = Cart.Where(l => !l.IsEmpty).ToList();
+        var lines = Cart.Where(l => !l.IsEmpty && !l.IsReturnLine).ToList();
         if (lines.Count == 0) return;
 
         foreach (var line in lines)

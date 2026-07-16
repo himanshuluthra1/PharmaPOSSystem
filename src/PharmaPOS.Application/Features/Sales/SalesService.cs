@@ -20,6 +20,14 @@ public class SalesService : ISalesService
 {
     private const int RewardPointsPerRupee = 100; // 1 point per ₹100 spent
 
+    /// <summary>Invoices that remain visible in Sales bill history / search.</summary>
+    private static readonly SaleStatus[] BillHistoryStatuses =
+    [
+        SaleStatus.Completed,
+        SaleStatus.PartiallyReturned,
+        SaleStatus.Returned
+    ];
+
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
@@ -45,7 +53,7 @@ public class SalesService : ISalesService
             .Take(25)
             .Select(m => new MedicineSearchRow(
                 m.Id, m.Name, m.GenericName, m.Barcode,
-                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired))
+                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
             .ToListAsync(ct);
 
         if (medicines.Count == 0)
@@ -56,7 +64,7 @@ public class SalesService : ISalesService
                 .Take(25)
                 .Select(m => new MedicineSearchRow(
                     m.Id, m.Name, m.GenericName, m.Barcode,
-                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired))
+                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
                 .ToListAsync(ct);
         }
 
@@ -65,11 +73,82 @@ public class SalesService : ISalesService
         var ids = medicines.Select(m => m.Id).ToList();
         var stockMap = await GetStockByMedicineIdsAsync(ids, branchId, ct);
 
-        return medicines.Select(m => new MedicineLookupDto(
+        return ToMedicineLookupDtos(medicines, stockMap);
+    }
+
+    public async Task<List<SubstituteMedicineDto>> ListSameSaltMedicinesAsync(
+        int medicineId, int? branchId, CancellationToken ct = default)
+    {
+        var source = await _uow.Repository<Medicine>().Query().AsNoTracking()
+            .Where(m => m.Id == medicineId)
+            .Select(m => new { m.GenericName, m.Composition, m.Strength })
+            .FirstOrDefaultAsync(ct);
+
+        if (source is null) return new();
+
+        var saltKey = GetSaltSearchKey(source.GenericName, source.Composition);
+        if (saltKey.Length == 0) return new();
+
+        var strengthKey = SearchQueryExtensions.NormalizeTerm(source.Strength);
+
+        List<SubstituteMedicineRow> medicines;
+        if (!string.IsNullOrWhiteSpace(source.GenericName))
+        {
+            medicines = await _uow.Repository<Medicine>().Query().AsNoTracking()
+                .Where(m => m.Status == EntityStatus.Active && m.GenericNameSearchKey == saltKey)
+                .Select(m => new SubstituteMedicineRow(
+                    m.Id, m.Name, m.GenericName, m.Brand, m.Mrp,
+                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, m.Strength, null))
+                .ToListAsync(ct);
+        }
+        else
+        {
+            medicines = await _uow.Repository<Medicine>().Query().AsNoTracking()
+                .Where(m => m.Status == EntityStatus.Active && m.Composition != null && m.Composition != "")
+                .Select(m => new SubstituteMedicineRow(
+                    m.Id, m.Name, m.GenericName, m.Brand, m.Mrp,
+                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, m.Strength, m.Composition))
+                .ToListAsync(ct);
+
+            medicines = medicines
+                .Where(m => SearchQueryExtensions.NormalizeTerm(m.Composition) == saltKey)
+                .ToList();
+        }
+
+        medicines = medicines
+            .Where(m => SearchQueryExtensions.NormalizeTerm(m.Strength) == strengthKey)
+            .ToList();
+
+        if (medicines.Count == 0) return new();
+
+        var ids = medicines.Select(m => m.Id).ToList();
+        var stockMap = await GetStockByMedicineIdsAsync(ids, branchId, ct);
+
+        return medicines
+            .Select(m => new SubstituteMedicineDto(
+                m.Id, m.Name, m.GenericName, m.Brand, m.Mrp,
+                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
+                stockMap.TryGetValue(m.Id, out var stock) ? stock : 0m))
+            .OrderByDescending(m => m.TotalStock)
+            .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string GetSaltSearchKey(string? genericName, string? composition)
+    {
+        if (!string.IsNullOrWhiteSpace(genericName))
+            return SearchQueryExtensions.NormalizeTerm(genericName);
+
+        return SearchQueryExtensions.NormalizeTerm(composition);
+    }
+
+    private static List<MedicineLookupDto> ToMedicineLookupDtos(
+        List<MedicineSearchRow> medicines,
+        Dictionary<int, decimal> stockMap)
+        => medicines.Select(m => new MedicineLookupDto(
             m.Id, m.Name, m.GenericName, m.Barcode,
             m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
             stockMap.TryGetValue(m.Id, out var stock) ? stock : 0m)).ToList();
-    }
 
     private async Task<Dictionary<int, decimal>> GetStockByMedicineIdsAsync(
         List<int> medicineIds, int? branchId, CancellationToken ct)
@@ -86,7 +165,13 @@ public class SalesService : ISalesService
 
     private sealed record MedicineSearchRow(
         int Id, string Name, string? GenericName, string? Barcode,
-        decimal GstPercent, decimal DefaultDiscountPercent, bool PrescriptionRequired);
+        decimal GstPercent, decimal DefaultDiscountPercent, bool PrescriptionRequired,
+        string? Strength, string? Composition);
+
+    private sealed record SubstituteMedicineRow(
+        int Id, string Name, string? GenericName, string? Brand, decimal Mrp,
+        decimal GstPercent, decimal DefaultDiscountPercent, bool PrescriptionRequired,
+        string? Strength, string? Composition);
 
     public async Task<List<BatchLookupDto>> GetBatchesAsync(int medicineId, int? branchId, CancellationToken ct = default)
     {
@@ -230,7 +315,7 @@ public class SalesService : ISalesService
     {
         var (start, end) = GetDateRange(date);
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed
+            .Where(s => BillHistoryStatuses.Contains(s.Status)
                         && s.InvoiceDate >= start
                         && s.InvoiceDate < end);
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
@@ -241,7 +326,8 @@ public class SalesService : ISalesService
                 s.Id,
                 s.InvoiceNumber,
                 s.InvoiceDate,
-                s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null)))
+                s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null),
+                s.Status))
             .ToListAsync(ct);
     }
 
@@ -260,7 +346,7 @@ public class SalesService : ISalesService
     {
         var before = GetDateRange(beforeDate).Start;
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed && s.InvoiceDate < before);
+            .Where(s => BillHistoryStatuses.Contains(s.Status) && s.InvoiceDate < before);
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         var previous = await q.MaxAsync(s => (DateTime?)s.InvoiceDate, ct);
@@ -271,7 +357,7 @@ public class SalesService : ISalesService
     {
         var (start, end) = GetDateRange(date);
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed
+            .Where(s => BillHistoryStatuses.Contains(s.Status)
                         && s.InvoiceDate >= start
                         && s.InvoiceDate < end);
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
@@ -281,7 +367,7 @@ public class SalesService : ISalesService
     private async Task<DateOnly?> GetLatestBillDateAsync(int? branchId, CancellationToken ct)
     {
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed);
+            .Where(s => BillHistoryStatuses.Contains(s.Status));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         var latest = await q.MaxAsync(s => (DateTime?)s.InvoiceDate, ct);
@@ -300,7 +386,7 @@ public class SalesService : ISalesService
         if (term.Length < 1) return new();
 
         var saleQuery = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed &&
+            .Where(s => BillHistoryStatuses.Contains(s.Status) &&
                         s.BillingCustomerName != null &&
                         EF.Functions.Like(s.BillingCustomerName, term + "%"));
         if (branchId.HasValue) saleQuery = saleQuery.Where(s => s.BranchId == branchId);
@@ -344,7 +430,7 @@ public class SalesService : ISalesService
         if (term.Length < 1) return Task.FromResult(new List<BillSearchResultDto>());
 
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed);
+            .Where(s => BillHistoryStatuses.Contains(s.Status));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         q = q.Where(s =>
@@ -360,7 +446,8 @@ public class SalesService : ISalesService
                 s.InvoiceDate,
                 s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null),
                 s.BillingCustomerPhone ?? (s.Customer != null ? s.Customer.Phone : null),
-                null))
+                null,
+                s.Status))
             .ToListAsync(ct);
     }
 
@@ -369,7 +456,7 @@ public class SalesService : ISalesService
         if (term.Length < 3) return Task.FromResult(new List<BillSearchResultDto>());
 
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed);
+            .Where(s => BillHistoryStatuses.Contains(s.Status));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         q = q.Where(s =>
@@ -385,7 +472,8 @@ public class SalesService : ISalesService
                 s.InvoiceDate,
                 s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null),
                 s.BillingCustomerPhone ?? (s.Customer != null ? s.Customer.Phone : null),
-                null))
+                null,
+                s.Status))
             .ToListAsync(ct);
     }
 
@@ -395,7 +483,7 @@ public class SalesService : ISalesService
         if (normalized.Length < 2) return Task.FromResult(new List<BillSearchResultDto>());
 
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.Status == SaleStatus.Completed);
+            .Where(s => BillHistoryStatuses.Contains(s.Status));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         q = q.Where(s => s.Items.Any(i =>
@@ -417,7 +505,8 @@ public class SalesService : ISalesService
                                 (EF.Functions.Like(i.Medicine.NameSearchKey, normalized + "%") ||
                                  EF.Functions.Like(i.Medicine.NameSearchKey, "%" + normalized + "%")))
                     .Select(i => i.Medicine!.Name)
-                    .FirstOrDefault()))
+                    .FirstOrDefault(),
+                s.Status))
             .ToListAsync(ct);
     }
 
@@ -426,7 +515,7 @@ public class SalesService : ISalesService
         var sale = await _uow.Repository<Sale>().Query()
             .Include(s => s.Items)
             .Include(s => s.Payments)
-            .FirstOrDefaultAsync(s => s.Id == saleId && s.Status == SaleStatus.Completed, ct);
+            .FirstOrDefaultAsync(s => s.Id == saleId && BillHistoryStatuses.Contains(s.Status), ct);
 
         if (sale is null)
             return Result.Failure<SaleEditDto>("Invoice not found.");
@@ -487,7 +576,67 @@ public class SalesService : ISalesService
             }).ToList()
         };
 
+        var returnLines = await LoadReturnLinesForSaleAsync(sale.Id, preferMedWinNames, ct);
+        dto.Lines.AddRange(returnLines);
+
         return Result.Success(dto);
+    }
+
+    /// <summary>
+    /// Return rows shown on the original invoice as negative-qty deduction lines.
+    /// </summary>
+    private async Task<List<SaleEditLineDto>> LoadReturnLinesForSaleAsync(
+        int saleId, bool preferMedWinNames, CancellationToken ct)
+    {
+        var returns = await _uow.Repository<SaleReturnItem>().Query().AsNoTracking()
+            .Where(i => i.SaleReturn!.SaleId == saleId
+                        && i.SaleReturn.Status == SaleReturnStatus.Completed)
+            .OrderBy(i => i.SaleReturn!.ReturnDate)
+            .ThenBy(i => i.Id)
+            .Select(i => new
+            {
+                i.MedicineId,
+                i.MedicineBatchId,
+                i.BatchNumber,
+                i.ExpiryDate,
+                i.ReturnedQuantity,
+                i.UnitPrice,
+                i.Mrp,
+                i.GstPercent,
+                i.DiscountPercent,
+                ReturnNumber = i.SaleReturn!.ReturnNumber
+            })
+            .ToListAsync(ct);
+
+        if (returns.Count == 0) return [];
+
+        var medNames = await ResolveMedicineDisplayNamesAsync(
+            returns.Select(r => r.MedicineId), preferMedWinNames, ct);
+
+        return returns.Select(r =>
+        {
+            var mrp = r.Mrp > 0 ? r.Mrp : r.UnitPrice;
+            var discountPercent = r.DiscountPercent > 0
+                ? r.DiscountPercent
+                : SaleLinePricing.DiscountPercent(mrp, r.UnitPrice);
+            var name = medNames.TryGetValue(r.MedicineId, out var n) ? n : "Medicine";
+            return new SaleEditLineDto
+            {
+                MedicineId = r.MedicineId,
+                MedicineBatchId = r.MedicineBatchId ?? 0,
+                MedicineName = $"RETURN ({r.ReturnNumber}): {name}",
+                BatchNumber = r.BatchNumber ?? string.Empty,
+                ExpiryDate = r.ExpiryDate,
+                Quantity = -r.ReturnedQuantity,
+                UnitPrice = r.UnitPrice,
+                Mrp = mrp,
+                GstPercent = r.GstPercent,
+                DiscountPercent = discountPercent,
+                AvailableStock = 0,
+                IsReturnLine = true,
+                ReturnNumber = r.ReturnNumber
+            };
+        }).ToList();
     }
 
     public async Task<Result<SaleReceiptDto>> GetSaleReceiptAsync(int saleId, int? branchId, CancellationToken ct = default)
@@ -496,7 +645,7 @@ public class SalesService : ISalesService
             .AsNoTracking()
             .Include(s => s.Items)
             .Include(s => s.Payments)
-            .FirstOrDefaultAsync(s => s.Id == saleId && s.Status == SaleStatus.Completed, ct);
+            .FirstOrDefaultAsync(s => s.Id == saleId && BillHistoryStatuses.Contains(s.Status), ct);
 
         if (sale is null)
             return Result.Failure<SaleReceiptDto>("Invoice not found.");
@@ -845,18 +994,30 @@ public class SalesService : ISalesService
 
         decimal totalTaxable = 0m, totalTax = 0m;
         int sr = 1;
+
+        var returnItems = await _uow.Repository<SaleReturnItem>().Query().AsNoTracking()
+            .Where(i => i.SaleReturn!.SaleId == sale.Id
+                        && i.SaleReturn.Status == SaleReturnStatus.Completed)
+            .OrderBy(i => i.SaleReturn!.ReturnDate)
+            .ThenBy(i => i.Id)
+            .ToListAsync(ct);
+        var hasReturns = returnItems.Count > 0;
+
         foreach (var i in sale.Items)
         {
             var unitPrice = i.UnitPrice;
             var mrp = i.Mrp > 0 ? i.Mrp : unitPrice;
-            var discountAmount = i.DiscountAmount > 0
-                ? i.DiscountAmount
-                : SaleLinePricing.DiscountAmount(mrp, unitPrice, i.Quantity);
             var discountPercent = i.DiscountPercent > 0
                 ? i.DiscountPercent
                 : SaleLinePricing.DiscountPercent(mrp, unitPrice);
+            var lineTotal = hasReturns || i.LineTotal == 0
+                ? SaleLinePricing.LineTotal(unitPrice, i.Quantity)
+                : i.LineTotal;
+            var discountAmount = hasReturns || i.DiscountAmount == 0
+                ? SaleLinePricing.DiscountAmount(mrp, unitPrice, i.Quantity)
+                : i.DiscountAmount;
             var (lineTaxable, lineTax) = SaleLinePricing.ResolveLineTax(
-                i.LineTotal, i.GstPercent, i.TaxableAmount, i.TaxAmount);
+                lineTotal, i.GstPercent, hasReturns ? 0m : i.TaxableAmount, hasReturns ? 0m : i.TaxAmount);
             totalTaxable += lineTaxable;
             totalTax += lineTax;
 
@@ -871,16 +1032,65 @@ public class SalesService : ISalesService
                 discountPercent,
                 discountAmount,
                 i.GstPercent,
-                i.LineTotal));
+                lineTotal));
         }
 
-        receipt.SubTotal = receipt.Lines.Sum(l => SaleLinePricing.GrossAtMrp(l.Mrp, l.Quantity));
-        receipt.DiscountAmount = receipt.Lines.Sum(l => l.DiscountAmount);
-        receipt.TaxableAmount = totalTaxable;
-        (receipt.CgstAmount, receipt.SgstAmount) = SaleLinePricing.SplitCgstSgst(totalTax);
-        receipt.GrandTotal = sale.GrandTotal > 0
-            ? sale.GrandTotal
-            : receipt.Lines.Sum(l => l.Amount) + sale.RoundOff;
+        if (hasReturns)
+        {
+            var returnMedIds = returnItems.Select(i => i.MedicineId).Distinct().ToList();
+            var returnMedNames = await ResolveMedicineDisplayNamesAsync(returnMedIds, preferMedWinNames, ct);
+
+            foreach (var ri in returnItems)
+            {
+                var unitPrice = ri.UnitPrice;
+                var mrp = ri.Mrp > 0 ? ri.Mrp : unitPrice;
+                var qty = -ri.ReturnedQuantity;
+                var lineTotal = SaleLinePricing.LineTotal(unitPrice, qty);
+                var discountAmount = SaleLinePricing.DiscountAmount(mrp, unitPrice, qty);
+                var discountPercent = ri.DiscountPercent > 0
+                    ? ri.DiscountPercent
+                    : SaleLinePricing.DiscountPercent(mrp, unitPrice);
+                var (lineTaxable, lineTax) = SaleLinePricing.ResolveLineTax(lineTotal, ri.GstPercent);
+                totalTaxable += lineTaxable;
+                totalTax += lineTax;
+
+                var name = returnMedNames.TryGetValue(ri.MedicineId, out var rn) ? rn : $"#{ri.MedicineId}";
+                receipt.Lines.Add(new SaleReceiptLineDto(
+                    sr++,
+                    $"RETURN: {name}",
+                    ri.BatchNumber ?? string.Empty,
+                    ri.ExpiryDate,
+                    qty,
+                    mrp,
+                    unitPrice,
+                    discountPercent,
+                    discountAmount,
+                    ri.GstPercent,
+                    lineTotal,
+                    IsReturnLine: true));
+            }
+
+            var summary = SaleLinePricing.ComputeBillSummary(
+                receipt.Lines.Select(l => (l.Mrp, l.Quantity, l.UnitPrice, l.GstPercent)));
+            receipt.SubTotal = summary.SubTotalMrp;
+            receipt.DiscountAmount = summary.Discount;
+            receipt.TaxableAmount = summary.Taxable;
+            receipt.CgstAmount = summary.Cgst;
+            receipt.SgstAmount = summary.Sgst;
+            receipt.RoundOff = summary.RoundOff;
+            receipt.GrandTotal = summary.GrandTotal;
+        }
+        else
+        {
+            receipt.SubTotal = receipt.Lines.Sum(l => SaleLinePricing.GrossAtMrp(l.Mrp, l.Quantity));
+            receipt.DiscountAmount = receipt.Lines.Sum(l => l.DiscountAmount);
+            receipt.TaxableAmount = totalTaxable;
+            (receipt.CgstAmount, receipt.SgstAmount) = SaleLinePricing.SplitCgstSgst(totalTax);
+            receipt.RoundOff = sale.RoundOff;
+            receipt.GrandTotal = sale.GrandTotal > 0
+                ? sale.GrandTotal
+                : receipt.Lines.Sum(l => l.Amount) + sale.RoundOff;
+        }
 
         return Result.Success(receipt);
     }

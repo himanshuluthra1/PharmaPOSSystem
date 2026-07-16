@@ -94,20 +94,12 @@ public class MainViewModel : ObservableObject
         if (sales is not null) SelectedItem = sales;
     }
 
-    /// <summary>Navigate to Sale Return (F8 shortcut).</summary>
-    public void NavigateToSaleReturn()
-    {
-        var item = MenuItems.FirstOrDefault(m => m.TargetViewModel == typeof(SaleReturnViewModel));
-        if (item is not null) SelectedItem = item;
-    }
-
     private void BuildMenu()
     {
         var all = new[]
         {
             new NavigationItem("Dashboard", "ViewDashboard", typeof(DashboardViewModel), "dashboard"),
             new NavigationItem("Sales (F2)", "PointOfSale", typeof(SalesViewModel), "sales"),
-            new NavigationItem("Sale Return (F8)", "KeyboardReturn", typeof(SaleReturnViewModel), "sales"),
             new NavigationItem("Purchase", "TruckDelivery", typeof(PurchaseViewModel), "purchase"),
             new NavigationItem("Inventory", "PackageVariantClosed", typeof(InventoryViewModel), "inventory"),
             new NavigationItem("Masters", "DatabaseCog", typeof(MastersViewModel), "masters"),
@@ -126,15 +118,7 @@ public class MainViewModel : ObservableObject
             }
 
             if (_currentUser.CanAccessModule(item.Module))
-            {
-                if (item.TargetViewModel == typeof(SaleReturnViewModel)
-                    && !_currentUser.HasAnyPermission(
-                        AppConstants.Permissions.SalesReturn,
-                        AppConstants.Permissions.SalesReturnManage))
-                    continue;
-
                 MenuItems.Add(item);
-            }
         }
     }
 }

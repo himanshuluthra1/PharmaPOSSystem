@@ -18,8 +18,6 @@ public partial class SalesView : UserControl
     private static readonly HashSet<string> EditableColumns = new(StringComparer.Ordinal)
         { "Qty", "MRP", "Disc%" };
 
-    private bool _billListSelectionFromCode;
-
     public SalesView()
     {
         InitializeComponent();
@@ -277,16 +275,22 @@ public partial class SalesView : UserControl
         await ViewModel.ShowMedicineDetailAsync(line);
     }
 
+    private async Task TryReplaceWithSubstituteForSelectedRowAsync()
+    {
+        if (ViewModel is null) return;
+        if (CartGrid.SelectedItem is not CartLineViewModel line) return;
+        CommitGridEdit();
+        await ViewModel.ReplaceWithSubstituteAsync(line);
+    }
+
     private void BillSelectorToggle_Checked(object sender, RoutedEventArgs e)
     {
         BillPopup.IsOpen = true;
-        _billListSelectionFromCode = true;
         BillListBox.SelectedItem = ViewModel?.SelectedBill;
-        _billListSelectionFromCode = false;
-        Dispatcher.BeginInvoke(FocusBillList, DispatcherPriority.Loaded);
-        if (BillListBox.SelectedItem is SaleListItemDto bill)
-            _ = TryLoadBillAsync(bill, focusGrid: false);
     }
+
+    private void BillPopup_Opened(object? sender, EventArgs e)
+        => Dispatcher.BeginInvoke(FocusBillList, DispatcherPriority.Input);
 
     private void BillSelectorToggle_Unchecked(object sender, RoutedEventArgs e)
         => BillPopup.IsOpen = false;
@@ -308,19 +312,20 @@ public partial class SalesView : UserControl
         ];
     }
 
-    private async void BillListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void BillListBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (_billListSelectionFromCode || ViewModel is null || ViewModel.SuppressBillLoad) return;
-        if (BillListBox.SelectedItem is not SaleListItemDto bill) return;
-        await TryLoadBillAsync(bill, focusGrid: false);
-    }
+        if (e.Key is Key.Up or Key.Down or Key.PageUp or Key.PageDown or Key.Home or Key.End)
+        {
+            Dispatcher.BeginInvoke(
+                () => _ = LoadHighlightedBillFromDropdownAsync(),
+                DispatcherPriority.Input);
+            return;
+        }
 
-    private async void BillListBox_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
         if (e.Key == Key.Enter && BillListBox.SelectedItem is SaleListItemDto bill)
         {
             e.Handled = true;
-            await CommitBillSelectionAsync(bill);
+            _ = CommitBillSelectionAsync(bill);
         }
         else if (e.Key == Key.Escape)
         {
@@ -331,8 +336,52 @@ public partial class SalesView : UserControl
 
     private async void BillListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (BillListBox.SelectedItem is not SaleListItemDto bill) return;
+        if (!IsInvoiceNumberClick(e.OriginalSource as DependencyObject))
+            return;
+
+        var bill = GetBillFromClick(e.OriginalSource as DependencyObject);
+        if (bill is null) return;
+
+        BillListBox.SelectedItem = bill;
+
         await CommitBillSelectionAsync(bill);
+    }
+
+    private static bool IsInvoiceNumberClick(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is FrameworkElement { Tag: string tag } && tag == "InvoiceNumber")
+                return true;
+
+            if (source is ListBoxItem)
+                return false;
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return false;
+    }
+
+    private static SaleListItemDto? GetBillFromClick(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is ListBoxItem { DataContext: SaleListItemDto bill })
+                return bill;
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return null;
+    }
+
+    private async Task LoadHighlightedBillFromDropdownAsync()
+    {
+        if (!BillPopup.IsOpen) return;
+        if (ViewModel is null || ViewModel.SuppressBillLoad) return;
+        if (BillListBox.SelectedItem is not SaleListItemDto bill) return;
+        await TryLoadBillAsync(bill, focusGrid: false);
     }
 
     private async Task CommitBillSelectionAsync(SaleListItemDto bill)
@@ -351,10 +400,23 @@ public partial class SalesView : UserControl
 
     private void FocusBillList()
     {
+        if (BillListBox.Items.Count == 0) return;
+
         BillListBox.Focus();
-        if (BillListBox.SelectedItem is null) return;
+        Keyboard.Focus(BillListBox);
+
+        if (BillListBox.SelectedItem is null)
+            BillListBox.SelectedIndex = 0;
+
+        BillListBox.UpdateLayout();
         if (BillListBox.ItemContainerGenerator.ContainerFromItem(BillListBox.SelectedItem) is ListBoxItem item)
             item.Focus();
+    }
+
+    private void CartGrid_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
+    {
+        if (e.Row.Item is CartLineViewModel { IsReturnLine: true })
+            e.Cancel = true;
     }
 
     private async void CartGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -432,6 +494,21 @@ public partial class SalesView : UserControl
             return;
         }
 
+        if (key == Key.F5)
+        {
+            e.Handled = true;
+            await TryReplaceWithSubstituteForSelectedRowAsync();
+            return;
+        }
+
+        if (key == Key.F8)
+        {
+            e.Handled = true;
+            if (ViewModel.OpenSaleReturnCommand.CanExecute(null))
+                ViewModel.OpenSaleReturnCommand.Execute(null);
+            return;
+        }
+
         if (key != Key.F3) return;
 
         if (IsCustomerSectionFocused())
@@ -462,6 +539,17 @@ public partial class SalesView : UserControl
                     CommitGridEdit();
                     if (CartGrid.SelectedItem is CartLineViewModel line)
                         _ = vm.ShowMedicineDetailAsync(line);
+                    return;
+                case Key.F5:
+                    e.Handled = true;
+                    CommitGridEdit();
+                    if (CartGrid.SelectedItem is CartLineViewModel substituteLine)
+                        _ = vm.ReplaceWithSubstituteAsync(substituteLine);
+                    return;
+                case Key.F8:
+                    if (vm.OpenSaleReturnCommand.CanExecute(null))
+                        vm.OpenSaleReturnCommand.Execute(null);
+                    e.Handled = true;
                     return;
                 case Key.F9:
                     if (vm.IsEditing && vm.PrintCommand.CanExecute(null))

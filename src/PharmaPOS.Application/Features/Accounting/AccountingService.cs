@@ -386,6 +386,7 @@ public class AccountingService : IAccountingService
                     partyName = supplier.Name;
                     supplier.OutstandingBalance -= amount;
                     _uow.Repository<Supplier>().Update(supplier);
+                    await AllocateSupplierPaymentAsync(partyId, amount, branchId, token);
                 }
                 else
                 {
@@ -399,6 +400,7 @@ public class AccountingService : IAccountingService
                     partyName = customer.Name;
                     customer.OutstandingBalance -= amount;
                     _uow.Repository<Customer>().Update(customer);
+                    await AllocateCustomerReceiptAsync(partyId, amount, branchId, token);
                 }
 
                 var cashAccount = await _uow.Repository<Account>().GetByIdAsync(cashOrBankAccountId, token);
@@ -449,6 +451,70 @@ public class AccountingService : IAccountingService
         catch (Exception ex)
         {
             return Result.Failure<VoucherReceiptDto>($"Could not save voucher: {ex.Message}");
+        }
+    }
+
+    private async Task AllocateSupplierPaymentAsync(
+        int supplierId, decimal amount, int? branchId, CancellationToken ct)
+    {
+        var remaining = amount;
+        var q = _uow.Repository<Purchase>().Query()
+            .Where(p => p.SupplierId == supplierId
+                        && p.Status == PurchaseStatus.Received
+                        && p.GrandTotal > p.PaidAmount);
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        var bills = await q
+            .OrderBy(p => p.InvoiceDate)
+            .ThenBy(p => p.Id)
+            .ToListAsync(ct);
+
+        foreach (var bill in bills)
+        {
+            if (remaining <= 0) break;
+
+            var due = bill.GrandTotal - bill.PaidAmount;
+            if (due <= 0) continue;
+
+            var applied = Math.Min(remaining, due);
+            bill.PaidAmount += applied;
+            bill.PaymentStatus = bill.PaidAmount >= bill.GrandTotal
+                ? PaymentStatus.Paid
+                : PaymentStatus.PartiallyPaid;
+            _uow.Repository<Purchase>().Update(bill);
+            remaining -= applied;
+        }
+    }
+
+    private async Task AllocateCustomerReceiptAsync(
+        int customerId, decimal amount, int? branchId, CancellationToken ct)
+    {
+        var remaining = amount;
+        var q = _uow.Repository<Sale>().Query()
+            .Where(s => s.CustomerId == customerId
+                        && s.Status == SaleStatus.Completed
+                        && s.GrandTotal > s.PaidAmount);
+        if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
+
+        var bills = await q
+            .OrderBy(s => s.InvoiceDate)
+            .ThenBy(s => s.Id)
+            .ToListAsync(ct);
+
+        foreach (var bill in bills)
+        {
+            if (remaining <= 0) break;
+
+            var due = bill.GrandTotal - bill.PaidAmount;
+            if (due <= 0) continue;
+
+            var applied = Math.Min(remaining, due);
+            bill.PaidAmount += applied;
+            bill.PaymentStatus = bill.PaidAmount >= bill.GrandTotal
+                ? PaymentStatus.Paid
+                : PaymentStatus.PartiallyPaid;
+            _uow.Repository<Sale>().Update(bill);
+            remaining -= applied;
         }
     }
 

@@ -276,7 +276,7 @@ public class SaleReturnService : ISaleReturnService
             .Where(r => r.IsActive).ToDictionaryAsync(r => r.Id, ct);
 
         var sale = await _uow.Repository<Sale>().Query()
-            .Include(s => s.Items).ThenInclude(i => i.Medicine)
+            .Include(s => s.Items)
             .Include(s => s.Payments)
             .FirstOrDefaultAsync(s => s.Id == request.SaleId, ct)
             ?? throw new SaleReturnException("Invoice not found.");
@@ -286,8 +286,15 @@ public class SaleReturnService : ISaleReturnService
         if (branchId.HasValue && sale.BranchId != branchId)
             throw new SaleReturnException("Invoice belongs to another branch.");
 
+        // Medicines may be soft-deleted (MedWin imports) — never ThenInclude them or
+        // EF query filters will drop the sale lines.
+        var medIds = sale.Items.Select(i => i.MedicineId).Distinct().ToList();
+        var medicineNames = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+            .Where(m => medIds.Contains(m.Id))
+            .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
+
         var returnedQty = await LoadReturnedQuantitiesAsync(sale.Id, ct);
-        var linesToReturn = ResolveReturnLines(request, sale, returnedQty);
+        var linesToReturn = ResolveReturnLines(request, sale, returnedQty, medicineNames);
 
         ValidateReturnWindow(sale, policy, request.ManagerOverrideUsed, _clock.Now);
         await ValidateLinesAsync(linesToReturn, sale, returnedQty, policy, reasons, request, ct);
@@ -404,11 +411,12 @@ public class SaleReturnService : ISaleReturnService
             return;
         }
 
-        if (returnItem.MedicineBatchId is not int batchId)
-            throw new SaleReturnException($"Batch is required to return {line.MedicineName}.");
-
-        var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(batchId, ct)
-            ?? throw new SaleReturnException($"Batch not found for {line.MedicineName}.");
+        // MedWin / legacy sales often store BatchNumber without MedicineBatchId.
+        // Resolve the original batch by id or number; create one if missing so stock
+        // always returns to the same batch identity.
+        var batch = await ResolveReturnBatchAsync(returnItem, line, branchId, ct);
+        returnItem.MedicineBatchId = batch.Id;
+        _uow.Repository<SaleReturnItem>().Update(returnItem);
 
         batch.QuantityAvailable += returnItem.ReturnedQuantity;
         _uow.Repository<MedicineBatch>().Update(batch);
@@ -417,7 +425,7 @@ public class SaleReturnService : ISaleReturnService
         {
             BranchId = branchId,
             MedicineId = returnItem.MedicineId,
-            MedicineBatchId = batchId,
+            MedicineBatchId = batch.Id,
             MovementType = StockMovementType.SaleReturn,
             Quantity = returnItem.ReturnedQuantity,
             BalanceAfter = batch.QuantityAvailable,
@@ -428,6 +436,43 @@ public class SaleReturnService : ISaleReturnService
             MovementDateUtc = _clock.UtcNow,
             Remarks = $"Return against {line.SaleItem.Sale?.InvoiceNumber}"
         }, ct);
+    }
+
+    private async Task<MedicineBatch> ResolveReturnBatchAsync(
+        SaleReturnItem returnItem, ResolvedReturnLine line, int? branchId, CancellationToken ct)
+    {
+        if (returnItem.MedicineBatchId is int existingId)
+        {
+            var existing = await _uow.Repository<MedicineBatch>().GetByIdAsync(existingId, ct);
+            if (existing is not null) return existing;
+        }
+
+        var batchNo = (returnItem.BatchNumber ?? string.Empty).Trim();
+        if (batchNo.Length > 0)
+        {
+            var q = _uow.Repository<MedicineBatch>().Query()
+                .Where(b => b.MedicineId == returnItem.MedicineId && b.BatchNumber == batchNo);
+            if (branchId.HasValue) q = q.Where(b => b.BranchId == branchId);
+
+            var match = await q.OrderByDescending(b => b.QuantityAvailable).FirstOrDefaultAsync(ct);
+            if (match is not null) return match;
+        }
+
+        var created = new MedicineBatch
+        {
+            MedicineId = returnItem.MedicineId,
+            BatchNumber = string.IsNullOrWhiteSpace(batchNo) ? "RETURN" : batchNo,
+            ExpiryDate = returnItem.ExpiryDate,
+            QuantityAvailable = 0,
+            Mrp = returnItem.Mrp,
+            SellingPrice = returnItem.UnitPrice,
+            PurchasePrice = line.SaleItem.UnitPrice,
+            GstPercent = returnItem.GstPercent,
+            BranchId = branchId
+        };
+        await _uow.Repository<MedicineBatch>().AddAsync(created, ct);
+        await _uow.SaveChangesAsync(ct);
+        return created;
     }
 
     private async Task ApplyRefundsAsync(
@@ -531,8 +576,12 @@ public class SaleReturnService : ISaleReturnService
             .ToDictionaryAsync(x => x.SaleItemId, x => x.Qty, ct);
 
     private static List<ResolvedReturnLine> ResolveReturnLines(
-        CreateSaleReturnRequest request, Sale sale, Dictionary<int, decimal> returnedQty)
+        CreateSaleReturnRequest request, Sale sale, Dictionary<int, decimal> returnedQty,
+        IReadOnlyDictionary<int, string> medicineNames)
     {
+        string NameOf(SaleItem item) =>
+            medicineNames.TryGetValue(item.MedicineId, out var n) ? n : $"Medicine #{item.MedicineId}";
+
         if (request.ReturnEntireInvoice)
         {
             return sale.Items
@@ -543,7 +592,7 @@ public class SaleReturnService : ISaleReturnService
                     if (available <= 0) return null;
                     return new ResolvedReturnLine(
                         item,
-                        item.Medicine?.Name ?? $"Medicine #{item.MedicineId}",
+                        NameOf(item),
                         available,
                         new CreateSaleReturnLineRequest
                         {
@@ -578,7 +627,7 @@ public class SaleReturnService : ISaleReturnService
 
             result.Add(new ResolvedReturnLine(
                 item,
-                item.Medicine?.Name ?? $"Medicine #{item.MedicineId}",
+                NameOf(item),
                 req.ReturnQuantity,
                 req,
                 SaleReturnPricing.ComputeLineAmounts(
@@ -605,7 +654,7 @@ public class SaleReturnService : ISaleReturnService
         CreateSaleReturnRequest request, CancellationToken ct)
     {
         var medIds = lines.Select(l => l.SaleItem.MedicineId).Distinct().ToList();
-        var medicines = await _uow.Repository<Medicine>().Query().AsNoTracking()
+        var medicines = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
             .Where(m => medIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, ct);
 

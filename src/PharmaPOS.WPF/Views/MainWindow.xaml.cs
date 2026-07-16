@@ -21,16 +21,6 @@ public partial class MainWindow : Window
                 vm.NavigateToSales();
                 e.Handled = true;
             }
-            return;
-        }
-
-        if (e.Key == Key.F8)
-        {
-            if (DataContext is MainViewModel vm)
-            {
-                vm.NavigateToSaleReturn();
-                e.Handled = true;
-            }
         }
     }
 }

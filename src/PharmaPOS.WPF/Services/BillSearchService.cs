@@ -32,6 +32,6 @@ public class BillSearchService : IBillSearchService
             return Task.FromResult<SaleListItemDto?>(null);
 
         return Task.FromResult<SaleListItemDto?>(
-            new SaleListItemDto(bill.SaleId, bill.InvoiceNumber, bill.InvoiceDate, bill.PatientName));
+            new SaleListItemDto(bill.SaleId, bill.InvoiceNumber, bill.InvoiceDate, bill.PatientName, bill.Status));
     }
 }

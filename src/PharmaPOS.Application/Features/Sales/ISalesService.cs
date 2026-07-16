@@ -6,6 +6,10 @@ namespace PharmaPOS.Application.Features.Sales;
 public interface ISalesService
 {
     Task<List<MedicineLookupDto>> SearchMedicinesAsync(string term, int? branchId, CancellationToken ct = default);
+
+    /// <summary>Active medicines with the same salt (generic/composition) and strength.</summary>
+    Task<List<SubstituteMedicineDto>> ListSameSaltMedicinesAsync(int medicineId, int? branchId, CancellationToken ct = default);
+
     Task<List<BatchLookupDto>> GetBatchesAsync(int medicineId, int? branchId, CancellationToken ct = default);
     Task<List<CustomerLookupDto>> SearchCustomersAsync(string term, CancellationToken ct = default);
     Task<List<DoctorLookupDto>> SearchDoctorsAsync(string term, CancellationToken ct = default);

@@ -57,6 +57,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IMedicinePickerService, MedicinePickerService>();
         services.AddSingleton<IBillSearchService, BillSearchService>();
         services.AddSingleton<IPurchaseSearchService, PurchaseSearchService>();
+        services.AddSingleton<ISaleReturnDialogService, SaleReturnDialogService>();
 
         // View models (transient so each navigation gets fresh data/context).
         services.AddTransient<LoginViewModel>();

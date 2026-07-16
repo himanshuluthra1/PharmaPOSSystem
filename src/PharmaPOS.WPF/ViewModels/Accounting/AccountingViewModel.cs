@@ -32,6 +32,7 @@ public class AccountingViewModel : ObservableObject
 
         PartyLedger = new PartyLedgerTabViewModel(accounting, currentUser, OnPartySelected);
         Vouchers = new VoucherTabViewModel(accounting, currentUser, dialog);
+        Vouchers.VoucherSaved += OnVoucherSavedAsync;
         CashBook = new CashBookTabViewModel(accounting, currentUser);
         Journal = new JournalTabViewModel(accounting, currentUser);
 
@@ -94,6 +95,13 @@ public class AccountingViewModel : ObservableObject
 
     private void OnPartySelected(PartyLedgerRowDto? party)
         => CommandManager.InvalidateRequerySuggested();
+
+    private async Task OnVoucherSavedAsync()
+    {
+        Summary = await _accounting.GetSummaryAsync(_branchId);
+        await PartyLedger.RefreshAsync();
+        if (SelectedTab == 2) await CashBook.RefreshAsync();
+    }
 
     private async Task RefreshAllAsync()
     {

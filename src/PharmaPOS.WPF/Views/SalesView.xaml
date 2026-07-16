@@ -40,7 +40,7 @@
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
                                 Padding="12,8" Margin="0,0,8,0"
                                 VerticalAlignment="Center"
-                                ToolTip="Sale Return (F8)">
+                                ToolTip="Return items from the open invoice (F8)">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="KeyboardReturn" Width="18" Height="18"
                                                            VerticalAlignment="Center" Margin="0,0,6,0" />
@@ -70,6 +70,7 @@
                                CustomPopupPlacementCallback="BillPopup_PlacementCallback"
                                StaysOpen="False"
                                AllowsTransparency="True"
+                               Opened="BillPopup_Opened"
                                Closed="BillPopup_Closed">
                             <Border x:Name="BillPopupBorder"
                                     Background="{DynamicResource MaterialDesignPaper}"
@@ -94,7 +95,6 @@
                                          HorizontalContentAlignment="Stretch"
                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                          ScrollViewer.CanContentScroll="False"
-                                         SelectionChanged="BillListBox_SelectionChanged"
                                          PreviewKeyDown="BillListBox_PreviewKeyDown"
                                          PreviewMouseLeftButtonUp="BillListBox_PreviewMouseLeftButtonUp">
                                     <ListBox.ItemContainerStyle>
@@ -113,9 +113,11 @@
                                                     <ColumnDefinition Width="*" MinWidth="160" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0"
+                                                           Tag="InvoiceNumber"
                                                            Text="{Binding InvoiceNumber}"
                                                            FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" />
+                                                           VerticalAlignment="Center"
+                                                           Cursor="Hand" />
                                                 <TextBlock Grid.Column="1"
                                                            Text="{Binding BillDateLabel}"
                                                            Margin="16,0,0,0"
@@ -147,7 +149,7 @@
                     </Grid>
                     </StackPanel>
                 </DockPanel>
-                <TextBlock Text="Press Enter on Item to search medicine. F3 customer. F4 medicine details."
+                <TextBlock Text="Press Enter on Item to search medicine. F3 customer. F4 medicine details. F5 substitute."
                            FontSize="12" Opacity="0.6" Margin="0,0,0,8" DockPanel.Dock="Top" />
 
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
@@ -157,6 +159,7 @@
                           SelectionMode="Single"
                           PreviewKeyDown="CartGrid_PreviewKeyDown"
                           MouseDoubleClick="CartGrid_MouseDoubleClick"
+                          BeginningEdit="CartGrid_BeginningEdit"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           IsReadOnly="False">
                     <DataGrid.Columns>
@@ -173,6 +176,10 @@
                                                         <Setter Property="Text" Value="Press Enter to add item..." />
                                                         <Setter Property="Opacity" Value="0.45" />
                                                         <Setter Property="FontStyle" Value="Italic" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsReturnLine}" Value="True">
+                                                        <Setter Property="Foreground" Value="#C62828" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -212,6 +219,9 @@
                                                 <Setter Property="Visibility" Value="Visible" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsReturnLine}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
