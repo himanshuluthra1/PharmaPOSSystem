@@ -30,7 +30,7 @@ public interface IMastersService
     Task<EmployeeDetailDto?> GetEmployeeAsync(int id, CancellationToken ct = default);
     Task<Result<int>> SaveEmployeeAsync(EmployeeDetailDto dto, int? branchId, CancellationToken ct = default);
 
-    // Medicines (search + update key fields; catalogue is bulk-imported)
+    // Medicines
     Task<List<MedicineListDto>> SearchMedicinesAsync(string term, CancellationToken ct = default);
     Task<MedicineDetailDto?> GetMedicineAsync(int id, CancellationToken ct = default);
     Task<Result<int>> SaveMedicineAsync(MedicineDetailDto dto, CancellationToken ct = default);

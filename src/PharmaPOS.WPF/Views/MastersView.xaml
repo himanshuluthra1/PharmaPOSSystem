@@ -7,6 +7,19 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+    <UserControl.Resources>
+        <Style x:Key="FieldCaption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#99000000" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+        <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="FieldCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+    </UserControl.Resources>
     <Grid Margin="8">
         <materialDesign:Card UniformCornerRadius="12" Padding="16"
                              materialDesign:ElevationAssist.Elevation="Dp2">
@@ -34,9 +47,11 @@
                                             <TextBlock Text="New" Margin="4,0,0,0" />
                                         </StackPanel>
                                     </Button>
-                                    <TextBox materialDesign:HintAssist.Hint="Search suppliers..."
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
@@ -51,40 +66,44 @@
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBox materialDesign:HintAssist.Hint="Name *" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Phone" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="GST Number" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Drug License" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.DrugLicenseNumber, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Contact Person" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.ContactPerson, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Email" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Address" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="GST Number" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Drug License" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.DrugLicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Contact Person" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ContactPerson, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Grid Margin="0,0,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Margin="0,0,4,0" materialDesign:HintAssist.Hint="City"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="1" Margin="4,0" materialDesign:HintAssist.Hint="State"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="2" Margin="4,0,0,0" materialDesign:HintAssist.Hint="Pincode"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.Pincode, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0">
+                                            <TextBlock Text="State" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
+                                            <TextBlock Text="Pincode" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Pincode, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
                                     </Grid>
-                                    <TextBox materialDesign:HintAssist.Hint="Payment Terms (days)" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.PaymentTermsDays, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <ComboBox materialDesign:HintAssist.Hint="Status" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <TextBlock Text="Payment Terms (days)" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.PaymentTermsDays, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
+                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
                                     <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
@@ -116,9 +135,11 @@
                                             <TextBlock Text="New" Margin="4,0,0,0" />
                                         </StackPanel>
                                     </Button>
-                                    <TextBox materialDesign:HintAssist.Hint="Search customers..."
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
@@ -132,24 +153,26 @@
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBox materialDesign:HintAssist.Hint="Name *" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <ComboBox materialDesign:HintAssist.Hint="Type" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding CustomerTypes}" SelectedItem="{Binding Editor.Type}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Phone" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Email" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="GST Number" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Address" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="City" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Credit Limit" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.CreditLimit, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <ComboBox materialDesign:HintAssist.Hint="Status" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Type" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}"
+                                              ItemsSource="{Binding CustomerTypes}" SelectedItem="{Binding Editor.Type}" />
+                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="GST Number" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Credit Limit" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.CreditLimit, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
+                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
                                     <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
@@ -181,9 +204,11 @@
                                             <TextBlock Text="New" Margin="4,0,0,0" />
                                         </StackPanel>
                                     </Button>
-                                    <TextBox materialDesign:HintAssist.Hint="Search doctors..."
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
@@ -197,22 +222,23 @@
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBox materialDesign:HintAssist.Hint="Name *" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Qualification" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Qualification, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Specialization" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Specialization, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Registration No." Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.RegistrationNumber, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Hospital" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Hospital, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Phone" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Email" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <ComboBox materialDesign:HintAssist.Hint="Status" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Qualification" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Qualification, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Specialization" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Specialization, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Registration No." Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.RegistrationNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Hospital" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Hospital, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
+                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
                                     <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
@@ -244,9 +270,11 @@
                                             <TextBlock Text="New" Margin="4,0,0,0" />
                                         </StackPanel>
                                     </Button>
-                                    <TextBox materialDesign:HintAssist.Hint="Search manufacturers..."
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
@@ -260,34 +288,37 @@
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBox materialDesign:HintAssist.Hint="Name *" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="GST Number" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="License Number" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.LicenseNumber, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Contact Person" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.ContactPerson, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Phone" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Email" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Address" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="GST Number" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="License Number" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.LicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Contact Person" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ContactPerson, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Margin="0,0,4,0" materialDesign:HintAssist.Hint="City"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="1" Margin="4,0,0,0" materialDesign:HintAssist.Hint="State"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="State" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
                                     </Grid>
-                                    <ComboBox materialDesign:HintAssist.Hint="Status" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
+                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
                                     <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
@@ -319,9 +350,11 @@
                                             <TextBlock Text="New" Margin="4,0,0,0" />
                                         </StackPanel>
                                     </Button>
-                                    <TextBox materialDesign:HintAssist.Hint="Search employees..."
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <StackPanel>
+                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
                                           AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
@@ -335,24 +368,25 @@
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
                                     <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBox materialDesign:HintAssist.Hint="Employee Code *" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Name *" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Designation" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Designation, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Phone" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Email" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Shift" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Shift, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Salary" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Salary, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="Commission %" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.CommissionPercent, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <ComboBox materialDesign:HintAssist.Hint="Status" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <TextBlock Text="Employee Code *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Designation" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Designation, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Shift" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Shift, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Salary" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Salary, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Commission %" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.CommissionPercent, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
+                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
                                     <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
@@ -378,9 +412,18 @@
                                     <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}" Margin="4,0,0,0">
                                         <materialDesign:PackIcon Kind="Refresh" />
                                     </Button>
-                                    <TextBox materialDesign:HintAssist.Hint="Search medicines (min 2 chars)..."
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
+                                            <TextBlock Text="New" Margin="4,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <StackPanel>
+                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
                                 </DockPanel>
                                 <TextBlock Text="{Binding SearchHint}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,6"
                                            Visibility="{Binding SearchHint, Converter={StaticResource StringToVisibility}}" />
@@ -394,50 +437,65 @@
                                 </DataGrid>
                             </StackPanel>
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,4" />
-                                    <TextBlock Text="{Binding Editor.ManufacturerName, StringFormat='Manufacturer: {0}'}"
-                                               Opacity="0.7" Margin="0,0,0,12" />
-                                    <TextBlock Text="{Binding Editor.GenericName}" Opacity="0.7" Margin="0,0,0,12" />
-                                    <TextBox materialDesign:HintAssist.Hint="Barcode" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.Barcode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <TextBox materialDesign:HintAssist.Hint="HSN Code" Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Editor.HsnCode, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                                    <Grid Margin="0,0,0,8">
+                                <StackPanel Visibility="{Binding ShowEditor, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
+                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Generic / Salt" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GenericName, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Brand" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Brand, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="Manufacturer" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}"
+                                              ItemsSource="{Binding Manufacturers}"
+                                              SelectedItem="{Binding SelectedManufacturer}"
+                                              DisplayMemberPath="Name" />
+                                    <TextBlock Text="Barcode" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Barcode, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Text="HSN Code" Style="{StaticResource FieldCaption}" />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.HsnCode, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Margin="0,0,4,0" materialDesign:HintAssist.Hint="Purchase Price"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.PurchasePrice, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="1" Margin="4,0" materialDesign:HintAssist.Hint="MRP"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.Mrp, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="2" Margin="4,0,0,0" materialDesign:HintAssist.Hint="Selling Price"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.SellingPrice, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Purchase Price" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.PurchasePrice, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0">
+                                            <TextBlock Text="MRP" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Mrp, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
+                                            <TextBlock Text="Selling Price" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.SellingPrice, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
                                     </Grid>
-                                    <Grid Margin="0,0,0,8">
+                                    <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" Margin="0,0,4,0" materialDesign:HintAssist.Hint="GST %"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.GstPercent, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="1" Margin="4,0" materialDesign:HintAssist.Hint="Default Disc %"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.DefaultDiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                                        <TextBox Grid.Column="2" Margin="4,0,0,0" materialDesign:HintAssist.Hint="Reorder Level"
-                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.ReorderLevel, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="GST %" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstPercent, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0">
+                                            <TextBlock Text="Default Disc %" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.DefaultDiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
+                                            <TextBlock Text="Reorder Level" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ReorderLevel, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
                                     </Grid>
                                     <CheckBox Content="Prescription Required" IsChecked="{Binding Editor.PrescriptionRequired}" Margin="0,0,0,8" />
-                                    <ComboBox materialDesign:HintAssist.Hint="Status" Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
+                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
                                     <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />

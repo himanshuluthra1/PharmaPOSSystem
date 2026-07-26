@@ -31,6 +31,7 @@ public class ReportSummaryDto
 }
 
 public record SalesReportRowDto(
+    int SaleId,
     string InvoiceNumber,
     DateTime InvoiceDate,
     string CustomerName,
@@ -49,6 +50,7 @@ public record SalesReportRowDto(
 }
 
 public record PurchaseReportRowDto(
+    int PurchaseId,
     string InvoiceNumber,
     DateTime InvoiceDate,
     string SupplierName,

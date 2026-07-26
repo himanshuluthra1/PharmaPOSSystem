@@ -91,7 +91,20 @@ public class MainViewModel : ObservableObject
     public void NavigateToSales()
     {
         var sales = MenuItems.FirstOrDefault(m => m.TargetViewModel == typeof(SalesViewModel));
-        if (sales is not null) SelectedItem = sales;
+        if (sales is null) return;
+        _selectedItem = sales;
+        OnPropertyChanged(nameof(SelectedItem));
+        _navigation.NavigateTo(sales.TargetViewModel);
+    }
+
+    /// <summary>Navigate to the Purchase module.</summary>
+    public void NavigateToPurchase()
+    {
+        var purchase = MenuItems.FirstOrDefault(m => m.TargetViewModel == typeof(PurchaseViewModel));
+        if (purchase is null) return;
+        _selectedItem = purchase;
+        OnPropertyChanged(nameof(SelectedItem));
+        _navigation.NavigateTo(purchase.TargetViewModel);
     }
 
     private void BuildMenu()

@@ -8,6 +8,36 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              PreviewKeyDown="PurchaseView_PreviewKeyDown">
+    <UserControl.Resources>
+        <!-- Force text-height fields on this screen (overrides any leftover MaterialDesign padding). -->
+        <Style x:Key="PurchaseField" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+        </Style>
+        <Style x:Key="PurchaseCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+        </Style>
+        <Style x:Key="PurchaseDate" TargetType="DatePicker" BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+        </Style>
+    </UserControl.Resources>
     <Grid Margin="8">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2.6*" />
@@ -42,7 +72,8 @@
                         <ToggleButton x:Name="PurchaseSelectorToggle"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
-                                      Padding="10,8"
+                                      Height="28"
+                                      Padding="8,2"
                                       Style="{StaticResource MaterialDesignOutlinedButton}"
                                       Checked="PurchaseSelectorToggle_Checked"
                                       Unchecked="PurchaseSelectorToggle_Unchecked">
@@ -141,7 +172,7 @@
                             </Button>
                             <TextBox x:Name="SupplierSearchBox"
                                      materialDesign:HintAssist.Hint="Search supplier (name / phone)"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Style="{StaticResource PurchaseField}"
                                      Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
                                      PreviewKeyDown="SupplierSearchBox_PreviewKeyDown" />
                         </DockPanel>
@@ -169,12 +200,12 @@
 
                     <TextBox Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Top"
                              materialDesign:HintAssist.Hint="Supplier invoice no."
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Style="{StaticResource PurchaseField}"
                              Text="{Binding SupplierInvoiceNumber, UpdateSourceTrigger=PropertyChanged}" />
 
                     <DatePicker Grid.Column="2" VerticalAlignment="Top"
                                 materialDesign:HintAssist.Hint="Invoice date"
-                                Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                Style="{StaticResource PurchaseDate}"
                                 SelectedDate="{Binding InvoiceDate}" />
                 </Grid>
 
@@ -186,7 +217,9 @@
                           ItemsSource="{Binding Lines}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                          materialDesign:DataGridAssist.CellPadding="8,6"
+                          RowHeight="28"
+                          ColumnHeaderHeight="28"
+                          materialDesign:DataGridAssist.CellPadding="5,1"
                           SelectionMode="Single"
                           PreviewKeyDown="PurchaseGrid_PreviewKeyDown"
                           MouseDoubleClick="PurchaseGrid_MouseDoubleClick"
@@ -220,7 +253,9 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <DatePicker SelectedDate="{Binding ExpiryDate, UpdateSourceTrigger=PropertyChanged}"
-                                                BorderThickness="0" Width="120" />
+                                                Style="{StaticResource PurchaseDate}"
+                                                BorderThickness="0" Width="120" Height="26"
+                                                MinHeight="26" MaxHeight="26" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -318,11 +353,11 @@
                     <Separator Margin="0,12" />
                     <TextBlock Text="Payment" FontWeight="SemiBold" Margin="0,0,0,6" />
                     <ComboBox materialDesign:HintAssist.Hint="Method"
-                              Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                              Style="{StaticResource PurchaseCombo}"
                               ItemsSource="{Binding PaymentMethods}"
-                              SelectedItem="{Binding PaymentMethod}" Margin="0,0,0,10" />
+                              SelectedItem="{Binding PaymentMethod}" Margin="0,0,0,8" />
                     <TextBox materialDesign:HintAssist.Hint="Amount paid to supplier"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Style="{StaticResource PurchaseField}"
                              Text="{Binding PaidAmount, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
                     <DockPanel Margin="0,3">
                         <TextBlock Text="Balance Due" DockPanel.Dock="Left" Opacity="0.7" />

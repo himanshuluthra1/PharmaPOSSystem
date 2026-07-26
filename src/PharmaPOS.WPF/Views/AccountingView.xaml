@@ -8,24 +8,28 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
     <UserControl.Resources>
-        <Style x:Key="AcctDataGrid" TargetType="DataGrid">
+        <Style x:Key="AcctDataGrid" TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
             <Setter Property="AutoGenerateColumns" Value="False" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="IsReadOnly" Value="True" />
             <Setter Property="HeadersVisibility" Value="Column" />
             <Setter Property="GridLinesVisibility" Value="Horizontal" />
-            <Setter Property="RowHeight" Value="30" />
-            <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="6,3" />
+            <Setter Property="RowHeight" Value="26" />
+            <Setter Property="ColumnHeaderHeight" Value="34" />
+            <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="5,1" />
+            <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="8,6" />
         </Style>
         <Style x:Key="AcctOutlinedBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
             <Setter Property="Margin" Value="0" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="MinHeight" Value="32" />
         </Style>
         <Style x:Key="AcctOutlinedCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
             <Setter Property="Margin" Value="0" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="MinHeight" Value="32" />
         </Style>
         <Style x:Key="AcctToolbarButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
             <Setter Property="Padding" Value="10,4" />

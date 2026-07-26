@@ -391,20 +391,41 @@ public class MastersService : IMastersService
             DefaultDiscountPercent = m.DefaultDiscountPercent,
             ReorderLevel = m.ReorderLevel, ReorderQuantity = m.ReorderQuantity,
             PrescriptionRequired = m.PrescriptionRequired, Status = m.Status,
+            ManufacturerId = m.ManufacturerId,
             ManufacturerName = m.Manufacturer?.Name
         };
     }
 
     public async Task<Result<int>> SaveMedicineAsync(MedicineDetailDto dto, CancellationToken ct = default)
     {
-        if (dto.Id <= 0)
-            return Result.Failure<int>("Select a medicine to update.");
+        if (string.IsNullOrWhiteSpace(dto.Name))
+            return Result.Failure<int>("Medicine name is required.");
 
-        var entity = await _uow.Repository<Medicine>().GetByIdAsync(dto.Id, ct);
-        if (entity is null) return Result.Failure<int>("Medicine not found.");
+        if (dto.Id > 0)
+        {
+            var entity = await _uow.Repository<Medicine>().GetByIdAsync(dto.Id, ct);
+            if (entity is null) return Result.Failure<int>("Medicine not found.");
+            ApplyMedicine(entity, dto);
+            _uow.Repository<Medicine>().Update(entity);
+            await _uow.SaveChangesAsync(ct);
+            return Result.Success(entity.Id);
+        }
 
-        entity.Barcode = dto.Barcode;
-        entity.HsnCode = dto.HsnCode;
+        var created = new Medicine();
+        ApplyMedicine(created, dto);
+        await _uow.Repository<Medicine>().AddAsync(created, ct);
+        await _uow.SaveChangesAsync(ct);
+        return Result.Success(created.Id);
+    }
+
+    private static void ApplyMedicine(Medicine entity, MedicineDetailDto dto)
+    {
+        entity.Name = dto.Name.Trim();
+        entity.GenericName = string.IsNullOrWhiteSpace(dto.GenericName) ? null : dto.GenericName.Trim();
+        entity.Brand = string.IsNullOrWhiteSpace(dto.Brand) ? null : dto.Brand.Trim();
+        entity.ManufacturerId = dto.ManufacturerId is > 0 ? dto.ManufacturerId : null;
+        entity.Barcode = string.IsNullOrWhiteSpace(dto.Barcode) ? null : dto.Barcode.Trim();
+        entity.HsnCode = string.IsNullOrWhiteSpace(dto.HsnCode) ? null : dto.HsnCode.Trim();
         entity.GstPercent = dto.GstPercent;
         entity.Mrp = dto.Mrp;
         entity.PurchasePrice = dto.PurchasePrice;
@@ -414,10 +435,6 @@ public class MastersService : IMastersService
         entity.ReorderQuantity = dto.ReorderQuantity;
         entity.PrescriptionRequired = dto.PrescriptionRequired;
         entity.Status = dto.Status;
-
-        _uow.Repository<Medicine>().Update(entity);
-        await _uow.SaveChangesAsync(ct);
-        return Result.Success(entity.Id);
     }
 
     #endregion

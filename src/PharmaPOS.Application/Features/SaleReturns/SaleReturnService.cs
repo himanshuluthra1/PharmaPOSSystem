@@ -228,7 +228,7 @@ public class SaleReturnService : ISaleReturnService
             .ToListAsync(ct);
     }
 
-    public Task<List<MedicineReturnReportRowDto>> GetMedicineReturnReportAsync(
+    public async Task<List<MedicineReturnReportRowDto>> GetMedicineReturnReportAsync(
         DateTime from, DateTime to, int? branchId, CancellationToken ct = default)
     {
         var q = _uow.Repository<SaleReturnItem>().Query().AsNoTracking()
@@ -237,15 +237,33 @@ public class SaleReturnService : ISaleReturnService
                         && i.SaleReturn.ReturnDate < to.AddDays(1));
         if (branchId.HasValue) q = q.Where(i => i.SaleReturn!.BranchId == branchId);
 
-        return q.GroupBy(i => new { i.MedicineId, i.Medicine!.Name, i.BatchNumber })
-            .Select(g => new MedicineReturnReportRowDto(
-                g.Key.Name,
-                g.Key.BatchNumber ?? "—",
-                g.Sum(x => x.ReturnedQuantity),
-                g.Sum(x => x.LineTotal),
-                g.Count()))
+        // Project anonymous types first — EF cannot translate record DTO constructors in GroupBy Select.
+        var raw = await q
+            .GroupBy(i => new { i.MedicineId, i.BatchNumber })
+            .Select(g => new
+            {
+                g.Key.MedicineId,
+                g.Key.BatchNumber,
+                ReturnedQuantity = g.Sum(x => x.ReturnedQuantity),
+                RefundAmount = g.Sum(x => x.LineTotal),
+                ReturnCount = g.Count()
+            })
             .OrderByDescending(x => x.RefundAmount)
             .ToListAsync(ct);
+
+        if (raw.Count == 0) return [];
+
+        var medIds = raw.Select(r => r.MedicineId).Distinct().ToList();
+        var names = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+            .Where(m => medIds.Contains(m.Id))
+            .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
+
+        return raw.Select(r => new MedicineReturnReportRowDto(
+            names.TryGetValue(r.MedicineId, out var name) ? name : $"Medicine #{r.MedicineId}",
+            string.IsNullOrWhiteSpace(r.BatchNumber) ? "—" : r.BatchNumber!,
+            r.ReturnedQuantity,
+            r.RefundAmount,
+            r.ReturnCount)).ToList();
     }
 
     public async Task<DailySaleReturnReportDto> GetDailyReturnSummaryAsync(

@@ -410,14 +410,18 @@ public class MedicineTabViewModel : MasterTabViewModelBase
     private MedicineListDto? _selected;
     private MedicineDetailDto _editor = new();
     private string? _searchHint;
+    private bool _isCreating;
+    private ManufacturerListDto? _selectedManufacturer;
 
     public MedicineTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
         : base(dialog, currentUser)
     {
         _masters = masters;
+        _ = LoadManufacturersAsync();
     }
 
     public ObservableCollection<MedicineListDto> Items { get; } = new();
+    public ObservableCollection<ManufacturerListDto> Manufacturers { get; } = new();
     public Array EntityStatuses => Enum.GetValues(typeof(EntityStatus));
 
     public string? SearchHint
@@ -431,8 +435,9 @@ public class MedicineTabViewModel : MasterTabViewModelBase
         get => _selected;
         set
         {
-            if (SetProperty(ref _selected, value) && value is not null)
-                _ = LoadItemAsync(value.Id);
+            if (!SetProperty(ref _selected, value) || value is null) return;
+            _isCreating = false;
+            _ = LoadItemAsync(value.Id);
         }
     }
 
@@ -445,20 +450,52 @@ public class MedicineTabViewModel : MasterTabViewModelBase
             {
                 OnPropertyChanged(nameof(EditorTitle));
                 OnPropertyChanged(nameof(IsNewRecord));
-                OnPropertyChanged(nameof(HasSelection));
+                OnPropertyChanged(nameof(ShowEditor));
+                SyncSelectedManufacturer();
             }
         }
     }
 
-    public bool HasSelection => Editor.Id > 0;
-    public override string EditorTitle => Editor.Id > 0 ? Editor.Name : "Select a medicine";
-    public override bool IsNewRecord => false;
+    public ManufacturerListDto? SelectedManufacturer
+    {
+        get => _selectedManufacturer;
+        set
+        {
+            if (!SetProperty(ref _selectedManufacturer, value)) return;
+            Editor.ManufacturerId = value?.Id;
+            Editor.ManufacturerName = value?.Name;
+        }
+    }
+
+    public bool ShowEditor => _isCreating || Editor.Id > 0;
+    public override string EditorTitle => _isCreating
+        ? "New Medicine"
+        : Editor.Id > 0 ? $"Edit: {Editor.Name}" : "Select a medicine";
+    public override bool IsNewRecord => _isCreating;
+
+    private async Task LoadManufacturersAsync()
+    {
+        var rows = await _masters.SearchManufacturersAsync(string.Empty);
+        Manufacturers.Clear();
+        foreach (var r in rows) Manufacturers.Add(r);
+        SyncSelectedManufacturer();
+    }
+
+    private void SyncSelectedManufacturer()
+    {
+        _selectedManufacturer = Editor.ManufacturerId is int id
+            ? Manufacturers.FirstOrDefault(m => m.Id == id)
+            : null;
+        OnPropertyChanged(nameof(SelectedManufacturer));
+    }
 
     protected override async Task SearchAsync(string term, CancellationToken ct = default)
     {
         term = term.Trim();
         Items.Clear();
-        SelectedItem = null;
+        _selected = null;
+        OnPropertyChanged(nameof(SelectedItem));
+        _isCreating = false;
         Editor = new MedicineDetailDto();
 
         if (term.Length < 2)
@@ -476,19 +513,37 @@ public class MedicineTabViewModel : MasterTabViewModelBase
     protected override async Task LoadItemAsync(int id)
     {
         var detail = await _masters.GetMedicineAsync(id);
-        if (detail is not null) Editor = detail;
+        if (detail is not null)
+        {
+            _isCreating = false;
+            Editor = detail;
+        }
     }
 
     protected override void BeginNew()
     {
-        Dialog.ShowInfo("Medicines are imported in bulk. Search and edit an existing record.");
+        _selected = null;
+        OnPropertyChanged(nameof(SelectedItem));
+        _isCreating = true;
+        Editor = new MedicineDetailDto
+        {
+            Status = EntityStatus.Active,
+            GstPercent = 12m
+        };
+        StatusMessage = null;
     }
 
     protected override async Task SaveAsync()
     {
-        if (Editor.Id <= 0)
+        if (!_isCreating && Editor.Id <= 0)
         {
-            Dialog.ShowError("Select a medicine to update.");
+            Dialog.ShowError("Select a medicine to update, or click New.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Editor.Name))
+        {
+            Dialog.ShowError("Medicine name is required.");
             return;
         }
 
@@ -500,8 +555,18 @@ public class MedicineTabViewModel : MasterTabViewModelBase
                 Dialog.ShowError(result.Error ?? "Could not save medicine.");
                 return;
             }
-            StatusMessage = "Medicine updated.";
-            await SearchAsync(SearchText);
+
+            var wasNew = _isCreating;
+            Editor.Id = result.Value;
+            _isCreating = false;
+            OnPropertyChanged(nameof(IsNewRecord));
+            OnPropertyChanged(nameof(ShowEditor));
+            OnPropertyChanged(nameof(EditorTitle));
+            StatusMessage = wasNew ? "Medicine created." : "Medicine updated.";
+
+            SearchText = Editor.Name;
+            await SearchAsync(Editor.Name);
+            SelectedItem = Items.FirstOrDefault(i => i.Id == result.Value);
         });
     }
 }

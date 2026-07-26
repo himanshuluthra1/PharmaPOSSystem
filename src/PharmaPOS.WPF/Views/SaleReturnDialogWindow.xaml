@@ -62,7 +62,7 @@
                               GridLinesVisibility="Horizontal"
                               SelectionMode="Single"
                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                              materialDesign:DataGridAssist.CellPadding="6,4">
+                              materialDesign:DataGridAssist.CellPadding="5,2">
                         <DataGrid.Columns>
                             <DataGridCheckBoxColumn Header="Return"
                                                     Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

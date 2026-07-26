@@ -1,0 +1,106 @@
+<Window x:Class="PharmaPOS.WPF.Views.PurchaseBillViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Purchase Invoice"
+        Height="720" Width="1100"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}">
+    <DockPanel>
+        <materialDesign:ColorZone DockPanel.Dock="Top" Mode="PrimaryMid" Padding="12,8">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Close" Click="CloseButton_Click"
+                        Style="{StaticResource MaterialDesignFlatLightButton}" Padding="12,4" />
+                <StackPanel>
+                    <TextBlock Text="Purchase Invoice" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Opacity="0.9" FontSize="12">
+                        <Run Text="{Binding InvoiceNumber, Mode=OneWay}" />
+                        <Run Text="  ·  " />
+                        <Run Text="{Binding InvoiceDateLabel, Mode=OneWay}" />
+                        <Run Text="  ·  " />
+                        <Run Text="{Binding SupplierName, Mode=OneWay}" />
+                    </TextBlock>
+                </StackPanel>
+            </DockPanel>
+        </materialDesign:ColorZone>
+
+        <Border DockPanel.Dock="Bottom" Padding="16,12" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource MaterialDesignDivider}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Close" IsCancel="True" Click="CloseButton_Click"
+                        Style="{StaticResource MaterialDesignRaisedButton}" Padding="20,8" />
+                <UniformGrid Columns="4" HorizontalAlignment="Left">
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Text="Grand Total" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding GrandTotal, StringFormat=N2}" FontSize="18" FontWeight="Bold" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Text="Paid" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding PaidAmount, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Text="Balance Due" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding BalanceDue, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Payment" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding PaymentMethod}" FontSize="16" FontWeight="SemiBold" />
+                    </StackPanel>
+                </UniformGrid>
+            </DockPanel>
+        </Border>
+
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <materialDesign:Card Grid.Row="0" Padding="12" Margin="0,0,0,12" UniformCornerRadius="8">
+                <UniformGrid Columns="4">
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="System Invoice #" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding InvoiceNumber}" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="Supplier Invoice #" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding SupplierInvoiceNumber}" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,0">
+                        <TextBlock Text="Supplier" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding SupplierName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Phone" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding SupplierPhone}" FontWeight="SemiBold" />
+                    </StackPanel>
+                </UniformGrid>
+            </materialDesign:Card>
+
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{Binding Lines}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      materialDesign:DataGridAssist.CellPadding="6,4">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="160" />
+                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
+                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="80" />
+                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat=N0}" Width="60" />
+                    <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity, StringFormat=N0}" Width="50" />
+                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
+                    <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="80" />
+                    <DataGridTextColumn Header="Disc %" Binding="{Binding DiscountPercent, StringFormat=N1}" Width="60" />
+                    <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, StringFormat=N1}" Width="60" />
+                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="90" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </DockPanel>
+</Window>

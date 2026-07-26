@@ -97,7 +97,7 @@ public class MedicineDetailDto
     public string? Brand { get; set; }
     public string? Barcode { get; set; }
     public string? HsnCode { get; set; }
-    public decimal GstPercent { get; set; }
+    public decimal GstPercent { get; set; } = 12m;
     public decimal Mrp { get; set; }
     public decimal PurchasePrice { get; set; }
     public decimal SellingPrice { get; set; }
@@ -106,5 +106,6 @@ public class MedicineDetailDto
     public int ReorderQuantity { get; set; }
     public bool PrescriptionRequired { get; set; }
     public EntityStatus Status { get; set; } = EntityStatus.Active;
+    public int? ManufacturerId { get; set; }
     public string? ManufacturerName { get; set; }
 }

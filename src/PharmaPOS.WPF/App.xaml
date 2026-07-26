@@ -28,6 +28,65 @@
             <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
             <conv:CurrencyConverter x:Key="Currency" />
 
+            <!-- Compact outlined inputs — floating labels disabled so height matches text. -->
+            <Style x:Key="MaterialDesignOutlinedTextBox" TargetType="TextBox"
+                   BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+                <Setter Property="Padding" Value="8,2" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Height" Value="30" />
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="MaxHeight" Value="30" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
+                <Setter Property="materialDesign:TextFieldAssist.TextBoxViewMargin" Value="0" />
+            </Style>
+
+            <Style x:Key="MaterialDesignOutlinedComboBox" TargetType="ComboBox"
+                   BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
+                <Setter Property="Padding" Value="8,2" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Height" Value="30" />
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="MaxHeight" Value="30" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
+            </Style>
+
+            <Style x:Key="MaterialDesignOutlinedDatePicker" TargetType="DatePicker"
+                   BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}">
+                <Setter Property="Padding" Value="8,2" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Height" Value="30" />
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="MaxHeight" Value="30" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
+            </Style>
+
+            <Style TargetType="DatePicker" BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}" />
+
+            <!-- Compact grids app-wide. -->
+            <Style TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
+                <Setter Property="RowHeight" Value="28" />
+                <Setter Property="ColumnHeaderHeight" Value="34" />
+                <Setter Property="GridLinesVisibility" Value="Horizontal" />
+                <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="6,2" />
+                <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="8,6" />
+            </Style>
+
+            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                <Setter Property="Height" Value="34" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontSize" Value="12" />
+            </Style>
+
             <!-- DataGridTextColumn defaults to TwoWay; read-only columns must be OneWay. -->
             <Style TargetType="{x:Type DataGridTextColumn}">
                 <Setter Property="IsReadOnly" Value="True" />

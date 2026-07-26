@@ -45,7 +45,13 @@
                 <DockPanel Grid.Column="1">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                         <TextBlock Text="{Binding SelectedReport.Label}" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding SelectedReportDescription}" Opacity="0.6" Margin="0,2,0,8" />
+                        <TextBlock Text="{Binding SelectedReportDescription}" Opacity="0.6" Margin="0,2,0,4" />
+                        <TextBlock Text="Double-click a row (or press Enter) to open the invoice."
+                                   FontSize="11" Opacity="0.5" Margin="0,0,0,8"
+                                   Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="Double-click a row (or press Enter) to open the purchase invoice."
+                                   FontSize="11" Opacity="0.5" Margin="0,0,0,8"
+                                   Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}" />
 
                         <Grid Margin="0,0,0,8"
                               Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}">
@@ -70,7 +76,7 @@
                             </StackPanel>
                         </Grid>
 
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Button Command="{Binding RunReportCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,8,0">
                                 <StackPanel Orientation="Horizontal">
                                     <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" />
@@ -85,6 +91,40 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
+
+                        <Grid Margin="0,0,0,8"
+                              Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Margin="0,0,8,0"
+                                     materialDesign:HintAssist.Hint="{Binding FilterTextHint}"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+                            <ComboBox Grid.Column="1" Margin="0,0,8,0"
+                                      ItemsSource="{Binding FilterOptions}"
+                                      SelectedItem="{Binding SelectedFilterOption}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Status"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                      Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Grid.Column="2"
+                                    Command="{Binding ClearFilterCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="10,4"
+                                    Visibility="{Binding HasActiveFilter, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Clear" />
+                            </Button>
+                        </Grid>
+
+                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6"
+                                Background="#FFF8E1"
+                                Visibility="{Binding HasNoFilterMatches, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="No matching records for the current filter. Clear or change the filter to see results."
+                                       TextWrapping="Wrap" Opacity="0.85" />
+                        </Border>
                     </StackPanel>
 
                     <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8"
@@ -148,7 +188,10 @@
                                    Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
                         <Grid>
                         <DataGrid ItemsSource="{Binding SalesRows}" Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
+                                  Cursor="Hand"
+                                  MouseDoubleClick="SalesGrid_MouseDoubleClick"
+                                  PreviewKeyDown="SalesGrid_PreviewKeyDown">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
                                 <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
@@ -161,7 +204,10 @@
                         </DataGrid>
 
                         <DataGrid ItemsSource="{Binding PurchaseRows}" Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
+                                  Cursor="Hand"
+                                  MouseDoubleClick="PurchaseGrid_MouseDoubleClick"
+                                  PreviewKeyDown="PurchaseGrid_PreviewKeyDown">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
                                 <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />

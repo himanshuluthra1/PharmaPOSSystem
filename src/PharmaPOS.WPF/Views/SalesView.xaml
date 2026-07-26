@@ -155,7 +155,9 @@
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                          materialDesign:DataGridAssist.CellPadding="8,6"
+                          RowHeight="28"
+                          ColumnHeaderHeight="30"
+                          materialDesign:DataGridAssist.CellPadding="6,2"
                           SelectionMode="Single"
                           PreviewKeyDown="CartGrid_PreviewKeyDown"
                           MouseDoubleClick="CartGrid_MouseDoubleClick"
@@ -300,8 +302,8 @@
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8">
                     <Separator Margin="0,0,0,8" />
                     <TextBlock Text="Payment" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <ComboBox materialDesign:HintAssist.Hint="Method"
-                              Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                    <TextBlock Text="Method" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
+                    <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
                               ItemsSource="{Binding PaymentMethods}"
                               SelectedItem="{Binding PaymentMethod}" />
                 </StackPanel>
@@ -334,27 +336,31 @@
                     </DockPanel>
                 </StackPanel>
 
-                <!-- Customer (compact, no scroll) -->
+                <!-- Customer -->
                 <StackPanel x:Name="CustomerPanel" VerticalAlignment="Top">
                     <Separator Margin="0,0,0,8" />
                     <TextBlock Text="Customer" FontWeight="SemiBold" Margin="0,0,0,4" />
+
+                    <TextBlock Text="Customer name" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
                     <TextBox x:Name="CustomerNameBox"
-                             materialDesign:HintAssist.Hint="Customer name (F3 to save)"
                              Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="{Binding CustomerName, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,4" />
-                    <TextBox materialDesign:HintAssist.Hint="Doctor name (optional)"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Margin="0,0,0,6"
+                             ToolTip="F3 to save customer" />
+
+                    <TextBlock Text="Doctor" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
+                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="{Binding DoctorName, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,4" />
-                    <TextBox materialDesign:HintAssist.Hint="Mobile (optional)"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Margin="0,0,0,6" />
+
+                    <TextBlock Text="Mobile" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
+                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="{Binding CustomerMobile, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,4" />
-                    <TextBox materialDesign:HintAssist.Hint="Address (optional)"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                             Text="{Binding CustomerAddress, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,0" />
+                             Margin="0,0,0,6" />
+
+                    <TextBlock Text="Address" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
+                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Text="{Binding CustomerAddress, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
             </DockPanel>
         </materialDesign:Card>

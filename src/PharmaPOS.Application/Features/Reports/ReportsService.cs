@@ -33,6 +33,7 @@ public class ReportsService : IReportsService
         var rows = await q
             .OrderByDescending(s => s.InvoiceDate)
             .Select(s => new SalesReportRowDto(
+                s.Id,
                 s.InvoiceNumber,
                 s.InvoiceDate,
                 s.Customer != null ? s.Customer.Name :
@@ -62,6 +63,7 @@ public class ReportsService : IReportsService
         var rows = await q
             .OrderByDescending(p => p.InvoiceDate)
             .Select(p => new PurchaseReportRowDto(
+                p.Id,
                 p.InvoiceNumber,
                 p.InvoiceDate,
                 p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
@@ -179,31 +181,63 @@ public class ReportsService : IReportsService
         var completedSales = SalesQuery(branchId)
             .Where(s => s.InvoiceDate >= start && s.InvoiceDate < end);
 
-        var raw = await (
-            from item in _uow.Repository<SaleItem>().Query()
+        // Keep SQL simple: EF cannot reliably translate left-join + null ternary inside Sum.
+        var lines = await (
+            from item in _uow.Repository<SaleItem>().Query().AsNoTracking()
             join sale in completedSales on item.SaleId equals sale.Id
-            join medicine in _uow.Repository<Medicine>().Query() on item.MedicineId equals medicine.Id
-            join batch in _uow.Repository<MedicineBatch>().Query()
-                on item.MedicineBatchId equals batch.Id into batchJoin
-            from batch in batchJoin.DefaultIfEmpty()
-            group new { item, batch } by new { medicine.Id, medicine.Name, medicine.GenericName } into g
-            orderby g.Sum(x => x.item.LineTotal) descending
             select new
             {
-                g.Key.Name,
-                g.Key.GenericName,
-                Qty = g.Sum(x => x.item.Quantity),
-                Revenue = g.Sum(x => x.item.LineTotal),
-                Cost = g.Sum(x => x.item.Quantity * (x.batch != null ? x.batch.PurchasePrice : 0m))
+                item.MedicineId,
+                item.MedicineBatchId,
+                item.Quantity,
+                item.LineTotal
             }).ToListAsync(ct);
 
-        var rows = raw.Select(r => new MedicineSalesRowDto(
-            r.Name,
-            r.GenericName,
-            r.Qty,
-            r.Revenue,
-            r.Cost,
-            r.Revenue - r.Cost)).ToList();
+        if (lines.Count == 0)
+        {
+            return (new ReportSummaryDto
+            {
+                RecordCount = 0,
+                FooterNote = "Top seller: —"
+            }, []);
+        }
+
+        var medIds = lines.Select(l => l.MedicineId).Distinct().ToList();
+        var medicines = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+            .Where(m => medIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.Name, m.GenericName })
+            .ToDictionaryAsync(m => m.Id, ct);
+
+        var batchIds = lines
+            .Where(l => l.MedicineBatchId.HasValue)
+            .Select(l => l.MedicineBatchId!.Value)
+            .Distinct()
+            .ToList();
+        var batchCosts = batchIds.Count == 0
+            ? new Dictionary<int, decimal>()
+            : await _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+                .Where(b => batchIds.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id, b => b.PurchasePrice, ct);
+
+        var rows = lines
+            .GroupBy(l => l.MedicineId)
+            .Select(g =>
+            {
+                medicines.TryGetValue(g.Key, out var med);
+                var name = med?.Name ?? $"Medicine #{g.Key}";
+                var generic = med?.GenericName;
+                var qty = g.Sum(x => x.Quantity);
+                var revenue = g.Sum(x => x.LineTotal);
+                var cost = g.Sum(x =>
+                {
+                    if (x.MedicineBatchId is int bid && batchCosts.TryGetValue(bid, out var price))
+                        return x.Quantity * price;
+                    return 0m;
+                });
+                return new MedicineSalesRowDto(name, generic, qty, revenue, cost, revenue - cost);
+            })
+            .OrderByDescending(r => r.Revenue)
+            .ToList();
 
         return (new ReportSummaryDto
         {
