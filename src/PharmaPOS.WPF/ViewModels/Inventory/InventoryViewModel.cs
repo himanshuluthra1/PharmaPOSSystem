@@ -18,12 +18,13 @@ public class InventoryViewModel : ObservableObject
         IInventoryService inventory,
         ICurrentUserService currentUser,
         IMedicinePickerService medicinePicker,
-        IDialogService dialog)
+        IDialogService dialog,
+        IBarcodeCameraService barcodeCamera)
     {
         CanAdjustStock = currentUser.HasAnyPermission(
             AppConstants.Permissions.InventoryAdjust, AppConstants.Permissions.InventoryManage);
 
-        StockOnHand = new StockOnHandTabViewModel(inventory, currentUser, OnStockBatchSelected);
+        StockOnHand = new StockOnHandTabViewModel(inventory, currentUser, OnStockBatchSelected, barcodeCamera);
         StockLedger = new StockLedgerTabViewModel(inventory, currentUser);
         StockAdjustment = new StockAdjustmentTabViewModel(inventory, currentUser, medicinePicker, dialog);
 

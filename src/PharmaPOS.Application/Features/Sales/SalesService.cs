@@ -39,27 +39,58 @@ public class SalesService : ISalesService
         _settings = settings;
     }
 
+    public async Task<MedicineLookupDto?> FindMedicineByBarcodeAsync(
+        string barcode, int? branchId, CancellationToken ct = default)
+    {
+        var key = SearchQueryExtensions.NormalizeTerm(barcode);
+        if (key.Length < 3) return null;
+
+        var medicine = await _uow.Repository<Medicine>().Query().AsNoTracking()
+            .Where(m => m.Status == EntityStatus.Active && m.BarcodeSearchKey == key)
+            .Select(m => new MedicineSearchRow(
+                m.Id, m.Name, m.GenericName, m.Barcode,
+                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
+            .FirstOrDefaultAsync(ct);
+
+        if (medicine is null) return null;
+
+        var stockMap = await GetStockByMedicineIdsAsync([medicine.Id], branchId, ct);
+        return ToMedicineLookupDtos([medicine], stockMap).FirstOrDefault();
+    }
+
     public async Task<List<MedicineLookupDto>> SearchMedicinesAsync(string term, int? branchId, CancellationToken ct = default)
     {
         var normalized = SearchQueryExtensions.NormalizeTerm(term);
         if (normalized.Length < 2) return new();
 
+        var tokens = SearchQueryExtensions.GetSearchTokens(term);
+        // Multi-token queries skip prefix-only (contiguous key won't match "DETTOL 110ML LIQ").
+        var usePrefixFirst = tokens.Length <= 1;
+
         var baseQuery = _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Status == EntityStatus.Active);
 
-        var medicines = await baseQuery
-            .WhereMedicineMatches(normalized, prefixOnly: true)
-            .OrderBy(m => m.Name)
-            .Take(25)
-            .Select(m => new MedicineSearchRow(
-                m.Id, m.Name, m.GenericName, m.Barcode,
-                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
-            .ToListAsync(ct);
+        List<MedicineSearchRow> medicines;
+        if (usePrefixFirst)
+        {
+            medicines = await baseQuery
+                .WhereMedicineMatches(normalized, prefixOnly: true, tokens)
+                .OrderBy(m => m.Name)
+                .Take(25)
+                .Select(m => new MedicineSearchRow(
+                    m.Id, m.Name, m.GenericName, m.Barcode,
+                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
+                .ToListAsync(ct);
+        }
+        else
+        {
+            medicines = new();
+        }
 
         if (medicines.Count == 0)
         {
             medicines = await baseQuery
-                .WhereMedicineMatches(normalized, prefixOnly: false)
+                .WhereMedicineMatches(normalized, prefixOnly: false, tokens)
                 .OrderBy(m => m.Name)
                 .Take(25)
                 .Select(m => new MedicineSearchRow(
@@ -704,6 +735,10 @@ public class SalesService : ISalesService
         if (branchId.HasValue && sale.BranchId != branchId)
             throw new BillingException("Invoice belongs to another branch.");
 
+        var previousCustomerId = sale.CustomerId;
+        var previousDue = DueOf(sale.GrandTotal, sale.PaidAmount);
+        var previousRewardDelta = sale.RewardPointsEarned - sale.RewardPointsRedeemed;
+
         await RestoreSaleStockAsync(sale, branchId, ct);
 
         foreach (var oldItem in sale.Items.ToList())
@@ -726,6 +761,15 @@ public class SalesService : ISalesService
 
         await ApplySaleLinesAsync(sale, request.Lines, branchId, ct);
         ApplySalePayments(sale, request.Payments);
+        sale.CustomerId = await ResolveCustomerForSaleAsync(request, sale, ct);
+
+        await ReverseCustomerOutstandingAsync(previousCustomerId, previousDue, previousRewardDelta, ct);
+        var newDue = DueOf(sale.GrandTotal, sale.PaidAmount);
+        await ApplyCustomerOutstandingAsync(
+            sale.CustomerId,
+            newDue,
+            sale.RewardPointsEarned - request.RewardPointsRedeemed,
+            ct);
 
         _uow.Repository<Sale>().Update(sale);
         await _uow.SaveChangesAsync(ct);
@@ -782,23 +826,17 @@ public class SalesService : ISalesService
         await ApplySaleLinesAsync(sale, request.Lines, branchId, ct);
         ApplySalePayments(sale, request.Payments);
 
+        sale.CustomerId = await ResolveCustomerForSaleAsync(request, sale, ct);
         sale.InvoiceNumber = await GenerateInvoiceNumberAsync(branchId, ct);
 
         await _uow.Repository<Sale>().AddAsync(sale, ct);
 
-        if (request.CustomerId is int custId)
-        {
-            var customer = await _uow.Repository<Customer>().GetByIdAsync(custId, ct);
-            if (customer is not null)
-            {
-                var paid = request.Payments.Sum(p => p.Amount);
-                var due = sale.GrandTotal - Math.Min(paid, sale.GrandTotal);
-                if (due > 0) customer.OutstandingBalance += due;
-                customer.RewardPoints += sale.RewardPointsEarned - request.RewardPointsRedeemed;
-                if (customer.RewardPoints < 0) customer.RewardPoints = 0;
-                _uow.Repository<Customer>().Update(customer);
-            }
-        }
+        var due = DueOf(sale.GrandTotal, sale.PaidAmount);
+        await ApplyCustomerOutstandingAsync(
+            sale.CustomerId,
+            due,
+            sale.RewardPointsEarned - request.RewardPointsRedeemed,
+            ct);
 
         await _uow.SaveChangesAsync(ct);
         return sale;
@@ -896,7 +934,10 @@ public class SalesService : ISalesService
 
     private void ApplySalePayments(Sale sale, List<SalePaymentRequest> payments)
     {
-        var paid = payments.Sum(p => p.Amount);
+        // Credit tenders record the credit portion but do not increase PaidAmount.
+        var paid = payments
+            .Where(p => p.Method != PaymentMethod.Credit)
+            .Sum(p => p.Amount);
         sale.PaidAmount = paid;
         sale.ChangeReturned = paid > sale.GrandTotal ? paid - sale.GrandTotal : 0m;
         sale.PaymentStatus = paid >= sale.GrandTotal ? PaymentStatus.Paid
@@ -913,6 +954,113 @@ public class SalesService : ISalesService
             });
         }
     }
+
+    private async Task<int?> ResolveCustomerForSaleAsync(CreateSaleRequest request, Sale sale, CancellationToken ct)
+    {
+        if (request.CustomerId is int explicitId)
+        {
+            var existing = await _uow.Repository<Customer>().GetByIdAsync(explicitId, ct);
+            if (existing is null)
+                throw new BillingException("Selected customer was not found.");
+            return existing.Id;
+        }
+
+        var due = sale.GrandTotal - Math.Min(sale.PaidAmount, sale.GrandTotal);
+        var isCreditTender = request.Payments.Any(p => p.Method == PaymentMethod.Credit);
+        if (due <= 0 && !isCreditTender)
+            return null;
+
+        var name = request.BillingCustomerName?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new BillingException("Customer name is required for credit / unpaid sales.");
+
+        var phone = string.IsNullOrWhiteSpace(request.BillingCustomerPhone)
+            ? null
+            : request.BillingCustomerPhone.Trim();
+
+        var q = _uow.Repository<Customer>().Query()
+            .Where(c => c.Status == EntityStatus.Active);
+        if (sale.BranchId.HasValue)
+            q = q.Where(c => c.BranchId == sale.BranchId);
+
+        Customer? match = null;
+        if (!string.IsNullOrWhiteSpace(phone))
+            match = await q.FirstOrDefaultAsync(c => c.Phone == phone, ct);
+
+        match ??= await q.FirstOrDefaultAsync(c => c.Name == name, ct);
+
+        if (match is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(match.Phone))
+                match.Phone = phone;
+            if (!string.IsNullOrWhiteSpace(request.BillingCustomerAddress) &&
+                string.IsNullOrWhiteSpace(match.Address))
+                match.Address = request.BillingCustomerAddress.Trim();
+            return match.Id;
+        }
+
+        var created = new Customer
+        {
+            BranchId = sale.BranchId,
+            Name = name,
+            Phone = phone,
+            Address = string.IsNullOrWhiteSpace(request.BillingCustomerAddress)
+                ? null
+                : request.BillingCustomerAddress.Trim(),
+            Type = CustomerType.Retail,
+            Status = EntityStatus.Active
+        };
+        await _uow.Repository<Customer>().AddAsync(created, ct);
+        await _uow.SaveChangesAsync(ct);
+        return created.Id;
+    }
+
+    private async Task ApplyCustomerOutstandingAsync(
+        int? customerId,
+        decimal due,
+        int rewardDelta,
+        CancellationToken ct)
+    {
+        if (customerId is not int custId) return;
+
+        var customer = await _uow.Repository<Customer>().GetByIdAsync(custId, ct);
+        if (customer is null) return;
+
+        if (due > 0)
+        {
+            if (customer.CreditLimit > 0 &&
+                customer.OutstandingBalance + due > customer.CreditLimit)
+            {
+                throw new BillingException(
+                    $"Credit limit exceeded for {customer.Name}. " +
+                    $"Limit ₹{customer.CreditLimit:N2}, outstanding ₹{customer.OutstandingBalance:N2}, this bill due ₹{due:N2}.");
+            }
+
+            customer.OutstandingBalance += due;
+        }
+
+        customer.RewardPoints += rewardDelta;
+        if (customer.RewardPoints < 0) customer.RewardPoints = 0;
+        _uow.Repository<Customer>().Update(customer);
+    }
+
+    private async Task ReverseCustomerOutstandingAsync(int? customerId, decimal due, int rewardDelta, CancellationToken ct)
+    {
+        if (customerId is not int custId || (due <= 0 && rewardDelta == 0)) return;
+
+        var customer = await _uow.Repository<Customer>().GetByIdAsync(custId, ct);
+        if (customer is null) return;
+
+        if (due > 0)
+            customer.OutstandingBalance = Math.Max(0m, customer.OutstandingBalance - due);
+
+        customer.RewardPoints -= rewardDelta;
+        if (customer.RewardPoints < 0) customer.RewardPoints = 0;
+        _uow.Repository<Customer>().Update(customer);
+    }
+
+    private static decimal DueOf(decimal grandTotal, decimal paidAmount)
+        => grandTotal > paidAmount ? grandTotal - paidAmount : 0m;
 
     /// <summary>Signals a recoverable, user-facing billing validation failure.</summary>
     private sealed class BillingException : Exception

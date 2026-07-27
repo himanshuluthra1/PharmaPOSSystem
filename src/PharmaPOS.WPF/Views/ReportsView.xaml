@@ -128,7 +128,7 @@
                     </StackPanel>
 
                     <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8"
-                                 Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}">
+                                 Visibility="{Binding ShowGenericSummaryKpis, Converter={StaticResource BoolToVisibility}}">
                         <materialDesign:Card Style="{StaticResource KpiCard}">
                             <StackPanel>
                                 <TextBlock Text="Records" Opacity="0.6" FontSize="11" />
@@ -142,17 +142,43 @@
                                            FontSize="20" FontWeight="Bold" />
                             </StackPanel>
                         </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}"
+                                             Visibility="{Binding ShowTaxDiscountKpis, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>
                                 <TextBlock Text="Tax / cost" Opacity="0.6" FontSize="11" />
                                 <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
                                            FontSize="20" FontWeight="Bold" />
                             </StackPanel>
                         </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}"
+                                             Visibility="{Binding ShowTaxDiscountKpis, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>
                                 <TextBlock Text="Discount / profit" Opacity="0.6" FontSize="11" />
                                 <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </UniformGrid>
+
+                    <UniformGrid DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
+                                 Visibility="{Binding ShowStockSummaryKpis, Converter={StaticResource BoolToVisibility}}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Records" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Total Amount" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Total Cost Amount" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
                                            FontSize="20" FontWeight="Bold" />
                             </StackPanel>
                         </materialDesign:Card>
@@ -266,8 +292,10 @@
                                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
                                 <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
                                 <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
+                                <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="80" />
                                 <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Amount" Binding="{Binding StockAmount, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Cost Amount" Binding="{Binding StockValue, StringFormat=N2}" Width="100" />
                             </DataGrid.Columns>
                         </DataGrid>
 

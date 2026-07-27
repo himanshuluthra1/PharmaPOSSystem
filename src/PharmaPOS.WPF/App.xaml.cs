@@ -59,6 +59,9 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IPurchaseSearchService, PurchaseSearchService>();
         services.AddSingleton<ISaleReturnDialogService, SaleReturnDialogService>();
         services.AddSingleton<IInvoiceViewerDialogService, InvoiceViewerDialogService>();
+        services.AddSingleton<IBarcodeCodec, BarcodeCodec>();
+        services.AddSingleton<IBarcodeCameraService, BarcodeCameraService>();
+        services.AddSingleton<IBarcodeLabelService, BarcodeLabelService>();
 
         // View models (transient so each navigation gets fresh data/context).
         services.AddTransient<LoginViewModel>();

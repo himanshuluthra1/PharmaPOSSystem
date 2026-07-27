@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Masters;
 using PharmaPOS.Domain.Enums;
@@ -407,22 +408,48 @@ public class EmployeeTabViewModel : MasterTabViewModelBase
 public class MedicineTabViewModel : MasterTabViewModelBase
 {
     private readonly IMastersService _masters;
+    private readonly IBarcodeCodec _barcodeCodec;
+    private readonly IBarcodeCameraService _barcodeCamera;
+    private readonly IBarcodeLabelService _barcodeLabel;
     private MedicineListDto? _selected;
     private MedicineDetailDto _editor = new();
     private string? _searchHint;
     private bool _isCreating;
     private ManufacturerListDto? _selectedManufacturer;
 
-    public MedicineTabViewModel(IMastersService masters, ICurrentUserService currentUser, IDialogService dialog)
+    public MedicineTabViewModel(
+        IMastersService masters,
+        ICurrentUserService currentUser,
+        IDialogService dialog,
+        IBarcodeCodec barcodeCodec,
+        IBarcodeCameraService barcodeCamera,
+        IBarcodeLabelService barcodeLabel)
         : base(dialog, currentUser)
     {
         _masters = masters;
-        _ = LoadManufacturersAsync();
+        _barcodeCodec = barcodeCodec;
+        _barcodeCamera = barcodeCamera;
+        _barcodeLabel = barcodeLabel;
+        GenerateBarcodeCommand = new RelayCommand(_ => GenerateBarcode(), _ => ShowEditor);
+        PreviewBarcodeCommand = new RelayCommand(_ => PreviewBarcode(), _ => ShowEditor && !string.IsNullOrWhiteSpace(Editor.Barcode));
+        ScanBarcodeCameraCommand = new RelayCommand(_ => ScanBarcodeCamera(), _ => ShowEditor);
+        ScanBarcodeImageCommand = new RelayCommand(_ => ScanBarcodeImage(), _ => ShowEditor);
+        _ = InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
+    {
+        await LoadManufacturersAsync();
     }
 
     public ObservableCollection<MedicineListDto> Items { get; } = new();
     public ObservableCollection<ManufacturerListDto> Manufacturers { get; } = new();
     public Array EntityStatuses => Enum.GetValues(typeof(EntityStatus));
+
+    public ICommand GenerateBarcodeCommand { get; }
+    public ICommand PreviewBarcodeCommand { get; }
+    public ICommand ScanBarcodeCameraCommand { get; }
+    public ICommand ScanBarcodeImageCommand { get; }
 
     public string? SearchHint
     {
@@ -557,16 +584,74 @@ public class MedicineTabViewModel : MasterTabViewModelBase
             }
 
             var wasNew = _isCreating;
-            Editor.Id = result.Value;
+            var saved = await _masters.GetMedicineAsync(result.Value);
+            if (saved is not null)
+                Editor = saved;
+            else
+                Editor.Id = result.Value;
+
             _isCreating = false;
             OnPropertyChanged(nameof(IsNewRecord));
             OnPropertyChanged(nameof(ShowEditor));
             OnPropertyChanged(nameof(EditorTitle));
-            StatusMessage = wasNew ? "Medicine created." : "Medicine updated.";
+            StatusMessage = wasNew
+                ? $"Medicine created{(string.IsNullOrWhiteSpace(Editor.Barcode) ? "" : $" · barcode {Editor.Barcode}")}."
+                : "Medicine updated.";
 
             SearchText = Editor.Name;
             await SearchAsync(Editor.Name);
             SelectedItem = Items.FirstOrDefault(i => i.Id == result.Value);
         });
+    }
+
+    private void GenerateBarcode()
+    {
+        AssignBarcode(_barcodeCodec.CreateUniqueValue());
+        StatusMessage = $"Generated barcode {Editor.Barcode}.";
+    }
+
+    private void PreviewBarcode()
+        => _barcodeLabel.ShowLabel(Editor.Name, Editor.Barcode ?? string.Empty);
+
+    private void ScanBarcodeCamera()
+    {
+        var value = _barcodeCamera.ScanWithCamera("Scan medicine barcode");
+        if (string.IsNullOrWhiteSpace(value)) return;
+        AssignBarcode(value);
+        StatusMessage = $"Scanned barcode {value}.";
+    }
+
+    private void ScanBarcodeImage()
+    {
+        var value = _barcodeCamera.ScanFromImageFile();
+        if (string.IsNullOrWhiteSpace(value)) return;
+        AssignBarcode(value);
+        StatusMessage = $"Decoded barcode {value}.";
+    }
+
+    private void AssignBarcode(string value)
+    {
+        var src = Editor;
+        Editor = new MedicineDetailDto
+        {
+            Id = src.Id,
+            Name = src.Name,
+            GenericName = src.GenericName,
+            Brand = src.Brand,
+            Barcode = value,
+            HsnCode = src.HsnCode,
+            GstPercent = src.GstPercent,
+            Mrp = src.Mrp,
+            PurchasePrice = src.PurchasePrice,
+            SellingPrice = src.SellingPrice,
+            DefaultDiscountPercent = src.DefaultDiscountPercent,
+            ReorderLevel = src.ReorderLevel,
+            ReorderQuantity = src.ReorderQuantity,
+            PrescriptionRequired = src.PrescriptionRequired,
+            Status = src.Status,
+            ManufacturerId = src.ManufacturerId,
+            ManufacturerName = src.ManufacturerName
+        };
+        CommandManager.InvalidateRequerySuggested();
     }
 }

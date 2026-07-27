@@ -355,19 +355,30 @@ public class MastersService : IMastersService
         var normalized = SearchQueryExtensions.NormalizeTerm(term);
         if (normalized.Length < 2) return new();
 
+        var tokens = SearchQueryExtensions.GetSearchTokens(term);
+        var usePrefixFirst = tokens.Length <= 1;
+
         var baseQuery = _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Status == EntityStatus.Active);
 
-        var results = await baseQuery
-            .WhereMedicineMatches(normalized, prefixOnly: true)
-            .OrderBy(m => m.Name).Take(DefaultTake)
-            .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
-            .ToListAsync(ct);
+        List<MedicineListDto> results;
+        if (usePrefixFirst)
+        {
+            results = await baseQuery
+                .WhereMedicineMatches(normalized, prefixOnly: true, tokens)
+                .OrderBy(m => m.Name).Take(DefaultTake)
+                .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
+                .ToListAsync(ct);
+        }
+        else
+        {
+            results = new();
+        }
 
         if (results.Count == 0)
         {
             results = await baseQuery
-                .WhereMedicineMatches(normalized, prefixOnly: false)
+                .WhereMedicineMatches(normalized, prefixOnly: false, tokens)
                 .OrderBy(m => m.Name).Take(DefaultTake)
                 .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
                 .ToListAsync(ct);
@@ -400,6 +411,17 @@ public class MastersService : IMastersService
     {
         if (string.IsNullOrWhiteSpace(dto.Name))
             return Result.Failure<int>("Medicine name is required.");
+
+        if (string.IsNullOrWhiteSpace(dto.Barcode))
+            dto.Barcode = BarcodeValueGenerator.CreateUnique();
+
+        var barcodeKey = SearchQueryExtensions.NormalizeTerm(dto.Barcode);
+        var duplicate = await _uow.Repository<Medicine>().Query()
+            .Where(m => m.BarcodeSearchKey == barcodeKey && m.Id != dto.Id)
+            .Select(m => m.Name)
+            .FirstOrDefaultAsync(ct);
+        if (duplicate is not null)
+            return Result.Failure<int>($"Barcode already used by \"{duplicate}\".");
 
         if (dto.Id > 0)
         {

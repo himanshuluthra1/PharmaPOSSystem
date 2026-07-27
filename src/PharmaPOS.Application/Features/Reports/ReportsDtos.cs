@@ -131,7 +131,9 @@ public record StockValuationReportRowDto(
     DateTime? ExpiryDate,
     decimal Quantity,
     decimal PurchasePrice,
-    decimal StockValue)
+    decimal Mrp,
+    decimal StockValue,
+    decimal StockAmount)
 {
     public string ExpiryLabel => ExpiryDate?.ToString("dd/MM/yyyy") ?? "—";
 }

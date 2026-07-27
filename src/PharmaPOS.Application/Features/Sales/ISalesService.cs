@@ -7,6 +7,9 @@ public interface ISalesService
 {
     Task<List<MedicineLookupDto>> SearchMedicinesAsync(string term, int? branchId, CancellationToken ct = default);
 
+    /// <summary>Exact barcode match for USB / camera scan-to-bill.</summary>
+    Task<MedicineLookupDto?> FindMedicineByBarcodeAsync(string barcode, int? branchId, CancellationToken ct = default);
+
     /// <summary>Active medicines with the same salt (generic/composition) and strength.</summary>
     Task<List<SubstituteMedicineDto>> ListSameSaltMedicinesAsync(int medicineId, int? branchId, CancellationToken ct = default);
 

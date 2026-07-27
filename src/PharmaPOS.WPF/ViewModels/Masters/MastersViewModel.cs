@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Masters;
 using PharmaPOS.WPF.Mvvm;
@@ -11,16 +12,27 @@ public class MastersViewModel : ObservableObject
     private int _selectedTab;
 
     public MastersViewModel(
-        IMastersService masters,
+        IServiceProvider services,
         ICurrentUserService currentUser,
-        IDialogService dialog)
+        IDialogService dialog,
+        IBarcodeCodec barcodeCodec,
+        IBarcodeCameraService barcodeCamera,
+        IBarcodeLabelService barcodeLabel)
     {
-        Suppliers = new SupplierTabViewModel(masters, currentUser, dialog);
-        Customers = new CustomerTabViewModel(masters, currentUser, dialog);
-        Doctors = new DoctorTabViewModel(masters, currentUser, dialog);
-        Manufacturers = new ManufacturerTabViewModel(masters, currentUser, dialog);
-        Employees = new EmployeeTabViewModel(masters, currentUser, dialog);
-        Medicines = new MedicineTabViewModel(masters, currentUser, dialog);
+        // Each tab gets its own MastersService (and DbContext). Constructors kick off
+        // parallel searches — sharing one context would throw concurrent-use errors.
+        Suppliers = new SupplierTabViewModel(services.GetRequiredService<IMastersService>(), currentUser, dialog);
+        Customers = new CustomerTabViewModel(services.GetRequiredService<IMastersService>(), currentUser, dialog);
+        Doctors = new DoctorTabViewModel(services.GetRequiredService<IMastersService>(), currentUser, dialog);
+        Manufacturers = new ManufacturerTabViewModel(services.GetRequiredService<IMastersService>(), currentUser, dialog);
+        Employees = new EmployeeTabViewModel(services.GetRequiredService<IMastersService>(), currentUser, dialog);
+        Medicines = new MedicineTabViewModel(
+            services.GetRequiredService<IMastersService>(),
+            currentUser,
+            dialog,
+            barcodeCodec,
+            barcodeCamera,
+            barcodeLabel);
     }
 
     public SupplierTabViewModel Suppliers { get; }

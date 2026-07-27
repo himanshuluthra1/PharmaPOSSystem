@@ -33,22 +33,33 @@ public class PurchaseService : IPurchaseService
         var normalized = SearchQueryExtensions.NormalizeTerm(term);
         if (normalized.Length < 2) return new();
 
+        var tokens = SearchQueryExtensions.GetSearchTokens(term);
+        var usePrefixFirst = tokens.Length <= 1;
+
         var baseQuery = _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Status == EntityStatus.Active);
 
-        var results = await baseQuery
-            .WhereMedicineMatches(normalized, prefixOnly: true)
-            .OrderBy(m => m.Name)
-            .Take(25)
-            .Select(m => new PurchaseMedicineDto(
-                m.Id, m.Name, m.GenericName, m.Barcode,
-                m.GstPercent, m.PurchasePrice, m.Mrp, m.SellingPrice))
-            .ToListAsync(ct);
+        List<PurchaseMedicineDto> results;
+        if (usePrefixFirst)
+        {
+            results = await baseQuery
+                .WhereMedicineMatches(normalized, prefixOnly: true, tokens)
+                .OrderBy(m => m.Name)
+                .Take(25)
+                .Select(m => new PurchaseMedicineDto(
+                    m.Id, m.Name, m.GenericName, m.Barcode,
+                    m.GstPercent, m.PurchasePrice, m.Mrp, m.SellingPrice))
+                .ToListAsync(ct);
+        }
+        else
+        {
+            results = new();
+        }
 
         if (results.Count == 0)
         {
             results = await baseQuery
-                .WhereMedicineMatches(normalized, prefixOnly: false)
+                .WhereMedicineMatches(normalized, prefixOnly: false, tokens)
                 .OrderBy(m => m.Name)
                 .Take(25)
                 .Select(m => new PurchaseMedicineDto(
@@ -76,6 +87,19 @@ public class PurchaseService : IPurchaseService
     {
         return await _uow.Repository<Medicine>().Query().AsNoTracking()
             .Where(m => m.Id == medicineId && m.Status == EntityStatus.Active)
+            .Select(m => new PurchaseMedicineDto(
+                m.Id, m.Name, m.GenericName, m.Barcode,
+                m.GstPercent, m.PurchasePrice, m.Mrp, m.SellingPrice))
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<PurchaseMedicineDto?> FindMedicineByBarcodeAsync(string barcode, CancellationToken ct = default)
+    {
+        var key = SearchQueryExtensions.NormalizeTerm(barcode);
+        if (key.Length < 3) return null;
+
+        return await _uow.Repository<Medicine>().Query().AsNoTracking()
+            .Where(m => m.Status == EntityStatus.Active && m.BarcodeSearchKey == key)
             .Select(m => new PurchaseMedicineDto(
                 m.Id, m.Name, m.GenericName, m.Barcode,
                 m.GstPercent, m.PurchasePrice, m.Mrp, m.SellingPrice))

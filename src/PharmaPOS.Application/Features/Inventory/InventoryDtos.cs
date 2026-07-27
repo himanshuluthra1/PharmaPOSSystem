@@ -97,6 +97,13 @@ public class StockAdjustmentLineRequest
     public string? Remarks { get; set; }
 }
 
+public record AdjustmentBatchDto(
+    int BatchId,
+    string BatchNumber,
+    DateTime? ExpiryDate,
+    decimal QuantityAvailable,
+    decimal Mrp);
+
 public class CreateStockAdjustmentRequest
 {
     public DateTime AdjustmentDate { get; set; } = DateTime.Today;

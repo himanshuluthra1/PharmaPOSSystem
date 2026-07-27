@@ -262,14 +262,17 @@ public class ReportsService : IReportsService
                 b.ExpiryDate,
                 b.QuantityAvailable,
                 b.PurchasePrice,
-                b.PurchasePrice * b.QuantityAvailable))
+                b.Mrp,
+                b.PurchasePrice * b.QuantityAvailable,
+                b.Mrp * b.QuantityAvailable))
             .ToListAsync(ct);
 
         return (new ReportSummaryDto
         {
             RecordCount = rows.Count,
-            TotalAmount = rows.Sum(r => r.StockValue),
-            FooterNote = $"Total stock value at purchase cost"
+            TotalAmount = rows.Sum(r => r.StockAmount),
+            TotalTax = rows.Sum(r => r.StockValue),
+            FooterNote = $"Stock at MRP: {rows.Sum(r => r.StockAmount):N2} · Cost: {rows.Sum(r => r.StockValue):N2}"
         }, rows);
     }
 

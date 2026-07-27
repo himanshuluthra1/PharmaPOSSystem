@@ -23,6 +23,7 @@ public class SalesViewModel : ObservableObject
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
+    private readonly IBarcodeCameraService _barcodeCamera;
 
     private string _customerName = string.Empty;
     private string? _customerMobile;
@@ -55,7 +56,8 @@ public class SalesViewModel : ObservableObject
         ISaleReturnDialogService saleReturnDialog,
         ICurrentUserService currentUser,
         IDialogService dialog,
-        IInvoicePrintService printService)
+        IInvoicePrintService printService,
+        IBarcodeCameraService barcodeCamera)
     {
         _salesService = salesService;
         _picker = picker;
@@ -64,6 +66,7 @@ public class SalesViewModel : ObservableObject
         _currentUser = currentUser;
         _dialog = dialog;
         _printService = printService;
+        _barcodeCamera = barcodeCamera;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesCreate, AppConstants.Permissions.SalesManage);
@@ -86,6 +89,7 @@ public class SalesViewModel : ObservableObject
         OpenSaleReturnCommand = new AsyncRelayCommand(_ => OpenInlineReturnAsync(),
             _ => CanReturn && IsEditing && !IsBusy);
         LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
+        ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanCreate && !IsBusy);
 
         EnsureTrailingEmptyRow();
         _ = InitializeBillsAsync();
@@ -109,6 +113,7 @@ public class SalesViewModel : ObservableObject
     public ICommand SearchBillsCommand { get; }
     public ICommand OpenSaleReturnCommand { get; }
     public ICommand LoadOlderBillsCommand { get; }
+    public ICommand ScanBarcodeCameraCommand { get; }
 
     public bool CanCreate { get; }
     public bool CanSearchBills { get; }
@@ -179,6 +184,80 @@ public class SalesViewModel : ObservableObject
         var focusLine = duplicate ?? line;
         if (!focusLine.IsEmpty)
             RequestItemFocus?.Invoke(focusLine);
+    }
+
+    public async Task TryAddByBarcodeAsync(string barcode)
+    {
+        if (!CanCreate || IsBusy) return;
+        barcode = barcode.Trim();
+        if (barcode.Length < 3) return;
+
+        IsBusy = true;
+        try
+        {
+            await _salesGate.WaitAsync();
+            try
+            {
+                var medicine = await _salesService.FindMedicineByBarcodeAsync(
+                    barcode, _currentUser.CurrentUser?.BranchId);
+                if (medicine is null)
+                {
+                    _dialog.ShowError($"No medicine found for barcode \"{barcode}\".");
+                    return;
+                }
+
+                var selection = await _picker.PickBatchForMedicineAsync(medicine);
+                if (selection is null) return;
+
+                var existing = Cart.FirstOrDefault(l => l.BatchId == selection.BatchId && l.BatchId > 0 && !l.IsReturnLine);
+                if (existing is not null)
+                {
+                    var newQty = existing.Quantity + 1;
+                    if (newQty > selection.AvailableStock)
+                    {
+                        _dialog.ShowError($"Only {selection.AvailableStock} units available in batch {selection.BatchNumber}.");
+                        return;
+                    }
+                    existing.Quantity = newQty;
+                    RecalculateTotals();
+                    RequestItemFocus?.Invoke(existing);
+                    StatusMessage = $"+1 {selection.MedicineName}";
+                    return;
+                }
+
+                var target = Cart.FirstOrDefault(l => l.IsEmpty) ?? CartLineViewModel.CreateEmpty();
+                if (!Cart.Contains(target))
+                {
+                    target.Changed += RecalculateTotals;
+                    Cart.Add(target);
+                }
+                target.ApplySelection(selection);
+                EnsureTrailingEmptyRow();
+                RecalculateTotals();
+                RequestItemFocus?.Invoke(target);
+                StatusMessage = $"Added {selection.MedicineName}";
+            }
+            finally
+            {
+                _salesGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private Task ScanBarcodeCameraAsync()
+    {
+        var value = _barcodeCamera.ScanWithCamera("Scan medicine barcode");
+        if (!string.IsNullOrWhiteSpace(value))
+            return TryAddByBarcodeAsync(value);
+        return Task.CompletedTask;
     }
 
     public async Task ShowMedicineDetailAsync(CartLineViewModel line)
@@ -323,8 +402,19 @@ public class SalesViewModel : ObservableObject
     public PaymentMethod PaymentMethod
     {
         get => _paymentMethod;
-        set => SetProperty(ref _paymentMethod, value);
+        set
+        {
+            if (SetProperty(ref _paymentMethod, value))
+            {
+                OnPropertyChanged(nameof(BalanceDue));
+                OnPropertyChanged(nameof(IsCreditSale));
+            }
+        }
     }
+
+    public bool IsCreditSale => PaymentMethod == PaymentMethod.Credit;
+
+    public decimal BalanceDue => IsCreditSale ? GrandTotal : 0m;
 
     private void RecalculateTotals()
     {
@@ -342,6 +432,7 @@ public class SalesViewModel : ObservableObject
 
         OnPropertyChanged(nameof(ItemCount));
         OnPropertyChanged(nameof(HasItems));
+        OnPropertyChanged(nameof(BalanceDue));
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -656,6 +747,13 @@ public class SalesViewModel : ObservableObject
             }
         }
 
+        if (PaymentMethod == PaymentMethod.Credit && string.IsNullOrWhiteSpace(CustomerName))
+        {
+            _dialog.ShowError("Enter the customer name for credit sales.");
+            RequestCustomerFocus?.Invoke();
+            return;
+        }
+
         var lineRequests = lines.Select(l => new SaleLineRequest
         {
             MedicineId = l.MedicineId,
@@ -667,9 +765,14 @@ public class SalesViewModel : ObservableObject
             DiscountPercent = l.DiscountPercent
         }).ToList();
 
+        // Credit tenders are recorded for audit but do not count as cash paid.
         var payments = new List<SalePaymentRequest>
         {
-            new() { Method = PaymentMethod, Amount = GrandTotal }
+            new()
+            {
+                Method = PaymentMethod,
+                Amount = GrandTotal
+            }
         };
 
         IsBusy = true;

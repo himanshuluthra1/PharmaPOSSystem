@@ -10,6 +10,9 @@ public interface IPurchaseService
 
     Task<PurchaseMedicineDto?> GetMedicineAsync(int medicineId, CancellationToken ct = default);
 
+    /// <summary>Exact barcode match for USB / camera scan on goods receipt.</summary>
+    Task<PurchaseMedicineDto?> FindMedicineByBarcodeAsync(string barcode, CancellationToken ct = default);
+
     /// <summary>Preview of the next purchase number for a new GRN (not reserved).</summary>
     Task<string> PreviewNextPurchaseNumberAsync(int? branchId, CancellationToken ct = default);
 

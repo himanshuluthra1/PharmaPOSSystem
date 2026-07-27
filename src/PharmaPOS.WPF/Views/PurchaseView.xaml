@@ -57,6 +57,22 @@
                     <TextBlock Text="Purchase / Goods Receipt" FontSize="20" FontWeight="Bold"
                                VerticalAlignment="Center" />
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBox x:Name="BarcodeScanBox"
+                                 Width="160"
+                                 Margin="0,0,6,0"
+                                 VerticalAlignment="Center"
+                                 materialDesign:HintAssist.Hint="Scan barcode"
+                                 materialDesign:HintAssist.IsFloating="False"
+                                 Style="{StaticResource PurchaseField}"
+                                 ToolTip="Focus here and scan with USB barcode reader (Enter)"
+                                 PreviewKeyDown="BarcodeScanBox_PreviewKeyDown" />
+                        <Button Command="{Binding ScanBarcodeCameraCommand}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="10,8" Margin="0,0,8,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Scan barcode with camera">
+                            <materialDesign:PackIcon Kind="BarcodeScan" Width="18" Height="18" />
+                        </Button>
                         <Button Command="{Binding SearchPurchasesCommand}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
                                 Padding="12,8" Margin="0,0,8,0"

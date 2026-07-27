@@ -95,6 +95,11 @@
 
                             <DockPanel Grid.Row="1" Margin="0,0,0,6">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding ScanBarcodeCameraCommand}"
+                                            Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Scan barcode with camera">
+                                        <materialDesign:PackIcon Kind="BarcodeScan" Width="14" Height="14" />
+                                    </Button>
                                     <Button Command="{Binding DataContext.ViewLedgerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             Style="{StaticResource InvToolbarButton}" Margin="4,0,0,0"
                                             ToolTip="View ledger for selected batch">

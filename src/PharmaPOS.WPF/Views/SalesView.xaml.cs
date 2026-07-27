@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels.Sales;
 
 namespace PharmaPOS.WPF.Views;
@@ -18,11 +19,21 @@ public partial class SalesView : UserControl
     private static readonly HashSet<string> EditableColumns = new(StringComparer.Ordinal)
         { "Qty", "MRP", "Disc%" };
 
+    private readonly UsbBarcodeWedge _barcodeWedge = new();
+
     public SalesView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         Loaded += (_, _) => OnRequestItemFocus(ViewModel?.Cart.FirstOrDefault());
+        _barcodeWedge.BarcodeScanned += code =>
+        {
+            Dispatcher.InvokeAsync(async () =>
+            {
+                if (ViewModel is null) return;
+                await ViewModel.TryAddByBarcodeAsync(code);
+            });
+        };
     }
 
     private SalesViewModel? ViewModel => DataContext as SalesViewModel;
@@ -482,10 +493,39 @@ public partial class SalesView : UserControl
         MoveToNextCellLikeTab(line);
     }
 
+    private async void BarcodeScanBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (ViewModel is null) return;
+        if (e.Key is not (Key.Enter or Key.Return)) return;
+
+        e.Handled = true;
+        var code = BarcodeScanBox.Text?.Trim() ?? string.Empty;
+        BarcodeScanBox.Clear();
+        if (code.Length >= 3)
+            await ViewModel.TryAddByBarcodeAsync(code);
+    }
+
     private async void SalesView_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (ViewModel is null) return;
         var key = GetKey(e);
+
+        // USB wedge: only when not typing in normal text fields (except the scan box).
+        var focused = Keyboard.FocusedElement;
+        var inScanBox = ReferenceEquals(focused, BarcodeScanBox);
+        var inOtherText = focused is TextBox or PasswordBox && !inScanBox;
+        if (!inOtherText && !inScanBox)
+        {
+            if (_barcodeWedge.ProcessKeyDown(key, Keyboard.Modifiers))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+        else if (!inScanBox)
+        {
+            _barcodeWedge.Reset();
+        }
 
         if (key == Key.F4)
         {

@@ -21,6 +21,7 @@ public class PurchaseViewModel : ObservableObject
     private readonly IPurchaseSearchService _purchaseSearch;
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
+    private readonly IBarcodeCameraService _barcodeCamera;
 
     private string _supplierSearchText = string.Empty;
     private SupplierLookupDto? _selectedSupplier;
@@ -47,13 +48,15 @@ public class PurchaseViewModel : ObservableObject
         IMedicinePickerService medicinePicker,
         IPurchaseSearchService purchaseSearch,
         ICurrentUserService currentUser,
-        IDialogService dialog)
+        IDialogService dialog,
+        IBarcodeCameraService barcodeCamera)
     {
         _purchaseService = purchaseService;
         _medicinePicker = medicinePicker;
         _purchaseSearch = purchaseSearch;
         _currentUser = currentUser;
         _dialog = dialog;
+        _barcodeCamera = barcodeCamera;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseCreate, AppConstants.Permissions.PurchaseManage);
@@ -68,6 +71,7 @@ public class PurchaseViewModel : ObservableObject
         NewPurchaseCommand = new RelayCommand(_ => NewPurchase(), _ => CanCreate);
         ClearSupplierCommand = new RelayCommand(_ => ClearSupplier());
         SearchPurchasesCommand = new AsyncRelayCommand(_ => OpenPurchaseSearchAsync(), _ => CanSearch && !IsBusy);
+        ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanCreate && !IsBusy);
 
         EnsureTrailingEmptyRow();
         _ = InitializePurchasesAsync();
@@ -92,6 +96,7 @@ public class PurchaseViewModel : ObservableObject
     public ICommand NewPurchaseCommand { get; }
     public ICommand ClearSupplierCommand { get; }
     public ICommand SearchPurchasesCommand { get; }
+    public ICommand ScanBarcodeCameraCommand { get; }
 
     public bool CanCreate { get; }
     public bool CanSearch { get; }
@@ -397,6 +402,53 @@ public class PurchaseViewModel : ObservableObject
         EnsureTrailingEmptyRow();
         RecalculateTotals();
         RequestItemFocus?.Invoke(line);
+    }
+
+    public async Task TryAddByBarcodeAsync(string barcode)
+    {
+        if (!CanCreate || IsBusy) return;
+        barcode = barcode.Trim();
+        if (barcode.Length < 3) return;
+
+        IsBusy = true;
+        try
+        {
+            var medicine = await _purchaseService.FindMedicineByBarcodeAsync(barcode);
+            if (medicine is null)
+            {
+                _dialog.ShowError($"No medicine found for barcode \"{barcode}\".");
+                return;
+            }
+
+            var target = Lines.FirstOrDefault(l => l.IsEmpty) ?? PurchaseLineViewModel.CreateEmpty();
+            if (!Lines.Contains(target))
+            {
+                target.Changed += RecalculateTotals;
+                Lines.Add(target);
+            }
+
+            target.ApplyMedicine(medicine);
+            EnsureTrailingEmptyRow();
+            RecalculateTotals();
+            RequestItemFocus?.Invoke(target);
+            StatusMessage = $"Added {medicine.Name}";
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private Task ScanBarcodeCameraAsync()
+    {
+        var value = _barcodeCamera.ScanWithCamera("Scan medicine barcode");
+        if (!string.IsNullOrWhiteSpace(value))
+            return TryAddByBarcodeAsync(value);
+        return Task.CompletedTask;
     }
 
     private void EnsureTrailingEmptyRow()

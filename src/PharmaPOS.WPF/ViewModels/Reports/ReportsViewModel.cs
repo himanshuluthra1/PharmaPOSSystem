@@ -222,6 +222,11 @@ public class ReportsViewModel : ObservableObject
     public bool ShowSaleReturnGrid => ActiveGrid == "SaleReturns";
     public bool ShowMedicineReturnGrid => ActiveGrid == "MedicineReturns";
 
+    /// <summary>Stock valuation uses Amount (MRP) + Cost KPIs instead of tax/discount.</summary>
+    public bool ShowStockSummaryKpis => ShowStockGrid && HasData;
+    public bool ShowGenericSummaryKpis => HasData && !ShowStockGrid;
+    public bool ShowTaxDiscountKpis => HasData && !ShowStockGrid;
+
     public bool IsBusy
     {
         get => _isBusy;
@@ -328,6 +333,7 @@ public class ReportsViewModel : ObservableObject
 
     private CancellationTokenSource? _runCts;
     private int _runId;
+    private readonly SemaphoreSlim _runGate = new(1, 1);
 
     private async Task RunReportAsync()
     {
@@ -337,132 +343,144 @@ public class ReportsViewModel : ObservableObject
         _runCts = new CancellationTokenSource();
         var token = _runCts.Token;
 
-        IsBusy = true;
-        StatusMessage = "Running report...";
-        ClearAllRows();
-        GstSummary = null;
-        ClearFilters(apply: false);
-
+        // Serialize runs on the shared ReportsService/DbContext. Cancel alone is not
+        // enough — EF may still be mid-query when the next report starts.
+        await _runGate.WaitAsync();
         try
         {
-            switch (SelectedReport.Kind)
+            if (runId != _runId) return;
+
+            IsBusy = true;
+            StatusMessage = "Running report...";
+            ClearAllRows();
+            GstSummary = null;
+            ClearFilters(apply: false);
+
+            try
             {
-                case ReportKind.Sales:
-                    var sales = await _reports.GetSalesReportAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    _allSales = sales.Rows;
-                    Summary = sales.Summary;
-                    SetActiveGrid("Sales");
-                    break;
+                switch (SelectedReport.Kind)
+                {
+                    case ReportKind.Sales:
+                        var sales = await _reports.GetSalesReportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        _allSales = sales.Rows;
+                        Summary = sales.Summary;
+                        SetActiveGrid("Sales");
+                        break;
 
-                case ReportKind.Purchases:
-                    var purchases = await _reports.GetPurchaseReportAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    _allPurchases = purchases.Rows;
-                    Summary = purchases.Summary;
-                    SetActiveGrid("Purchases");
-                    break;
+                    case ReportKind.Purchases:
+                        var purchases = await _reports.GetPurchaseReportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        _allPurchases = purchases.Rows;
+                        Summary = purchases.Summary;
+                        SetActiveGrid("Purchases");
+                        break;
 
-                case ReportKind.GstSummary:
-                    var gst = await _reports.GetGstReportAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    GstSummary = gst.Summary;
-                    _allGst = gst.Rows;
-                    Summary = new ReportSummaryDto
-                    {
-                        RecordCount = gst.Rows.Count,
-                        TotalAmount = gst.Summary.SalesGrandTotal,
-                        TotalTax = gst.Summary.NetTaxPayable,
-                        FooterNote = $"Net GST payable: {gst.Summary.NetTaxPayable:N2}"
-                    };
-                    SetActiveGrid("Gst");
-                    break;
+                    case ReportKind.GstSummary:
+                        var gst = await _reports.GetGstReportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        GstSummary = gst.Summary;
+                        _allGst = gst.Rows;
+                        Summary = new ReportSummaryDto
+                        {
+                            RecordCount = gst.Rows.Count,
+                            TotalAmount = gst.Summary.SalesGrandTotal,
+                            TotalTax = gst.Summary.NetTaxPayable,
+                            FooterNote = $"Net GST payable: {gst.Summary.NetTaxPayable:N2}"
+                        };
+                        SetActiveGrid("Gst");
+                        break;
 
-                case ReportKind.Profit:
-                    var profit = await _reports.GetProfitReportAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    _allProfit = profit.Rows;
-                    Summary = profit.Summary;
-                    SetActiveGrid("Profit");
-                    break;
+                    case ReportKind.Profit:
+                        var profit = await _reports.GetProfitReportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        _allProfit = profit.Rows;
+                        Summary = profit.Summary;
+                        SetActiveGrid("Profit");
+                        break;
 
-                case ReportKind.SalesByMedicine:
-                    var med = await _reports.GetSalesByMedicineReportAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    _allMedicineSales = med.Rows;
-                    Summary = med.Summary;
-                    SetActiveGrid("Medicine");
-                    break;
+                    case ReportKind.SalesByMedicine:
+                        var med = await _reports.GetSalesByMedicineReportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        _allMedicineSales = med.Rows;
+                        Summary = med.Summary;
+                        SetActiveGrid("Medicine");
+                        break;
 
-                case ReportKind.StockValuation:
-                    var stock = await _reports.GetStockValuationReportAsync(_branchId, token);
-                    if (runId != _runId) return;
-                    _allStock = stock.Rows;
-                    Summary = stock.Summary;
-                    SetActiveGrid("Stock");
-                    break;
+                    case ReportKind.StockValuation:
+                        var stock = await _reports.GetStockValuationReportAsync(_branchId, token);
+                        if (runId != _runId) return;
+                        _allStock = stock.Rows;
+                        Summary = stock.Summary;
+                        SetActiveGrid("Stock");
+                        break;
 
-                case ReportKind.Expiry:
-                    var expiry = await _reports.GetExpiryReportAsync(_branchId, token);
-                    if (runId != _runId) return;
-                    _allExpiry = expiry.Rows;
-                    Summary = expiry.Summary;
-                    SetActiveGrid("Expiry");
-                    break;
+                    case ReportKind.Expiry:
+                        var expiry = await _reports.GetExpiryReportAsync(_branchId, token);
+                        if (runId != _runId) return;
+                        _allExpiry = expiry.Rows;
+                        Summary = expiry.Summary;
+                        SetActiveGrid("Expiry");
+                        break;
 
-                case ReportKind.LowStock:
-                    var low = await _reports.GetLowStockReportAsync(_branchId, token);
-                    if (runId != _runId) return;
-                    _allLowStock = low.Rows;
-                    Summary = low.Summary;
-                    SetActiveGrid("LowStock");
-                    break;
+                    case ReportKind.LowStock:
+                        var low = await _reports.GetLowStockReportAsync(_branchId, token);
+                        if (runId != _runId) return;
+                        _allLowStock = low.Rows;
+                        Summary = low.Summary;
+                        SetActiveGrid("LowStock");
+                        break;
 
-                case ReportKind.SaleReturns:
-                    var returns = await _saleReturns.ListReturnsAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    _allSaleReturns = returns;
-                    Summary = new ReportSummaryDto
-                    {
-                        RecordCount = returns.Count,
-                        TotalAmount = returns.Sum(r => r.RefundAmount),
-                        FooterNote = $"{returns.Count} return(s)"
-                    };
-                    SetActiveGrid("SaleReturns");
-                    break;
+                    case ReportKind.SaleReturns:
+                        var returns = await _saleReturns.ListReturnsAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        _allSaleReturns = returns;
+                        Summary = new ReportSummaryDto
+                        {
+                            RecordCount = returns.Count,
+                            TotalAmount = returns.Sum(r => r.RefundAmount),
+                            FooterNote = $"{returns.Count} return(s)"
+                        };
+                        SetActiveGrid("SaleReturns");
+                        break;
 
-                case ReportKind.MedicineReturns:
-                    var medRet = await _saleReturns.GetMedicineReturnReportAsync(FromDate, ToDate, _branchId, token);
-                    if (runId != _runId) return;
-                    _allMedicineReturns = medRet;
-                    Summary = new ReportSummaryDto
-                    {
-                        RecordCount = medRet.Count,
-                        TotalAmount = medRet.Sum(r => r.RefundAmount),
-                        FooterNote = $"{medRet.Count} medicine/batch group(s)"
-                    };
-                    SetActiveGrid("MedicineReturns");
-                    break;
+                    case ReportKind.MedicineReturns:
+                        var medRet = await _saleReturns.GetMedicineReturnReportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        _allMedicineReturns = medRet;
+                        Summary = new ReportSummaryDto
+                        {
+                            RecordCount = medRet.Count,
+                            TotalAmount = medRet.Sum(r => r.RefundAmount),
+                            FooterNote = $"{medRet.Count} medicine/batch group(s)"
+                        };
+                        SetActiveGrid("MedicineReturns");
+                        break;
+                }
+
+                if (runId != _runId) return;
+                ApplyFilters();
+                CommandManager.InvalidateRequerySuggested();
             }
-
-            if (runId != _runId) return;
-            ApplyFilters();
-            CommandManager.InvalidateRequerySuggested();
-        }
-        catch (OperationCanceledException)
-        {
-            // Switched to another report; ignore.
-        }
-        catch (Exception ex)
-        {
-            if (runId != _runId) return;
-            StatusMessage = $"Report failed: {ex.Message}";
-            _dialog.ShowError(ex.Message);
+            catch (OperationCanceledException)
+            {
+                // Switched to another report; ignore.
+            }
+            catch (Exception ex)
+            {
+                if (runId != _runId) return;
+                StatusMessage = $"Report failed: {ex.Message}";
+                _dialog.ShowError(ex.Message);
+            }
+            finally
+            {
+                if (runId == _runId)
+                    IsBusy = false;
+            }
         }
         finally
         {
-            if (runId == _runId)
-                IsBusy = false;
+            _runGate.Release();
         }
     }
 
@@ -593,7 +611,10 @@ public class ReportsViewModel : ObservableObject
             "Gst" => (GstRows.Count, GstRows.Sum(r => r.GrandTotal), GstRows.Sum(r => r.TotalTax), 0m),
             "Profit" => (ProfitRows.Count, ProfitRows.Sum(r => r.Revenue), ProfitRows.Sum(r => r.Cost), ProfitRows.Sum(r => r.GrossProfit)),
             "Medicine" => (MedicineSalesRows.Count, MedicineSalesRows.Sum(r => r.Revenue), MedicineSalesRows.Sum(r => r.Cost), MedicineSalesRows.Sum(r => r.GrossProfit)),
-            "Stock" => (StockValuationRows.Count, StockValuationRows.Sum(r => r.StockValue), 0m, 0m),
+            "Stock" => (StockValuationRows.Count,
+                StockValuationRows.Sum(r => r.StockAmount),
+                StockValuationRows.Sum(r => r.StockValue),
+                0m),
             "Expiry" => (ExpiryRows.Count, ExpiryRows.Sum(r => r.StockValue), 0m, 0m),
             "LowStock" => (LowStockRows.Count, 0m, 0m, LowStockRows.Sum(r => r.Shortfall)),
             "SaleReturns" => (SaleReturnRows.Count, SaleReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
@@ -613,9 +634,14 @@ public class ReportsViewModel : ObservableObject
                 ? (count == 0
                     ? $"No matching records (filtered from {totalSource})"
                     : $"Showing {count} of {totalSource} record(s)")
-                : $"{count} record(s) — total {amount:N2}"
+                : ActiveGrid == "Stock"
+                    ? $"{count} batch(es) — Amount {amount:N2} · Cost {tax:N2}"
+                    : $"{count} record(s) — total {amount:N2}"
         };
         StatusMessage = Summary.FooterNote;
+        OnPropertyChanged(nameof(ShowStockSummaryKpis));
+        OnPropertyChanged(nameof(ShowGenericSummaryKpis));
+        OnPropertyChanged(nameof(ShowTaxDiscountKpis));
     }
 
     private static void Fill<T>(ObservableCollection<T> target, IEnumerable<T> source)
@@ -646,6 +672,9 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowLowStockGrid));
         OnPropertyChanged(nameof(ShowSaleReturnGrid));
         OnPropertyChanged(nameof(ShowMedicineReturnGrid));
+        OnPropertyChanged(nameof(ShowStockSummaryKpis));
+        OnPropertyChanged(nameof(ShowGenericSummaryKpis));
+        OnPropertyChanged(nameof(ShowTaxDiscountKpis));
     }
 
     private static string GridNameFor(ReportKind kind) => kind switch

@@ -28,6 +28,10 @@
             <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
             <conv:CurrencyConverter x:Key="Currency" />
 
+            <!-- Match Sales bill-dropdown selection (default ListBox highlight ≈ sky blue). -->
+            <SolidColorBrush x:Key="GridSelectionBrush" Color="#87CEEB" />
+            <SolidColorBrush x:Key="GridSelectionForegroundBrush" Color="#1A1A1A" />
+
             <!-- Compact outlined inputs — floating labels disabled so height matches text. -->
             <Style x:Key="MaterialDesignOutlinedTextBox" TargetType="TextBox"
                    BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
@@ -68,7 +72,26 @@
 
             <Style TargetType="DatePicker" BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}" />
 
-            <!-- Compact grids app-wide. -->
+            <!-- Compact grids app-wide with sky-blue selected row (same feel as bill dropdown). -->
+            <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{StaticResource GridSelectionBrush}" />
+                        <Setter Property="Foreground" Value="{StaticResource GridSelectionForegroundBrush}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="{StaticResource GridSelectionBrush}" />
+                        <Setter Property="BorderBrush" Value="{StaticResource GridSelectionBrush}" />
+                        <Setter Property="Foreground" Value="{StaticResource GridSelectionForegroundBrush}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
             <Style TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
                 <Setter Property="RowHeight" Value="28" />
                 <Setter Property="ColumnHeaderHeight" Value="34" />

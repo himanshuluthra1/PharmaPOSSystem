@@ -59,18 +59,35 @@ public class InventoryService : IInventoryService
         var nearExpiryDate = today.AddDays(prefs.NearExpiryDays);
 
         var batches = BatchQuery(branchId);
-        var medicines = _uow.Repository<Medicine>().Query()
-            .Where(m => m.Status == EntityStatus.Active);
 
         if (!string.IsNullOrWhiteSpace(term))
         {
+            var tokens = SearchQueryExtensions.GetSearchTokens(term);
             var normalized = SearchQueryExtensions.NormalizeTerm(term);
-            batches = batches.Where(b =>
-                b.BatchNumber.Replace(" ", "").Contains(normalized) ||
-                (b.Medicine != null && (
-                    b.Medicine.NameSearchKey.Contains(normalized) ||
-                    (b.Medicine.GenericNameSearchKey != "" && b.Medicine.GenericNameSearchKey.Contains(normalized)) ||
-                    (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(normalized)))));
+
+            if (tokens.Length > 1)
+            {
+                foreach (var raw in tokens)
+                {
+                    var token = SearchQueryExtensions.NormalizeTerm(raw);
+                    if (token.Length == 0) continue;
+                    batches = batches.Where(b =>
+                        b.BatchNumber.Replace(" ", "").Contains(token) ||
+                        (b.Medicine != null && (
+                            b.Medicine.NameSearchKey.Contains(token) ||
+                            (b.Medicine.GenericNameSearchKey != "" && b.Medicine.GenericNameSearchKey.Contains(token)) ||
+                            (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(token)))));
+                }
+            }
+            else
+            {
+                batches = batches.Where(b =>
+                    b.BatchNumber.Replace(" ", "").Contains(normalized) ||
+                    (b.Medicine != null && (
+                        b.Medicine.NameSearchKey.Contains(normalized) ||
+                        (b.Medicine.GenericNameSearchKey != "" && b.Medicine.GenericNameSearchKey.Contains(normalized)) ||
+                        (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(normalized)))));
+            }
         }
 
         if (filter == StockFilterKind.LowStock)
@@ -94,6 +111,11 @@ public class InventoryService : IInventoryService
             };
         }
 
+        // Unfiltered on-hand lists can exceed thousands of rows; a hard 1000-row cap
+        // alphabetically hid medicines like "DETTOL LIQ". Prefer a higher cap when
+        // the user has typed a search term (result set is already narrowed).
+        var take = string.IsNullOrWhiteSpace(term) ? 2500 : 1000;
+
         var rows = await batches
             .OrderBy(b => b.Medicine!.Name)
             .ThenBy(b => b.ExpiryDate)
@@ -113,7 +135,7 @@ public class InventoryService : IInventoryService
                 RackNumber = b.RackNumber ?? b.Medicine.RackNumber,
                 b.Medicine.ReorderLevel
             })
-            .Take(1000)
+            .Take(take)
             .ToListAsync(ct);
 
         if (rows.Count == 0) return [];
@@ -199,6 +221,60 @@ public class InventoryService : IInventoryService
 
     public Task<string> PreviewNextAdjustmentNumberAsync(int? branchId, CancellationToken ct = default)
         => GenerateAdjustmentNumberAsync(branchId, ct);
+
+    public async Task<List<AdjustmentBatchDto>> GetBatchesForAdjustmentAsync(
+        int medicineId, int? branchId, CancellationToken ct = default)
+    {
+        var q = _uow.Repository<MedicineBatch>().Query()
+            .Where(b => b.MedicineId == medicineId);
+        if (branchId.HasValue) q = q.Where(b => b.BranchId == branchId);
+
+        var batches = await q
+            .OrderBy(b => b.ExpiryDate)
+            .ThenBy(b => b.BatchNumber)
+            .Select(b => new AdjustmentBatchDto(
+                b.Id, b.BatchNumber, b.ExpiryDate, b.QuantityAvailable, b.Mrp))
+            .ToListAsync(ct);
+
+        if (batches.Count > 0) return batches;
+
+        var medicine = await _uow.Repository<Medicine>().GetByIdAsync(medicineId, ct);
+        if (medicine is null) return [];
+
+        var existingOpening = await _uow.Repository<MedicineBatch>().Query()
+            .FirstOrDefaultAsync(b => b.MedicineId == medicineId &&
+                                      b.BranchId == branchId &&
+                                      b.BatchNumber == "OPENING", ct);
+        if (existingOpening is not null)
+        {
+            return
+            [
+                new AdjustmentBatchDto(
+                    existingOpening.Id, existingOpening.BatchNumber, existingOpening.ExpiryDate,
+                    existingOpening.QuantityAvailable, existingOpening.Mrp)
+            ];
+        }
+
+        var batch = new MedicineBatch
+        {
+            MedicineId = medicineId,
+            BranchId = branchId,
+            BatchNumber = "OPENING",
+            ExpiryDate = _clock.Today.AddYears(2),
+            QuantityAvailable = 0,
+            PurchasePrice = medicine.PurchasePrice,
+            Mrp = medicine.Mrp,
+            SellingPrice = medicine.SellingPrice > 0 ? medicine.SellingPrice : medicine.Mrp,
+            GstPercent = medicine.GstPercent
+        };
+        await _uow.Repository<MedicineBatch>().AddAsync(batch, ct);
+        await _uow.SaveChangesAsync(ct);
+
+        return
+        [
+            new AdjustmentBatchDto(batch.Id, batch.BatchNumber, batch.ExpiryDate, batch.QuantityAvailable, batch.Mrp)
+        ];
+    }
 
     public async Task<Result<StockAdjustmentReceiptDto>> CreateStockAdjustmentAsync(
         CreateStockAdjustmentRequest request,

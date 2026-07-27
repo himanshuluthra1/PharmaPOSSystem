@@ -89,7 +89,7 @@ public class StockAdjustmentTabViewModel : ObservableObject
 
     private async Task AddLineAsync()
     {
-        var pick = await _medicinePicker.PickMedicineAsync();
+        var pick = await _medicinePicker.PickMedicineForAdjustmentAsync();
         if (pick is null) return;
 
         if (Lines.Any(l => l.BatchId == pick.BatchId))

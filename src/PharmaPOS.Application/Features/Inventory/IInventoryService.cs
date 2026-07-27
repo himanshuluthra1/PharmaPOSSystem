@@ -22,6 +22,13 @@ public interface IInventoryService
 
     Task<string> PreviewNextAdjustmentNumberAsync(int? branchId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Batches for stock adjustment (includes zero qty). Does not invent a large
+    /// opening quantity — creates OPENING@0 only when the medicine has no batch yet.
+    /// </summary>
+    Task<List<AdjustmentBatchDto>> GetBatchesForAdjustmentAsync(
+        int medicineId, int? branchId, CancellationToken ct = default);
+
     Task<Result<StockAdjustmentReceiptDto>> CreateStockAdjustmentAsync(
         CreateStockAdjustmentRequest request,
         int? branchId,

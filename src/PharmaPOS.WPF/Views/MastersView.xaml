@@ -451,7 +451,32 @@
                                               SelectedItem="{Binding SelectedManufacturer}"
                                               DisplayMemberPath="Name" />
                                     <TextBlock Text="Barcode" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Barcode, UpdateSourceTrigger=PropertyChanged}" />
+                                    <DockPanel Margin="0,0,0,8">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
+                                            <Button Command="{Binding GenerateBarcodeCommand}"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                    ToolTip="Generate barcode" Padding="8,4" Margin="0,0,4,0">
+                                                <materialDesign:PackIcon Kind="Barcode" Width="18" Height="18" />
+                                            </Button>
+                                            <Button Command="{Binding PreviewBarcodeCommand}"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                    ToolTip="Preview / print label" Padding="8,4" Margin="0,0,4,0">
+                                                <materialDesign:PackIcon Kind="Printer" Width="18" Height="18" />
+                                            </Button>
+                                            <Button Command="{Binding ScanBarcodeCameraCommand}"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                    ToolTip="Scan with camera" Padding="8,4" Margin="0,0,4,0">
+                                                <materialDesign:PackIcon Kind="Camera" Width="18" Height="18" />
+                                            </Button>
+                                            <Button Command="{Binding ScanBarcodeImageCommand}"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                    ToolTip="Decode from image file" Padding="8,4">
+                                                <materialDesign:PackIcon Kind="Image" Width="18" Height="18" />
+                                            </Button>
+                                        </StackPanel>
+                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding Editor.Barcode, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DockPanel>
                                     <TextBlock Text="HSN Code" Style="{StaticResource FieldCaption}" />
                                     <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.HsnCode, UpdateSourceTrigger=PropertyChanged}" />
                                     <Grid>

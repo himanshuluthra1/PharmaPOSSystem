@@ -3,6 +3,7 @@ using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Inventory;
 using PharmaPOS.WPF.Mvvm;
+using PharmaPOS.WPF.Services;
 
 namespace PharmaPOS.WPF.ViewModels.Inventory;
 
@@ -11,6 +12,7 @@ public class StockOnHandTabViewModel : ObservableObject
     private readonly IInventoryService _inventory;
     private readonly int? _branchId;
     private readonly Action<StockBatchRowDto?> _onSelectionChanged;
+    private readonly IBarcodeCameraService _barcodeCamera;
 
     private string _searchText = string.Empty;
     private StockFilterOption _selectedFilter;
@@ -23,11 +25,13 @@ public class StockOnHandTabViewModel : ObservableObject
     public StockOnHandTabViewModel(
         IInventoryService inventory,
         ICurrentUserService currentUser,
-        Action<StockBatchRowDto?> onSelectionChanged)
+        Action<StockBatchRowDto?> onSelectionChanged,
+        IBarcodeCameraService barcodeCamera)
     {
         _inventory = inventory;
         _branchId = currentUser.CurrentUser?.BranchId;
         _onSelectionChanged = onSelectionChanged;
+        _barcodeCamera = barcodeCamera;
 
         FilterOptions =
         [
@@ -41,6 +45,7 @@ public class StockOnHandTabViewModel : ObservableObject
         _selectedFilter = FilterOptions[1];
 
         RefreshCommand = new AsyncRelayCommand(_ => RefreshAsync(), _ => !IsBusy);
+        ScanBarcodeCameraCommand = new RelayCommand(_ => ScanBarcodeCamera());
         _ = RefreshAsync();
     }
 
@@ -104,6 +109,14 @@ public class StockOnHandTabViewModel : ObservableObject
     }
 
     public ICommand RefreshCommand { get; }
+    public ICommand ScanBarcodeCameraCommand { get; }
+
+    private void ScanBarcodeCamera()
+    {
+        var value = _barcodeCamera.ScanWithCamera("Scan medicine barcode");
+        if (string.IsNullOrWhiteSpace(value)) return;
+        SearchText = value;
+    }
 
     private async Task DebouncedSearchAsync()
     {
@@ -150,7 +163,9 @@ public class StockOnHandTabViewModel : ObservableObject
 
             StatusMessage = rows.Count == 0
                 ? "No stock batches match the current filter."
-                : $"{rows.Count} batch row(s) shown.";
+                : string.IsNullOrWhiteSpace(SearchText) && rows.Count >= 2500
+                    ? $"{rows.Count} batch row(s) shown (list capped — type a medicine name to find more)."
+                    : $"{rows.Count} batch row(s) shown.";
         }
         catch (Exception ex)
         {
