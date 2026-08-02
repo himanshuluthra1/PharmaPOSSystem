@@ -296,7 +296,10 @@
 
                     <!-- PREFERENCES -->
                     <TabItem Header="Preferences" Visibility="{Binding CanManagePreferences, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel DataContext="{Binding Preferences}" Margin="0,8,0,0" MaxWidth="520" HorizontalAlignment="Left">
+                        <ScrollViewer DataContext="{Binding Preferences}" Margin="0,8,0,0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel MaxWidth="520" HorizontalAlignment="Left" Margin="0,0,8,16">
                             <TextBlock Text="Inventory &amp; Billing Preferences" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
                             <TextBlock Text="Near-expiry alert (days)" Style="{StaticResource FieldCaption}" />
                             <TextBox Style="{StaticResource FieldBox}"
@@ -311,6 +314,101 @@
                             <TextBox Style="{StaticResource FieldBox}"
                                      Text="{Binding Editor.PurchaseInvoicePrefix, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Text="Invoice numbers use the format PREFIX-yyyyMMdd-#### (resets daily)." Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                            <TextBlock Text="Bill editing" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,8" />
+                            <CheckBox Content="Allow editing existing sale bills"
+                                      IsChecked="{Binding Editor.AllowEditSalesBills}"
+                                      Margin="0,0,0,8" />
+                            <CheckBox Content="Allow editing existing purchase bills"
+                                      IsChecked="{Binding Editor.AllowEditPurchaseBills}"
+                                      Margin="0,0,0,4" />
+                            <TextBlock Text="When off, opened bills are view-only (print / return still work for sales)."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                            <TextBlock Text="AI bill scan (Gemini)" FontWeight="SemiBold" FontSize="14" Margin="0,8,0,4" />
+                            <TextBlock Text="Uses Google Gemini to read supplier bills of different formats. Get a free/paid API key from Google AI Studio. Key is stored only on this PC."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox Content="Use Gemini for purchase bill scan"
+                                      IsChecked="{Binding UseGemini}"
+                                      Margin="0,0,0,8"
+                                      FontWeight="SemiBold" />
+                            <TextBlock Text="Must be checked (and API key saved) or Scan bill uses Windows OCR only."
+                                       Foreground="#C62828" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <TextBlock Text="Gemini API key" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding GeminiApiKey, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Model" Style="{StaticResource FieldCaption}" />
+                            <ComboBox Style="{StaticResource FieldCombo}"
+                                      Margin="0,0,0,12"
+                                      ItemsSource="{Binding GeminiModelOptions}"
+                                      SelectedItem="{Binding GeminiModel}"
+                                      IsEditable="True" />
+
+                            <TextBlock Text="Send sale bill (WhatsApp / SMS)" FontWeight="SemiBold" FontSize="14" Margin="0,8,0,4" />
+                            <TextBlock Text="After save, ask to share the bill. With VPS upload enabled, the PDF is uploaded and WhatsApp/SMS includes a download link. Without VPS, WhatsApp falls back to manual PDF attach."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox Content="Enable WhatsApp"
+                                      IsChecked="{Binding EnableWhatsAppShare}"
+                                      Margin="0,0,0,6" />
+                            <CheckBox Content="Enable SMS"
+                                      IsChecked="{Binding EnableSmsShare}"
+                                      Margin="0,0,0,6" />
+                            <CheckBox Content="Ask after saving a sale"
+                                      IsChecked="{Binding AskShareAfterSave}"
+                                      Margin="0,0,0,12" />
+
+                            <TextBlock Text="VPS bill PDF upload (SFTP)" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,4" />
+                            <TextBlock Text="Upload each bill PDF, then put the public HTTPS link in WhatsApp. Public base URL must be the exact browser prefix where those files open — not the Linux folder path."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <TextBlock Text="Example for your VPS: Public base URL http://bills.cloudpharma.site/bills/ (must open the PDF in a browser)."
+                                       Opacity="0.75" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox Content="Upload bill PDF to VPS and share link"
+                                      IsChecked="{Binding EnableVpsUpload}"
+                                      Margin="0,0,0,8"
+                                      FontWeight="SemiBold" />
+                            <TextBlock Text="Public base URL (what you type in a browser)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     materialDesign:HintAssist.Hint="https://yourdomain.com/bills/"
+                                     Text="{Binding PublicBaseUrl, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Must start with https:// and end with the folder path that serves PDFs (usually ends with /bills/)."
+                                       Foreground="#C62828" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <TextBlock Text="SFTP host" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding SftpHost, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="SFTP port" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding SftpPort, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="SFTP username" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding SftpUsername, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="SFTP password" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding SftpPassword, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Remote folder on VPS (must be inside website public root)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Margin="0,0,0,4"
+                                     materialDesign:HintAssist.Hint="public_html/bills  or  /var/www/html/bills"
+                                     Text="{Binding SftpRemoteDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Do NOT use a bare /bills path unless that folder is actually your web root. If the browser 404s, the SFTP folder is wrong — not the Public base URL."
+                                       Foreground="#C62828" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox Content="Shorten bill link with TinyURL (recommended for WhatsApp)"
+                                      IsChecked="{Binding EnableTinyUrl}"
+                                      Margin="0,0,0,12" />
+
+                            <TextBlock Text="Layout (this PC)" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,4" />
+                            <TextBlock Text="Drag the splitter between grid and summary on Sales/Purchase, or resize grid column headers. Widths are saved automatically. You can also set summary panel widths here."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <TextBlock Text="Sales summary panel width (px)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding SalesSidePanelWidth, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Purchase summary panel width (px)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding PurchaseSidePanelWidth, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Command="{Binding ResetLayoutCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    HorizontalAlignment="Left" Margin="0,4,0,12"
+                                    Content="Reset layout to defaults" />
+
                             <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
                                 <StackPanel Orientation="Horizontal">
                                     <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
@@ -319,7 +417,8 @@
                             </Button>
                             <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
                                        Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
-                        </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
                     </TabItem>
 
                     <!-- MEDICINE MAPPING -->

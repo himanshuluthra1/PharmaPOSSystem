@@ -1,0 +1,476 @@
+<UserControl x:Class="PharmaPOS.WPF.Views.PurchaseReturnView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:purchaseVm="clr-namespace:PharmaPOS.WPF.ViewModels.Purchases"
+             d:DataContext="{d:DesignInstance Type=purchaseVm:PurchaseReturnViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
+             Focusable="True"
+             PreviewKeyDown="PurchaseReturnView_PreviewKeyDown">
+    <Grid Margin="8">
+        <TabControl x:Name="MainTabs">
+            <!-- Against purchase bill -->
+            <TabItem Header="Against Bill">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SearchBox" Grid.Column="0" Margin="0,0,8,0"
+                                     materialDesign:HintAssist.Hint="Search by invoice #, supplier invoice #, or supplier name"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="1" Margin="0,0,8,0"
+                                    Command="{Binding SearchCommand}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}"
+                                    Padding="16,8"
+                                    Content="Search (F3)" />
+                            <Button Grid.Column="2"
+                                    Command="{Binding LoadPurchaseCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="16,8"
+                                    Content="Load Bill" />
+                        </Grid>
+                    </materialDesign:Card>
+
+                    <materialDesign:Card Grid.Row="1" Margin="0,0,0,8" UniformCornerRadius="10" Padding="8"
+                                         MaxHeight="140"
+                                         Visibility="{Binding HasSearchResults, Converter={StaticResource BoolToVisibility}}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Matching purchase bills" FontWeight="SemiBold" Margin="4,0,0,6" />
+                            <DataGrid ItemsSource="{Binding SearchResults}"
+                                      SelectedItem="{Binding SelectedSearch, Mode=TwoWay}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      CanUserAddRows="False"
+                                      HeadersVisibility="Column"
+                                      MouseDoubleClick="SearchGrid_MouseDoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
+                                    <DataGridTextColumn Header="Supplier Inv #" Binding="{Binding SupplierInvoiceNumber}" Width="130" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDate, StringFormat=dd-MMM-yyyy}" Width="110" />
+                                    <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </materialDesign:Card>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="520" />
+                            <ColumnDefinition Width="320" MinWidth="280" />
+                        </Grid.ColumnDefinitions>
+
+                        <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="Items to return" FontSize="18" FontWeight="Bold" />
+                                        <TextBlock Margin="0,4,0,0" Opacity="0.85" TextWrapping="Wrap"
+                                                   Visibility="{Binding HasLoadedPurchase, Converter={StaticResource BoolToVisibility}}">
+                                            <Run Text="{Binding LoadedPurchase.InvoiceNumber, StringFormat=Bill: {0}, Mode=OneWay}" />
+                                            <Run Text="  ·  " />
+                                            <Run Text="{Binding LoadedPurchase.SupplierName, StringFormat=Supplier: {0}, Mode=OneWay}" />
+                                            <Run Text="  ·  " />
+                                            <Run Text="{Binding LoadedPurchase.InvoiceDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Text="Search and load a received purchase bill, then tick lines to return."
+                                                   Opacity="0.65" Margin="0,4,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasLoadedPurchase}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                            Command="{Binding ClearCommand}"
+                                            Style="{StaticResource MaterialDesignFlatButton}"
+                                            Content="Clear" />
+                                </DockPanel>
+
+                                <DataGrid Grid.Row="1"
+                                          ItemsSource="{Binding Lines}"
+                                          AutoGenerateColumns="False"
+                                          CanUserAddRows="False"
+                                          HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal"
+                                          EnableRowVirtualization="True"
+                                          materialDesign:DataGridAssist.CellPadding="5,2">
+                                    <DataGrid.Columns>
+                                        <DataGridCheckBoxColumn Header="Return"
+                                                                Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                Width="60" />
+                                        <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="140" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="70" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Purchased" Binding="{Binding Quantity, StringFormat=N0}" Width="70" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Avail" Binding="{Binding AvailableQty, StringFormat=N0}" Width="50" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Return Qty"
+                                                            Binding="{Binding ReturnQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="80" />
+                                        <DataGridTextColumn Header="Return Free"
+                                                            Binding="{Binding ReturnFreeQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="85" />
+                                        <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" IsReadOnly="True" />
+                                        <DataGridTemplateColumn Header="Reason" Width="150">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ComboBox ItemsSource="{Binding DataContext.Reasons, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                              SelectedValue="{Binding ReturnReasonId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                              SelectedValuePath="Id"
+                                                              DisplayMemberPath="Name" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </materialDesign:Card>
+
+                        <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="16">
+                            <StackPanel>
+                                <TextBlock Text="Return summary" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
+                                <TextBlock TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,12"
+                                           Text="Stock is reduced when you process the return. Enter the supplier return receipt / debit note number later under Return Records." />
+
+                                <ComboBox ItemsSource="{Binding SettlementModes}"
+                                          SelectedItem="{Binding SettlementMode}"
+                                          materialDesign:HintAssist.Hint="Settlement"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                          Margin="0,0,0,12" />
+
+                                <TextBox materialDesign:HintAssist.Hint="Remarks (optional)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
+                                         Margin="0,0,0,12" />
+
+                                <Button Command="{Binding ProcessReturnCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        HorizontalAlignment="Stretch"
+                                        MinHeight="44"
+                                        Padding="16,12"
+                                        Foreground="White"
+                                        FontWeight="SemiBold"
+                                        Content="Process Return (F9)" />
+
+                                <TextBlock Text="{Binding StatusMessage}" Margin="0,12,0,0"
+                                           FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </Grid>
+
+                    <TextBlock Grid.Row="3" Margin="4,6,0,0" FontSize="11" Opacity="0.55"
+                               Text="F3 Search · Enter / double-click Load · F9 Process return" />
+                </Grid>
+            </TabItem>
+
+            <!-- Direct return without purchase bill -->
+            <TabItem Header="Direct Return">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0" Margin="0,0,8,0">
+                                <TextBox x:Name="DirectSupplierBox"
+                                         materialDesign:HintAssist.Hint="Search supplier"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding DirectSupplierSearch, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="DirectSupplierBox_PreviewKeyDown" />
+                                <Popup IsOpen="{Binding ShowDirectSupplierResults, Mode=OneWay}"
+                                       PlacementTarget="{Binding ElementName=DirectSupplierBox}"
+                                       Placement="Bottom"
+                                       StaysOpen="False"
+                                       AllowsTransparency="True">
+                                    <Border Background="{DynamicResource MaterialDesignPaper}"
+                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                            BorderThickness="1" MaxHeight="180" MinWidth="320">
+                                        <ListBox ItemsSource="{Binding DirectSupplierResults}"
+                                                 SelectedIndex="{Binding SupplierSuggestionIndex, Mode=TwoWay}"
+                                                 DisplayMemberPath="Name"
+                                                 MouseDoubleClick="DirectSupplierList_MouseDoubleClick" />
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold"
+                                       Text="{Binding DirectSupplierDisplay}" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="2" Margin="0,0,8,0"
+                                    Command="{Binding AddDirectMedicineCommand}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}"
+                                    Padding="16,8"
+                                    Content="Add Medicine" />
+                            <Button Grid.Column="3"
+                                    Command="{Binding ClearDirectCommand}"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Content="Clear" />
+                        </Grid>
+                    </materialDesign:Card>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="520" />
+                            <ColumnDefinition Width="320" MinWidth="280" />
+                        </Grid.ColumnDefinitions>
+
+                        <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                                    <TextBlock Text="Medicines to return" FontSize="18" FontWeight="Bold" />
+                                    <TextBlock Margin="0,4,0,0" Opacity="0.65" TextWrapping="Wrap"
+                                               Text="Pick medicines from stock (no purchase bill required). Rate defaults from batch purchase price." />
+                                </StackPanel>
+                                <DataGrid Grid.Row="1"
+                                          ItemsSource="{Binding DirectLines}"
+                                          AutoGenerateColumns="False"
+                                          CanUserAddRows="False"
+                                          HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal"
+                                          materialDesign:DataGridAssist.CellPadding="5,2">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="140" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="70" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Stock" Binding="{Binding AvailableQty, StringFormat=N0}" Width="60" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Qty"
+                                                            Binding="{Binding ReturnQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="70" />
+                                        <DataGridTextColumn Header="Free"
+                                                            Binding="{Binding ReturnFreeQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="60" />
+                                        <DataGridTextColumn Header="Rate"
+                                                            Binding="{Binding PurchasePrice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="80" />
+                                        <DataGridTextColumn Header="Disc %"
+                                                            Binding="{Binding DiscountPercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="60" />
+                                        <DataGridTextColumn Header="GST %"
+                                                            Binding="{Binding GstPercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                            Width="60" />
+                                        <DataGridTemplateColumn Header="Reason" Width="140">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <ComboBox ItemsSource="{Binding DataContext.Reasons, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                              SelectedValue="{Binding ReturnReasonId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                              SelectedValuePath="Id"
+                                                              DisplayMemberPath="Name" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="" Width="50">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Button Command="{Binding DataContext.RemoveDirectLineCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                            CommandParameter="{Binding}"
+                                                            Style="{StaticResource MaterialDesignFlatButton}"
+                                                            ToolTip="Remove"
+                                                            Content="✕" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </materialDesign:Card>
+
+                        <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="16">
+                            <StackPanel>
+                                <TextBlock Text="Direct return" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
+                                <TextBlock TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,12"
+                                           Text="Use this when returning stock without the original purchase bill. Same receipt-number entry later under Return Records." />
+
+                                <ComboBox ItemsSource="{Binding SettlementModes}"
+                                          SelectedItem="{Binding DirectSettlementMode}"
+                                          materialDesign:HintAssist.Hint="Settlement"
+                                          Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                          Margin="0,0,0,12" />
+
+                                <TextBox materialDesign:HintAssist.Hint="Remarks (optional)"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding DirectRemarks, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
+                                         Margin="0,0,0,12" />
+
+                                <Button Command="{Binding ProcessDirectReturnCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        HorizontalAlignment="Stretch"
+                                        MinHeight="44"
+                                        Padding="16,12"
+                                        Foreground="White"
+                                        FontWeight="SemiBold"
+                                        Content="Process Direct Return (F9)" />
+
+                                <TextBlock Text="{Binding StatusMessage}" Margin="0,12,0,0"
+                                           FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </Grid>
+
+                    <TextBlock Grid.Row="2" Margin="4,6,0,0" FontSize="11" Opacity="0.55"
+                               Text="Select supplier · Add Medicine · set qty/rate · F9 Process" />
+                </Grid>
+            </TabItem>
+
+            <!-- Existing returns + supplier receipt -->
+            <TabItem Header="Return Records">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <CheckBox Content="Only pending supplier receipt"
+                                  IsChecked="{Binding PendingReceiptOnly}"
+                                  VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                Command="{Binding RefreshReturnsCommand}"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Content="Refresh" />
+                    </DockPanel>
+
+                    <materialDesign:Card Grid.Row="1" UniformCornerRadius="10" Padding="12" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Margin="0,0,0,8" TextWrapping="Wrap" Opacity="0.85"
+                                       Text="{Binding SelectedReturnHint}" />
+                            <Grid Grid.Row="1" IsEnabled="{Binding HasSelectedReturn}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="180" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="ReceiptNumberBox" Grid.Column="0" Margin="0,0,8,0"
+                                         materialDesign:HintAssist.Hint="Supplier return receipt / debit note number"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding ReceiptNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                                            materialDesign:HintAssist.Hint="Receipt date"
+                                            SelectedDate="{Binding ReceiptDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="2"
+                                        Command="{Binding AttachReceiptCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Padding="16,8"
+                                        Content="Save Receipt #" />
+                            </Grid>
+                        </Grid>
+                    </materialDesign:Card>
+
+                    <materialDesign:Card Grid.Row="2" UniformCornerRadius="10" Padding="8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" MinHeight="140" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="180" MinHeight="120" />
+                            </Grid.RowDefinitions>
+
+                            <DataGrid Grid.Row="0"
+                                      ItemsSource="{Binding ReturnRecords}"
+                                      SelectedItem="{Binding SelectedReturn, Mode=TwoWay}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      CanUserAddRows="False"
+                                      HeadersVisibility="Column"
+                                      SelectionMode="Single"
+                                      SelectionUnit="FullRow"
+                                      MouseDoubleClick="ReturnRecordsGrid_MouseDoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Return #" Binding="{Binding ReturnNumber, Mode=OneWay}" Width="140" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding ReturnDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" Width="110" />
+                                    <DataGridCheckBoxColumn Header="Direct" Binding="{Binding IsDirectReturn, Mode=OneWay}" Width="60" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Purchase #" Binding="{Binding PurchaseInvoiceNumber, Mode=OneWay}" Width="120" />
+                                    <DataGridTextColumn Header="Supplier Inv #" Binding="{Binding SupplierInvoiceNumber, Mode=OneWay}" Width="120" />
+                                    <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName, Mode=OneWay}" Width="*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding GrandTotal, StringFormat=N2, Mode=OneWay}" Width="90" />
+                                    <DataGridTextColumn Header="Supplier Receipt #" Binding="{Binding SupplierReturnReceiptNumber, Mode=OneWay}" Width="140" />
+                                    <DataGridTextColumn Header="Receipt Date" Binding="{Binding SupplierReturnReceiptDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" Width="110" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="1" Margin="4,10,0,6" FontWeight="SemiBold"
+                                       Text="Medicines in selected return" />
+
+                            <DataGrid Grid.Row="2"
+                                      ItemsSource="{Binding SelectedReturnLines}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      CanUserAddRows="False"
+                                      HeadersVisibility="Column"
+                                      Visibility="{Binding HasSelectedReturnLines, Converter={StaticResource BoolToVisibility}}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName, Mode=OneWay}" Width="*" MinWidth="160" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, Mode=OneWay}" Width="100" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy, Mode=OneWay}" Width="70" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding ReturnedQuantity, StringFormat=N0, Mode=OneWay}" Width="60" />
+                                    <DataGridTextColumn Header="Free" Binding="{Binding ReturnedFreeQuantity, StringFormat=N0, Mode=OneWay}" Width="50" />
+                                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2, Mode=OneWay}" Width="80" />
+                                    <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, StringFormat=N0, Mode=OneWay}" Width="60" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2, Mode=OneWay}" Width="90" />
+                                    <DataGridTextColumn Header="Reason" Binding="{Binding ReasonName, Mode=OneWay}" Width="140" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="2" Margin="8,8,0,0" Opacity="0.6"
+                                       Text="Select a return above to see the medicines returned.">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasSelectedReturnLines}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </materialDesign:Card>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

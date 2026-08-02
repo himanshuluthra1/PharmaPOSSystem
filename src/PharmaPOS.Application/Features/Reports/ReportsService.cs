@@ -279,39 +279,151 @@ public class ReportsService : IReportsService
     public async Task<(ReportSummaryDto Summary, List<ExpiryReportRowDto> Rows)> GetExpiryReportAsync(
         int? branchId, CancellationToken ct = default)
     {
-        var today = _clock.Today;
-        var prefs = await _settings.GetPreferencesAsync(ct);
-        var nearExpiry = today.AddDays(prefs.NearExpiryDays);
+        var today = _clock.Today.Date;
+        var horizon = today.AddMonths(12);
 
         var batches = await BatchQuery(branchId)
-            .Where(b => b.QuantityAvailable > 0 && b.ExpiryDate != null)
+            .Where(b => b.QuantityAvailable > 0
+                        && b.ExpiryDate != null
+                        && b.ExpiryDate!.Value.Date <= horizon)
             .OrderBy(b => b.ExpiryDate)
+            .Select(b => new
+            {
+                b.Id,
+                b.MedicineId,
+                MedicineName = b.Medicine!.Name,
+                b.BatchNumber,
+                b.ExpiryDate,
+                b.QuantityAvailable,
+                StockValue = b.PurchasePrice * b.QuantityAvailable
+            })
             .ToListAsync(ct);
+
+        var supplierByBatch = await ResolveBatchSuppliersAsync(
+            batches.Select(b => (b.Id, b.MedicineId, b.MedicineName, b.BatchNumber)).ToList(), ct);
 
         var rows = batches.Select(b =>
         {
             var expiry = b.ExpiryDate!.Value.Date;
-            var status = expiry < today ? "Expired"
-                : expiry <= nearExpiry ? "Near expiry"
-                : "OK";
+            string status;
+            if (expiry < today)
+                status = "Expired";
+            else
+            {
+                var months = ((expiry.Year - today.Year) * 12) + expiry.Month - today.Month;
+                if (expiry.Day < today.Day) months--;
+                if (months < 1) months = 1;
+                status = months == 1 ? "Within 1 month" : $"Within {months} months";
+            }
+
+            supplierByBatch.TryGetValue(b.Id, out var supplier);
             return new ExpiryReportRowDto(
-                b.Medicine!.Name,
+                b.MedicineName,
                 b.BatchNumber,
                 b.ExpiryDate,
                 b.QuantityAvailable,
-                b.PurchasePrice * b.QuantityAvailable,
-                status);
-        })
-        .Where(r => r.ExpiryStatus != "OK")
-        .ToList();
+                b.StockValue,
+                status,
+                supplier.Id,
+                supplier.Name);
+        }).ToList();
 
         return (new ReportSummaryDto
         {
             RecordCount = rows.Count,
             TotalAmount = rows.Sum(r => r.StockValue),
-            FooterNote = $"{rows.Count(r => r.ExpiryStatus == "Expired")} expired, " +
-                         $"{rows.Count(r => r.ExpiryStatus == "Near expiry")} near expiry"
+            FooterNote = $"{rows.Count(r => r.ExpiryStatus == "Expired")} expired · " +
+                         $"{rows.Count(r => r.ExpiryStatus != "Expired")} within 12 months"
         }, rows);
+    }
+
+    /// <summary>
+    /// Resolves supplier per stock batch. Purchase-line medicines are often soft-deleted
+    /// after catalogue remapping, so this query ignores soft-delete filters on Medicine.
+    /// </summary>
+    private async Task<Dictionary<int, (int? Id, string? Name)>> ResolveBatchSuppliersAsync(
+        List<(int BatchId, int MedicineId, string MedicineName, string BatchNumber)> batches,
+        CancellationToken ct)
+    {
+        var result = new Dictionary<int, (int?, string?)>();
+        if (batches.Count == 0) return result;
+
+        // IgnoreQueryFilters: purchase medicines are frequently soft-deleted (replaced by
+        // catalogue imports) while PurchaseItems remain. Without this, Medicine joins
+        // return nothing and the Supplier column stays blank.
+        var purchaseRows = await _uow.Repository<PurchaseItem>().QueryIncludingDeleted()
+            .AsNoTracking()
+            .Where(i => !i.IsDeleted
+                        && i.Purchase != null && !i.Purchase.IsDeleted
+                        && i.Purchase.Supplier != null && !i.Purchase.Supplier.IsDeleted
+                        && i.Medicine != null)
+            .Select(i => new
+            {
+                i.MedicineBatchId,
+                i.MedicineId,
+                MedicineName = i.Medicine!.Name,
+                i.BatchNumber,
+                i.Purchase!.SupplierId,
+                SupplierName = i.Purchase.Supplier!.Name,
+                i.Purchase.InvoiceDate,
+                PurchaseId = i.Purchase.Id
+            })
+            .ToListAsync(ct);
+
+        static string Norm(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
+
+        var byBatchId = purchaseRows
+            .Where(p => p.MedicineBatchId is > 0)
+            .GroupBy(p => p.MedicineBatchId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.PurchaseId).First());
+
+        var byMedicineBatch = purchaseRows
+            .GroupBy(p => (p.MedicineId, Batch: Norm(p.BatchNumber)))
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.PurchaseId).First());
+
+        var byNameBatch = purchaseRows
+            .GroupBy(p => (Name: Norm(p.MedicineName), Batch: Norm(p.BatchNumber)))
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.PurchaseId).First());
+
+        var byMedicineId = purchaseRows
+            .GroupBy(p => p.MedicineId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.PurchaseId).First());
+
+        var byMedicineName = purchaseRows
+            .GroupBy(p => Norm(p.MedicineName))
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.InvoiceDate).ThenByDescending(x => x.PurchaseId).First());
+
+        foreach (var batch in batches)
+        {
+            (int SupplierId, string SupplierName)? hit = null;
+
+            if (byBatchId.TryGetValue(batch.BatchId, out var viaId))
+                hit = (viaId.SupplierId, viaId.SupplierName);
+            else if (byMedicineBatch.TryGetValue((batch.MedicineId, Norm(batch.BatchNumber)), out var viaMedBatch))
+                hit = (viaMedBatch.SupplierId, viaMedBatch.SupplierName);
+            else if (byNameBatch.TryGetValue((Norm(batch.MedicineName), Norm(batch.BatchNumber)), out var viaNameBatch))
+                hit = (viaNameBatch.SupplierId, viaNameBatch.SupplierName);
+            else if (byMedicineId.TryGetValue(batch.MedicineId, out var viaMed))
+                hit = (viaMed.SupplierId, viaMed.SupplierName);
+            else if (byMedicineName.TryGetValue(Norm(batch.MedicineName), out var viaName))
+                hit = (viaName.SupplierId, viaName.SupplierName);
+
+            result[batch.BatchId] = hit is null
+                ? (null, null)
+                : (hit.Value.SupplierId, hit.Value.SupplierName);
+        }
+
+        return result;
     }
 
     public async Task<(ReportSummaryDto Summary, List<LowStockReportRowDto> Rows)> GetLowStockReportAsync(

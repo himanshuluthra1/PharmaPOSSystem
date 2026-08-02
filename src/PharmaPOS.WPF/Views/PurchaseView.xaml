@@ -9,7 +9,12 @@
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              PreviewKeyDown="PurchaseView_PreviewKeyDown">
     <UserControl.Resources>
-        <!-- Force text-height fields on this screen (overrides any leftover MaterialDesign padding). -->
+        <Style x:Key="PurchaseFieldCaption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Foreground" Value="#616161" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
         <Style x:Key="PurchaseField" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
             <Setter Property="Height" Value="28" />
             <Setter Property="MinHeight" Value="28" />
@@ -18,6 +23,7 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+            <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
         <Style x:Key="PurchaseCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
             <Setter Property="Height" Value="28" />
@@ -27,6 +33,7 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+            <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
         <Style x:Key="PurchaseDate" TargetType="DatePicker" BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}">
             <Setter Property="Height" Value="28" />
@@ -36,202 +43,199 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+            <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
     </UserControl.Resources>
-    <Grid Margin="8">
+    <Grid Margin="4">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="2.6*" />
-            <ColumnDefinition Width="1*" />
+            <ColumnDefinition Width="*" MinWidth="400" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition x:Name="SideColumn" Width="240" MinWidth="200" MaxWidth="480" />
         </Grid.ColumnDefinitions>
 
-        <materialDesign:Card Grid.Column="0" Margin="4" UniformCornerRadius="12" Padding="16"
+        <materialDesign:Card Grid.Column="0" Margin="2" UniformCornerRadius="8" Padding="8"
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <DockPanel Grid.Row="0" Margin="0,0,0,12">
-                    <TextBlock Text="Purchase / Goods Receipt" FontSize="20" FontWeight="Bold"
-                               VerticalAlignment="Center" />
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <TextBox x:Name="BarcodeScanBox"
-                                 Width="160"
-                                 Margin="0,0,6,0"
-                                 VerticalAlignment="Center"
-                                 materialDesign:HintAssist.Hint="Scan barcode"
-                                 materialDesign:HintAssist.IsFloating="False"
-                                 Style="{StaticResource PurchaseField}"
-                                 ToolTip="Focus here and scan with USB barcode reader (Enter)"
-                                 PreviewKeyDown="BarcodeScanBox_PreviewKeyDown" />
-                        <Button Command="{Binding ScanBarcodeCameraCommand}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="10,8" Margin="0,0,8,0"
-                                VerticalAlignment="Center"
-                                ToolTip="Scan barcode with camera">
-                            <materialDesign:PackIcon Kind="BarcodeScan" Width="18" Height="18" />
-                        </Button>
-                        <Button Command="{Binding SearchPurchasesCommand}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="12,8" Margin="0,0,8,0"
-                                VerticalAlignment="Center"
-                                ToolTip="Search purchases by supplier">
-                            <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="Magnify" Width="18" Height="18"
-                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock Text="Search" VerticalAlignment="Center" />
+                <!-- Single compact toolbar above the grid -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,4">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" MinWidth="160" />
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="Purchase" FontSize="15" FontWeight="Bold"
+                                   VerticalAlignment="Bottom" Margin="0,0,8,4" />
+
+                        <StackPanel Grid.Column="1" Margin="0,0,4,0">
+                            <TextBlock Text="Supplier (name / phone)" Style="{StaticResource PurchaseFieldCaption}" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource MaterialDesignIconButton}"
+                                        Width="28" Height="28" Padding="0"
+                                        Command="{Binding ClearSupplierCommand}" ToolTip="Clear supplier">
+                                    <materialDesign:PackIcon Kind="Close" Width="14" Height="14" />
+                                </Button>
+                                <TextBox x:Name="SupplierSearchBox"
+                                         Style="{StaticResource PurchaseField}"
+                                         ToolTip="{Binding SupplierDisplay}"
+                                         Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="SupplierSearchBox_PreviewKeyDown" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Margin="0,0,4,0">
+                            <TextBlock Text="Supplier invoice no." Style="{StaticResource PurchaseFieldCaption}" />
+                            <TextBox Style="{StaticResource PurchaseField}"
+                                     ToolTip="Supplier invoice number"
+                                     Text="{Binding SupplierInvoiceNumber, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="3" Margin="0,0,6,0">
+                            <TextBlock Text="Invoice date" Style="{StaticResource PurchaseFieldCaption}" />
+                            <DatePicker Style="{StaticResource PurchaseDate}"
+                                        SelectedDate="{Binding InvoiceDate}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
+                            <StackPanel Width="130" Margin="0,0,3,0">
+                                <TextBlock Text="Scan barcode" Style="{StaticResource PurchaseFieldCaption}" />
+                                <TextBox x:Name="BarcodeScanBox"
+                                         Style="{StaticResource PurchaseField}"
+                                         ToolTip="Scan barcode (Enter)"
+                                         PreviewKeyDown="BarcodeScanBox_PreviewKeyDown" />
                             </StackPanel>
-                        </Button>
-                        <Grid Width="320">
-                        <ToggleButton x:Name="PurchaseSelectorToggle"
-                                      HorizontalAlignment="Stretch"
-                                      HorizontalContentAlignment="Stretch"
-                                      Height="28"
-                                      Padding="8,2"
-                                      Style="{StaticResource MaterialDesignOutlinedButton}"
-                                      Checked="PurchaseSelectorToggle_Checked"
-                                      Unchecked="PurchaseSelectorToggle_Unchecked">
-                            <Grid>
-                                <TextBlock Text="{Binding SelectedPurchase.DisplayLabel, FallbackValue='Select purchase'}"
-                                           VerticalAlignment="Center" HorizontalAlignment="Left"
-                                           Margin="0,0,20,0" TextTrimming="CharacterEllipsis" />
-                                <materialDesign:PackIcon Kind="ChevronDown"
-                                                           HorizontalAlignment="Right"
-                                                           VerticalAlignment="Center" Width="18" Height="18" />
-                            </Grid>
-                        </ToggleButton>
-                        <Popup x:Name="PurchasePopup"
-                               PlacementTarget="{Binding ElementName=PurchaseSelectorToggle}"
-                               Placement="Custom"
-                               CustomPopupPlacementCallback="PurchasePopup_PlacementCallback"
-                               StaysOpen="False"
-                               AllowsTransparency="True"
-                               Closed="PurchasePopup_Closed">
-                            <Border Background="{DynamicResource MaterialDesignPaper}"
-                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                    BorderThickness="1"
-                                    CornerRadius="4"
-                                    Padding="0,4"
-                                    Width="720"
-                                    MaxHeight="360"
-                                    materialDesign:ElevationAssist.Elevation="Dp4">
-                                <ListBox x:Name="PurchaseListBox"
-                                         ItemsSource="{Binding PurchaseHistory}"
-                                         SelectedItem="{Binding SelectedPurchase, Mode=TwoWay}"
-                                         Width="712"
-                                         HorizontalContentAlignment="Stretch"
-                                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                         ScrollViewer.CanContentScroll="False"
-                                         SelectionChanged="PurchaseListBox_SelectionChanged"
-                                         PreviewKeyDown="PurchaseListBox_PreviewKeyDown"
-                                         PreviewMouseLeftButtonUp="PurchaseListBox_PreviewMouseLeftButtonUp">
-                                    <ListBox.ItemContainerStyle>
-                                        <Style TargetType="ListBoxItem">
-                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                            <Setter Property="Padding" Value="0" />
-                                            <Setter Property="MinHeight" Value="36" />
-                                        </Style>
-                                    </ListBox.ItemContainerStyle>
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="12,8" Width="680">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="130" />
-                                                    <ColumnDefinition Width="120" />
-                                                    <ColumnDefinition Width="165" />
-                                                    <ColumnDefinition Width="*" MinWidth="140" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0"
-                                                           Text="{Binding InvoiceNumber}"
-                                                           FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding BillSupplierInvoiceLabel}"
-                                                           Margin="12,0,0,0"
-                                                           Opacity="0.9"
-                                                           VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="2"
-                                                           Text="{Binding BillDateLabel}"
-                                                           Margin="12,0,0,0"
-                                                           Opacity="0.9"
-                                                           VerticalAlignment="Center" />
-                                                <TextBlock Grid.Column="3"
-                                                           Text="{Binding BillSupplierLabel}"
-                                                           Margin="12,0,0,0"
-                                                           VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </Border>
-                        </Popup>
-                    </Grid>
-                    </StackPanel>
-                </DockPanel>
-
-                <Grid Grid.Row="1" Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*" />
-                        <ColumnDefinition Width="1.4*" />
-                        <ColumnDefinition Width="1.2*" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Style="{StaticResource MaterialDesignIconButton}"
-                                    Command="{Binding ClearSupplierCommand}" ToolTip="Clear supplier">
-                                <materialDesign:PackIcon Kind="Close" />
+                            <Button Command="{Binding ScanBarcodeCameraCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="4,0" Margin="0,0,3,0" Height="28" MinWidth="28"
+                                    ToolTip="Scan with camera">
+                                <materialDesign:PackIcon Kind="BarcodeScan" Width="15" Height="15" />
                             </Button>
-                            <TextBox x:Name="SupplierSearchBox"
-                                     materialDesign:HintAssist.Hint="Search supplier (name / phone)"
-                                     Style="{StaticResource PurchaseField}"
-                                     Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     PreviewKeyDown="SupplierSearchBox_PreviewKeyDown" />
-                        </DockPanel>
-                        <ListBox x:Name="SupplierResultsList"
-                                 ItemsSource="{Binding SupplierResults}"
-                                 SelectedIndex="{Binding SupplierSuggestionIndex, Mode=TwoWay}"
-                                 MaxHeight="110" Margin="0,4,0,0"
-                                 Visibility="{Binding ShowSupplierResults, Converter={StaticResource BoolToVisibility}}"
-                                 PreviewKeyDown="SupplierResultsList_PreviewKeyDown"
-                                 PreviewMouseLeftButtonUp="SupplierResultsList_PreviewMouseLeftButtonUp">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Padding="4,2">
-                                        <Run Text="{Binding Name}" FontWeight="SemiBold" />
-                                        <Run Text="{Binding Phone, StringFormat=' ({0})'}" FontSize="11" />
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                        <Border Background="{DynamicResource MaterialDesignChipBackground}"
-                                CornerRadius="6" Padding="10,6" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding SupplierDisplay}" FontWeight="SemiBold" />
-                        </Border>
-                    </StackPanel>
+                            <Button Command="{Binding ScanPurchaseBillCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="8,0" Margin="0,0,3,0" Height="28"
+                                    ToolTip="Scan supplier purchase bill (OCR)">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="FileDocumentOutline" Width="15" Height="15"
+                                                               VerticalAlignment="Center" Margin="0,0,4,0" />
+                                    <TextBlock Text="Scan bill" VerticalAlignment="Center" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding SearchPurchasesCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="6,0" Margin="0,0,3,0" Height="28" MinWidth="28"
+                                    ToolTip="Search purchases">
+                                <materialDesign:PackIcon Kind="Magnify" Width="15" Height="15" />
+                            </Button>
+                            <Grid Width="200" Height="28">
+                                <ToggleButton x:Name="PurchaseSelectorToggle"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch"
+                                              Height="28"
+                                              Padding="8,0"
+                                              Style="{StaticResource MaterialDesignOutlinedButton}"
+                                              ToolTip="Select purchase"
+                                              Checked="PurchaseSelectorToggle_Checked"
+                                              Unchecked="PurchaseSelectorToggle_Unchecked">
+                                    <Grid>
+                                        <TextBlock Text="{Binding SelectedPurchase.DisplayLabel, FallbackValue='Select purchase'}"
+                                                   VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                   Margin="0,0,16,0" TextTrimming="CharacterEllipsis" FontSize="11" />
+                                        <materialDesign:PackIcon Kind="ChevronDown"
+                                                                   HorizontalAlignment="Right"
+                                                                   VerticalAlignment="Center" Width="14" Height="14" />
+                                    </Grid>
+                                </ToggleButton>
+                                <Popup x:Name="PurchasePopup"
+                                       PlacementTarget="{Binding ElementName=PurchaseSelectorToggle}"
+                                       Placement="Custom"
+                                       CustomPopupPlacementCallback="PurchasePopup_PlacementCallback"
+                                       StaysOpen="False"
+                                       AllowsTransparency="True"
+                                       Closed="PurchasePopup_Closed">
+                                    <Border Background="{DynamicResource MaterialDesignPaper}"
+                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Padding="0,4"
+                                            Width="720"
+                                            MaxHeight="360"
+                                            materialDesign:ElevationAssist.Elevation="Dp4">
+                                        <ListBox x:Name="PurchaseListBox"
+                                                 ItemsSource="{Binding PurchaseHistory}"
+                                                 SelectedItem="{Binding SelectedPurchase, Mode=TwoWay}"
+                                                 Width="712"
+                                                 HorizontalContentAlignment="Stretch"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                 ScrollViewer.CanContentScroll="False"
+                                                 SelectionChanged="PurchaseListBox_SelectionChanged"
+                                                 PreviewKeyDown="PurchaseListBox_PreviewKeyDown"
+                                                 PreviewMouseLeftButtonUp="PurchaseListBox_PreviewMouseLeftButtonUp">
+                                            <ListBox.ItemContainerStyle>
+                                                <Style TargetType="ListBoxItem">
+                                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                    <Setter Property="Padding" Value="0" />
+                                                    <Setter Property="MinHeight" Value="32" />
+                                                </Style>
+                                            </ListBox.ItemContainerStyle>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="10,6" Width="680">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="130" />
+                                                            <ColumnDefinition Width="120" />
+                                                            <ColumnDefinition Width="165" />
+                                                            <ColumnDefinition Width="*" MinWidth="140" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Text="{Binding InvoiceNumber}"
+                                                                   FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding BillSupplierInvoiceLabel}"
+                                                                   Margin="12,0,0,0" Opacity="0.9" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding BillDateLabel}"
+                                                                   Margin="12,0,0,0" Opacity="0.9" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="3" Text="{Binding BillSupplierLabel}"
+                                                                   Margin="12,0,0,0" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
 
-                    <TextBox Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Top"
-                             materialDesign:HintAssist.Hint="Supplier invoice no."
-                             Style="{StaticResource PurchaseField}"
-                             Text="{Binding SupplierInvoiceNumber, UpdateSourceTrigger=PropertyChanged}" />
+                    <ListBox x:Name="SupplierResultsList"
+                             ItemsSource="{Binding SupplierResults}"
+                             SelectedIndex="{Binding SupplierSuggestionIndex, Mode=TwoWay}"
+                             MaxHeight="88" Margin="0,2,0,0"
+                             Visibility="{Binding ShowSupplierResults, Converter={StaticResource BoolToVisibility}}"
+                             PreviewKeyDown="SupplierResultsList_PreviewKeyDown"
+                             PreviewMouseLeftButtonUp="SupplierResultsList_PreviewMouseLeftButtonUp">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Padding="4,1" FontSize="12">
+                                    <Run Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <Run Text="{Binding Phone, StringFormat=' ({0})'}" FontSize="11" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
 
-                    <DatePicker Grid.Column="2" VerticalAlignment="Top"
-                                materialDesign:HintAssist.Hint="Invoice date"
-                                Style="{StaticResource PurchaseDate}"
-                                SelectedDate="{Binding InvoiceDate}" />
-                </Grid>
-
-                <DockPanel Grid.Row="2">
-                    <TextBlock DockPanel.Dock="Top" Text="Press Enter on Item to search medicine."
-                               FontSize="12" Opacity="0.6" Margin="0,0,0,8" />
-
-                    <DataGrid x:Name="PurchaseGrid"
+                <DataGrid x:Name="PurchaseGrid" Grid.Row="1"
                           ItemsSource="{Binding Lines}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
+                          CanUserResizeColumns="True"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                           RowHeight="28"
                           ColumnHeaderHeight="28"
@@ -240,7 +244,7 @@
                           PreviewKeyDown="PurchaseGrid_PreviewKeyDown"
                           MouseDoubleClick="PurchaseGrid_MouseDoubleClick"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                          IsReadOnly="False">
+                          IsReadOnly="{Binding IsBillReadOnly}">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Item" Width="2*" MinWidth="180">
                             <DataGridTemplateColumn.CellTemplate>
@@ -264,8 +268,8 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Batch" IsReadOnly="False"
-                                            Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
-                        <DataGridTemplateColumn Header="Expiry" Width="Auto">
+                                            Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="90" />
+                        <DataGridTemplateColumn Header="Expiry" Width="120">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <DatePicker SelectedDate="{Binding ExpiryDate, UpdateSourceTrigger=PropertyChanged}"
@@ -275,23 +279,23 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Qty" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="Qty" Width="55" IsReadOnly="False"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="Free" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="Free" Width="50" IsReadOnly="False"
                                             Binding="{Binding FreeQuantity, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="Cost" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="Cost" Width="70" IsReadOnly="False"
                                             Binding="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="MRP" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="MRP" Width="70" IsReadOnly="False"
                                             Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Sale" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="Sale" Width="70" IsReadOnly="False"
                                             Binding="{Binding SellingPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Disc%" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="Disc%" Width="55" IsReadOnly="False"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="GST%" Width="Auto" IsReadOnly="False"
+                        <DataGridTextColumn Header="GST%" Width="55" IsReadOnly="False"
                                             Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="Auto"
+                        <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="80"
                                             Binding="{Binding LineTotal, StringFormat=N2}" />
-                        <DataGridTemplateColumn Width="Auto">
+                        <DataGridTemplateColumn Width="40">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Style="{StaticResource MaterialDesignIconButton}"
@@ -307,11 +311,20 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                </DockPanel>
             </Grid>
         </materialDesign:Card>
 
-        <materialDesign:Card Grid.Column="1" Margin="4" UniformCornerRadius="12" Padding="16"
+        <GridSplitter Grid.Column="1"
+                      Width="6"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      ResizeBehavior="PreviousAndNext"
+                      ShowsPreview="True"
+                      Background="Transparent"
+                      ToolTip="Drag to resize panels"
+                      DragCompleted="SideSplitter_DragCompleted" />
+
+        <materialDesign:Card Grid.Column="2" Margin="2" UniformCornerRadius="8" Padding="10"
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Bottom">
@@ -321,64 +334,65 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" Margin="0,0,4,0" Command="{Binding NewPurchaseCommand}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}">
+                                Style="{StaticResource MaterialDesignOutlinedButton}" Height="32" Padding="8,4">
                             <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="FileDocumentPlusOutline" VerticalAlignment="Center" />
-                                <TextBlock Text="New (Esc)" Margin="6,0,0,0" />
+                                <materialDesign:PackIcon Kind="FileDocumentPlusOutline" VerticalAlignment="Center" Width="16" Height="16" />
+                                <TextBlock Text="New" Margin="4,0,0,0" FontSize="12" />
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding SaveCommand}"
-                                Style="{StaticResource MaterialDesignRaisedButton}">
+                                Style="{StaticResource MaterialDesignRaisedButton}" Height="32" Padding="8,4"
+                                Foreground="White">
                             <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                <TextBlock Text="Save (F9)" Margin="6,0,0,0" />
+                                <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" Width="16" Height="16" />
+                                <TextBlock Text="Save (F9)" Margin="4,0,0,0" FontSize="12" />
                             </StackPanel>
                         </Button>
                     </Grid>
                     <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32"
-                               TextWrapping="Wrap" Margin="0,8,0,0"
+                               TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11"
                                Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Top">
-                    <TextBlock Text="Purchase Summary" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <TextBlock Text="Summary" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                    <DockPanel Margin="0,3"><TextBlock Text="Items" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding ItemCount}" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,3"><TextBlock Text="Sub Total" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding SubTotal, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,3"><TextBlock Text="Discount" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding DiscountTotal, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,3"><TextBlock Text="Taxable" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding TaxableTotal, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,3"><TextBlock Text="CGST" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding Cgst, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,3"><TextBlock Text="SGST" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding Sgst, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,3"><TextBlock Text="Round Off" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding RoundOff, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="Items" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding ItemCount}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="Sub Total" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding SubTotal, Converter={StaticResource Currency}}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="Discount" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding DiscountTotal, Converter={StaticResource Currency}}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="Taxable" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding TaxableTotal, Converter={StaticResource Currency}}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="CGST" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding Cgst, Converter={StaticResource Currency}}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="SGST" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding Sgst, Converter={StaticResource Currency}}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
+                    <DockPanel Margin="0,2"><TextBlock Text="Round Off" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
+                        <TextBlock Text="{Binding RoundOff, Converter={StaticResource Currency}}" HorizontalAlignment="Right" FontSize="12" /></DockPanel>
 
-                    <Separator Margin="0,8" />
-                    <DockPanel Margin="0,3">
-                        <TextBlock Text="Grand Total" DockPanel.Dock="Left" FontWeight="Bold" FontSize="18" />
+                    <Separator Margin="0,6" />
+                    <DockPanel Margin="0,2">
+                        <TextBlock Text="Grand Total" DockPanel.Dock="Left" FontWeight="Bold" FontSize="16" />
                         <TextBlock Text="{Binding GrandTotal, Converter={StaticResource Currency}}"
-                                   HorizontalAlignment="Right" FontWeight="Bold" FontSize="18"
+                                   HorizontalAlignment="Right" FontWeight="Bold" FontSize="16"
                                    Foreground="#00695C" />
                     </DockPanel>
 
-                    <Separator Margin="0,12" />
-                    <TextBlock Text="Payment" FontWeight="SemiBold" Margin="0,0,0,6" />
-                    <ComboBox materialDesign:HintAssist.Hint="Method"
-                              Style="{StaticResource PurchaseCombo}"
+                    <Separator Margin="0,8" />
+                    <TextBlock Text="Payment" FontWeight="SemiBold" Margin="0,0,0,6" FontSize="12" />
+                    <TextBlock Text="Payment method" Style="{StaticResource PurchaseFieldCaption}" />
+                    <ComboBox Style="{StaticResource PurchaseCombo}"
                               ItemsSource="{Binding PaymentMethods}"
                               SelectedItem="{Binding PaymentMethod}" Margin="0,0,0,8" />
-                    <TextBox materialDesign:HintAssist.Hint="Amount paid to supplier"
-                             Style="{StaticResource PurchaseField}"
+                    <TextBlock Text="Amount paid to supplier" Style="{StaticResource PurchaseFieldCaption}" />
+                    <TextBox Style="{StaticResource PurchaseField}"
                              Text="{Binding PaidAmount, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8" />
-                    <DockPanel Margin="0,3">
-                        <TextBlock Text="Balance Due" DockPanel.Dock="Left" Opacity="0.7" />
+                    <DockPanel Margin="0,2">
+                        <TextBlock Text="Balance Due" DockPanel.Dock="Left" Opacity="0.7" FontSize="12" />
                         <TextBlock Text="{Binding BalanceDue, Converter={StaticResource Currency}}"
-                                   HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="#E53935" />
+                                   HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="#E53935" FontSize="12" />
                     </DockPanel>
                 </StackPanel>
             </DockPanel>

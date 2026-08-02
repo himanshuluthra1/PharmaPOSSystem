@@ -309,6 +309,11 @@ public class PurchaseService : IPurchaseService
         if (request.Lines.Count == 0)
             return Result.Failure<PurchaseReceiptDto>("Add at least one item to the purchase.");
 
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        if (!prefs.AllowEditPurchaseBills)
+            return Result.Failure<PurchaseReceiptDto>(
+                "Editing purchase bills is turned off. An admin can enable it under Settings → Preferences.");
+
         try
         {
             var purchase = await _uow.ExecuteInTransactionAsync(

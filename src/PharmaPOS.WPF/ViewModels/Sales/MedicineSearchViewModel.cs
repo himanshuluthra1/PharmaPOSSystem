@@ -103,7 +103,9 @@ public class MedicineSearchViewModel : ObservableObject
 
                 foreach (var r in rows) Results.Add(r);
                 SelectedIndex = rows.Count > 0 ? 0 : -1;
-                Hint = rows.Count == 0 ? $"No medicines found for \"{term}\"." : null;
+                Hint = rows.Count == 0
+                    ? $"No medicines found for \"{term}\". Click “Not found? Create from website” to add it."
+                    : null;
             }
             finally
             {

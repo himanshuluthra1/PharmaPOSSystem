@@ -67,11 +67,9 @@ public class PartyLedgerTabViewModel : ObservableObject
         get => _selectedParty;
         set
         {
-            if (SetProperty(ref _selectedParty, value))
-            {
-                _onSelectionChanged(value);
-                _ = LoadBillsAsync();
-            }
+            if (!SetProperty(ref _selectedParty, value)) return;
+            _onSelectionChanged(value);
+            _ = LoadBillsAsync();
         }
     }
 
@@ -94,8 +92,19 @@ public class PartyLedgerTabViewModel : ObservableObject
             foreach (var row in rows)
                 Parties.Add(row);
 
-            Bills.Clear();
-            SelectedParty = Parties.FirstOrDefault(p => p.OutstandingBalance > 0) ?? Parties.FirstOrDefault();
+            var next = Parties.FirstOrDefault(p => p.OutstandingBalance > 0) ?? Parties.FirstOrDefault();
+            // Clear first so record equality does not skip bill reload on refresh.
+            if (_selectedParty is not null)
+            {
+                _selectedParty = null;
+                OnPropertyChanged(nameof(SelectedParty));
+            }
+
+            _selectedParty = next;
+            OnPropertyChanged(nameof(SelectedParty));
+            _onSelectionChanged(next);
+            await LoadBillsAsync();
+
             StatusMessage = rows.Count == 0
                 ? "No parties found."
                 : $"{rows.Count} party ledger(s) loaded.";

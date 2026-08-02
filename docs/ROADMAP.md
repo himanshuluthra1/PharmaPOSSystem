@@ -45,7 +45,8 @@ services and repository-based persistence, with unit/integration tests.
   duplicate-medicine detection, expiry prediction, recommendations, chatbot
 - Performance: caching, background jobs, offline mode, query tuning for 200k+
   medicines / millions of invoices (<100 ms search)
-- Windows installer + auto-update
+- Windows installer scaffolding (Inno Setup + masters-only DB pack) — see `docs/INSTALLER.md`
+  (polish + auto-update still pending)
 - Full unit/integration test coverage, documentation, XML docs
 
 ## Future platforms

@@ -1,0 +1,37 @@
+PharmaPOS — Installation notes
+================================
+
+Requirements
+------------
+• Windows 10/11 (64-bit)
+• SQL Server Express LocalDB (free). If the installer warns that LocalDB is missing,
+  install it from Microsoft, then launch PharmaPOS.
+
+What is included in the database
+--------------------------------
+On first launch, PharmaPOS restores a master-data backup that includes:
+
+  • Medicines catalogue (including salts / generic names)
+  • Manufacturers and medicine categories
+  • Suppliers (balances reset to zero)
+  • MedWin medicine mappings (if present)
+  • System setup: roles, admin user, chart of accounts, return reasons
+
+It does NOT include shop-specific data:
+
+  • Customers / patients
+  • Doctors
+  • Employees
+  • Stock batches / inventory quantities
+  • Sales, purchases, returns, or accounting journals
+
+Default login
+-------------
+  Username: admin
+  Password: Admin@123
+  (You will be prompted to change the password.)
+
+Data location
+-------------
+Database files are created under:
+  %LocalAppData%\PharmaPOS\Data\

@@ -24,10 +24,13 @@ public static class PermissionCatalog
         new(AppConstants.Permissions.PurchaseCreate, "Create & Receive Stock", "Purchase"),
         new(AppConstants.Permissions.PurchaseSearch, "Search Purchase Bills", "Purchase"),
         new(AppConstants.Permissions.PurchaseManage, "Full Purchase Access", "Purchase"),
+        new(AppConstants.Permissions.PurchaseReturn, "Process Purchase Returns", "Purchase"),
+        new(AppConstants.Permissions.PurchaseReturnManage, "Full Purchase Return Access", "Purchase"),
 
         // Inventory
         new(AppConstants.Permissions.InventoryView, "View Stock & Ledger", "Inventory"),
         new(AppConstants.Permissions.InventoryAdjust, "Stock Adjustments", "Inventory"),
+        new(AppConstants.Permissions.InventoryTransfer, "Transfer Stock Between Stores", "Inventory"),
         new(AppConstants.Permissions.InventoryManage, "Full Inventory Access", "Inventory"),
 
         // Masters

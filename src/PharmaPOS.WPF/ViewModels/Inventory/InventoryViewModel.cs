@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Inventory;
@@ -16,6 +15,7 @@ public class InventoryViewModel : ObservableObject
 
     public InventoryViewModel(
         IInventoryService inventory,
+        IStockTransferService stockTransfers,
         ICurrentUserService currentUser,
         IMedicinePickerService medicinePicker,
         IDialogService dialog,
@@ -23,10 +23,13 @@ public class InventoryViewModel : ObservableObject
     {
         CanAdjustStock = currentUser.HasAnyPermission(
             AppConstants.Permissions.InventoryAdjust, AppConstants.Permissions.InventoryManage);
+        CanTransferStock = currentUser.HasAnyPermission(
+            AppConstants.Permissions.InventoryTransfer, AppConstants.Permissions.InventoryManage);
 
         StockOnHand = new StockOnHandTabViewModel(inventory, currentUser, OnStockBatchSelected, barcodeCamera);
         StockLedger = new StockLedgerTabViewModel(inventory, currentUser);
         StockAdjustment = new StockAdjustmentTabViewModel(inventory, currentUser, medicinePicker, dialog);
+        StockTransfer = new StockTransferTabViewModel(stockTransfers, currentUser, medicinePicker, dialog);
 
         ViewLedgerCommand = new RelayCommand(_ =>
         {
@@ -39,8 +42,10 @@ public class InventoryViewModel : ObservableObject
     public StockOnHandTabViewModel StockOnHand { get; }
     public StockLedgerTabViewModel StockLedger { get; }
     public StockAdjustmentTabViewModel StockAdjustment { get; }
+    public StockTransferTabViewModel StockTransfer { get; }
 
     public bool CanAdjustStock { get; }
+    public bool CanTransferStock { get; }
 
     public int SelectedTab
     {

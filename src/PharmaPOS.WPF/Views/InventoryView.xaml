@@ -262,6 +262,161 @@
                             </DataGrid>
                         </Grid>
                     </TabItem>
+
+                    <!-- BRANCH TRANSFER -->
+                    <TabItem Header="Transfer" Padding="10,4"
+                             Visibility="{Binding CanTransferStock, Converter={StaticResource BoolToVisibility}}">
+                        <Grid DataContext="{Binding StockTransfer}" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" MinHeight="120" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="140" MinHeight="100" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="140" MinHeight="100" />
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Margin="0,0,6,0" IsReadOnly="True"
+                                         materialDesign:HintAssist.Hint="Transfer #"
+                                         Style="{StaticResource InvOutlinedBox}"
+                                         Text="{Binding TransferNumber, Mode=OneWay}" />
+                                <DatePicker Grid.Column="1" Margin="0,0,6,0"
+                                            materialDesign:HintAssist.Hint="Date"
+                                            SelectedDate="{Binding TransferDate}" />
+                                <ComboBox Grid.Column="2" Margin="0,0,6,0"
+                                          Style="{StaticResource InvOutlinedCombo}"
+                                          materialDesign:HintAssist.Hint="To store"
+                                          ItemsSource="{Binding DestinationBranches}"
+                                          SelectedItem="{Binding SelectedDestination}"
+                                          DisplayMemberPath="Name" />
+                                <TextBox Grid.Column="3"
+                                         materialDesign:HintAssist.Hint="Remarks (optional)"
+                                         Style="{StaticResource InvOutlinedBox}"
+                                         Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" />
+                            </Grid>
+
+                            <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding ImportCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Import .pharmatrf package from another store">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="FileImportOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Import" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding NewCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0">
+                                        <TextBlock Text="New" />
+                                    </Button>
+                                    <Button Command="{Binding AddLineCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Add" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding SaveCommand}"
+                                            Style="{StaticResource MaterialDesignRaisedButton}"
+                                            Padding="12,4" Height="32">
+                                        <TextBlock Text="Send + export file" FontSize="12" />
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Text="Each store keeps its own DB. Send creates a .pharmatrf file — the other store uses Import. Partner stores: Settings → Branches (same Code on both PCs)."
+                                           FontSize="12" Opacity="0.55" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="2" Style="{StaticResource InvDataGrid}"
+                                      ItemsSource="{Binding Lines}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Available" Binding="{Binding AvailableQuantity}" Width="75" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Transfer qty" IsReadOnly="False"
+                                                        Binding="{Binding TransferQuantity, UpdateSourceTrigger=PropertyChanged}" Width="90" />
+                                    <DataGridTemplateColumn Width="40">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                        Width="28" Height="28"
+                                                        Command="{Binding DataContext.RemoveLineCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Remove">
+                                                    <materialDesign:PackIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                                </Button>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <DockPanel Grid.Row="3" Margin="0,10,0,4">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding CancelCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Cancel selected sent package and restore stock">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Undo" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Cancel / rollback" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding ReExportCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Re-export selected sent package">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Export" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Re-export" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding RefreshHistoryCommand}"
+                                            Style="{StaticResource InvToolbarButton}" ToolTip="Refresh history">
+                                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                                    </Button>
+                                </StackPanel>
+                                <TextBlock Text="Recent transfers (this store)" FontWeight="SemiBold" FontSize="13"
+                                           VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="4" Style="{StaticResource InvReadOnlyGrid}"
+                                      ItemsSource="{Binding RecentTransfers}"
+                                      SelectedItem="{Binding SelectedHistoryRow}"
+                                      SelectionMode="Single">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Transfer #" Binding="{Binding TransferNumber}" Width="130" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding TransferDate, StringFormat=dd-MMM-yyyy}" Width="100" />
+                                    <DataGridTextColumn Header="From" Binding="{Binding FromBranchName}" Width="*" MinWidth="100" />
+                                    <DataGridTextColumn Header="To" Binding="{Binding ToBranchName}" Width="*" MinWidth="100" />
+                                    <DataGridTextColumn Header="Lines" Binding="{Binding LineCount}" Width="55" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding TotalQuantity}" Width="60" />
+                                    <DataGridTextColumn Header="Direction" Binding="{Binding DirectionLabel}" Width="80" />
+                                    <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="80" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="5" Margin="0,10,0,4"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       Text="{Binding SelectedTransferSummary, TargetNullValue=Select a transfer above to see medicines,
+                                                      FallbackValue=Select a transfer above to see medicines}"
+                                       TextWrapping="Wrap" Opacity="0.85" />
+
+                            <DataGrid Grid.Row="6" Style="{StaticResource InvReadOnlyGrid}"
+                                      ItemsSource="{Binding SelectedTransferLines}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Barcode" Binding="{Binding MedicineBarcode}" Width="110" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="60" />
+                                    <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
+                                    <DataGridTextColumn Header="P.Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
                 </TabControl>
             </DockPanel>
         </materialDesign:Card>

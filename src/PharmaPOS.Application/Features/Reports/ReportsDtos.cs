@@ -144,9 +144,12 @@ public record ExpiryReportRowDto(
     DateTime? ExpiryDate,
     decimal Quantity,
     decimal StockValue,
-    string ExpiryStatus)
+    string ExpiryStatus,
+    int? SupplierId = null,
+    string? SupplierName = null)
 {
     public string ExpiryLabel => ExpiryDate?.ToString("dd/MM/yyyy") ?? "—";
+    public string SupplierLabel => string.IsNullOrWhiteSpace(SupplierName) ? "—" : SupplierName;
 }
 
 public record LowStockReportRowDto(

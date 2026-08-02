@@ -96,7 +96,8 @@
                               Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox Grid.Column="0" Margin="0,0,8,0"
@@ -107,10 +108,18 @@
                                       ItemsSource="{Binding FilterOptions}"
                                       SelectedItem="{Binding SelectedFilterOption}"
                                       DisplayMemberPath="Label"
-                                      materialDesign:HintAssist.Hint="Status"
+                                      materialDesign:HintAssist.Hint="Expiry window"
                                       Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                       Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}" />
-                            <Button Grid.Column="2"
+                            <ComboBox Grid.Column="2" Margin="0,0,8,0" MinWidth="200"
+                                      ItemsSource="{Binding ExpirySupplierOptions}"
+                                      SelectedValuePath="Key"
+                                      SelectedValue="{Binding SelectedExpirySupplierKey}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Supplier"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                      Visibility="{Binding ShowExpirySupplierFilter, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Grid.Column="3"
                                     Command="{Binding ClearFilterCommand}"
                                     Style="{StaticResource MaterialDesignOutlinedButton}"
                                     Padding="10,4"
@@ -305,9 +314,10 @@
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
                                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
                                 <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
+                                <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierLabel}" Width="*" MinWidth="120" />
                                 <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
                                 <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding ExpiryStatus}" Width="100" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding ExpiryStatus}" Width="120" />
                             </DataGrid.Columns>
                         </DataGrid>
 

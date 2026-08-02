@@ -91,7 +91,7 @@ public class AccountingService : IAccountingService
             .ToListAsync(ct);
     }
 
-    public Task<List<PartyBillRowDto>> ListPartyBillsAsync(
+    public async Task<List<PartyBillRowDto>> ListPartyBillsAsync(
         PartyLedgerKind kind,
         int partyId,
         int? branchId,
@@ -100,10 +100,12 @@ public class AccountingService : IAccountingService
         if (kind == PartyLedgerKind.Supplier)
         {
             var q = _uow.Repository<Purchase>().Query().AsNoTracking()
-                .Where(p => p.SupplierId == partyId && p.Status == PurchaseStatus.Received);
+                .Where(p => p.SupplierId == partyId
+                            && p.Status != PurchaseStatus.Cancelled
+                            && p.Status != PurchaseStatus.Draft);
             if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
-            return q
+            return await q
                 .Where(p => p.GrandTotal > p.PaidAmount)
                 .OrderByDescending(p => p.InvoiceDate)
                 .Select(p => new PartyBillRowDto(
@@ -112,25 +114,57 @@ public class AccountingService : IAccountingService
                     p.InvoiceDate,
                     p.GrandTotal,
                     p.PaidAmount,
-                    p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m))
+                    p.GrandTotal - p.PaidAmount))
                 .ToListAsync(ct);
         }
 
+        // Receivables: include completed and partially-returned invoices that still have due.
+        // Fully returned / cancelled / draft bills are excluded.
+        var openStatuses = new[] { SaleStatus.Completed, SaleStatus.PartiallyReturned };
+
+        var customer = await _uow.Repository<Customer>().Query().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == partyId, ct);
+
         var sq = _uow.Repository<Sale>().Query().AsNoTracking()
-            .Where(s => s.CustomerId == partyId && s.Status == SaleStatus.Completed);
+            .Where(s => openStatuses.Contains(s.Status)
+                        && (s.CustomerId == partyId
+                            || (s.CustomerId == null
+                                && customer != null
+                                && s.BillingCustomerName == customer.Name
+                                && (customer.Phone == null
+                                    || customer.Phone == ""
+                                    || s.BillingCustomerPhone == customer.Phone))));
         if (branchId.HasValue) sq = sq.Where(s => s.BranchId == branchId);
 
-        return sq
-            .Where(s => s.GrandTotal > s.PaidAmount)
+        var sales = await sq
             .OrderByDescending(s => s.InvoiceDate)
-            .Select(s => new PartyBillRowDto(
-                s.Id,
-                s.InvoiceNumber,
-                s.InvoiceDate,
-                s.GrandTotal,
-                s.PaidAmount,
-                s.GrandTotal > s.PaidAmount ? s.GrandTotal - s.PaidAmount : 0m))
+            .ThenByDescending(s => s.Id)
             .ToListAsync(ct);
+
+        if (sales.Count == 0) return [];
+
+        var saleIds = sales.Select(s => s.Id).ToList();
+        var returnedBySale = await _uow.Repository<SaleReturn>().Query().AsNoTracking()
+            .Where(r => saleIds.Contains(r.SaleId))
+            .GroupBy(r => r.SaleId)
+            .Select(g => new { SaleId = g.Key, Returned = g.Sum(x => x.GrandTotal) })
+            .ToDictionaryAsync(x => x.SaleId, x => x.Returned, ct);
+
+        return sales
+            .Select(s =>
+            {
+                returnedBySale.TryGetValue(s.Id, out var returned);
+                var due = s.GrandTotal - s.PaidAmount - returned;
+                return new PartyBillRowDto(
+                    s.Id,
+                    s.InvoiceNumber,
+                    s.InvoiceDate,
+                    s.GrandTotal,
+                    s.PaidAmount,
+                    due > 0 ? due : 0m);
+            })
+            .Where(b => b.BalanceDue > 0)
+            .ToList();
     }
 
     public async Task<List<AccountLookupDto>> ListAccountsAsync(
@@ -490,10 +524,10 @@ public class AccountingService : IAccountingService
         int customerId, decimal amount, int? branchId, CancellationToken ct)
     {
         var remaining = amount;
+        var openStatuses = new[] { SaleStatus.Completed, SaleStatus.PartiallyReturned };
         var q = _uow.Repository<Sale>().Query()
             .Where(s => s.CustomerId == customerId
-                        && s.Status == SaleStatus.Completed
-                        && s.GrandTotal > s.PaidAmount);
+                        && openStatuses.Contains(s.Status));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
         var bills = await q
@@ -501,16 +535,26 @@ public class AccountingService : IAccountingService
             .ThenBy(s => s.Id)
             .ToListAsync(ct);
 
+        if (bills.Count == 0) return;
+
+        var saleIds = bills.Select(b => b.Id).ToList();
+        var returnedBySale = await _uow.Repository<SaleReturn>().Query().AsNoTracking()
+            .Where(r => saleIds.Contains(r.SaleId))
+            .GroupBy(r => r.SaleId)
+            .Select(g => new { SaleId = g.Key, Returned = g.Sum(x => x.GrandTotal) })
+            .ToDictionaryAsync(x => x.SaleId, x => x.Returned, ct);
+
         foreach (var bill in bills)
         {
             if (remaining <= 0) break;
 
-            var due = bill.GrandTotal - bill.PaidAmount;
+            returnedBySale.TryGetValue(bill.Id, out var returned);
+            var due = bill.GrandTotal - bill.PaidAmount - returned;
             if (due <= 0) continue;
 
             var applied = Math.Min(remaining, due);
             bill.PaidAmount += applied;
-            bill.PaymentStatus = bill.PaidAmount >= bill.GrandTotal
+            bill.PaymentStatus = bill.PaidAmount + returned >= bill.GrandTotal
                 ? PaymentStatus.Paid
                 : PaymentStatus.PartiallyPaid;
             _uow.Repository<Sale>().Update(bill);

@@ -47,10 +47,13 @@ public static class AppConstants
         public const string PurchaseCreate = "purchase.create";
         public const string PurchaseSearch = "purchase.search";
         public const string PurchaseManage = "purchase.manage";
+        public const string PurchaseReturn = "purchase.return";
+        public const string PurchaseReturnManage = "purchase.return.manage";
 
         // Inventory
         public const string InventoryView = "inventory.view";
         public const string InventoryAdjust = "inventory.adjust";
+        public const string InventoryTransfer = "inventory.transfer";
         public const string InventoryManage = "inventory.manage";
 
         // Masters

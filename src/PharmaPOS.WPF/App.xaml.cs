@@ -52,6 +52,12 @@ public partial class App : System.Windows.Application
     {
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IUiLayoutService, UiLayoutService>();
+        services.AddSingleton<IAiBillSettingsService, AiBillSettingsService>();
+        services.AddSingleton<IBillShareSettingsService, BillShareSettingsService>();
+        services.AddSingleton<IBillPdfUploadService, BillPdfUploadService>();
+        services.AddSingleton<IUrlShortenerService, TinyUrlShortenerService>();
+        services.AddSingleton<IBillShareService, BillShareService>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IInvoicePrintService, InvoicePrintService>();
         services.AddSingleton<IMedicinePickerService, MedicinePickerService>();
@@ -62,6 +68,16 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IBarcodeCodec, BarcodeCodec>();
         services.AddSingleton<IBarcodeCameraService, BarcodeCameraService>();
         services.AddSingleton<IBarcodeLabelService, BarcodeLabelService>();
+        services.AddHttpClient<IGeminiPurchaseBillExtractor, GeminiPurchaseBillExtractor>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(90);
+        });
+        services.AddHttpClient<IPharmacyMedicineImportService, PharmacyMedicineImportService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
+        services.AddSingleton<IMedicineLedgerDialogService, MedicineLedgerDialogService>();
+        services.AddTransient<IPurchaseBillScanService, PurchaseBillScanService>();
 
         // View models (transient so each navigation gets fresh data/context).
         services.AddTransient<LoginViewModel>();
@@ -70,6 +86,7 @@ public partial class App : System.Windows.Application
         services.AddTransient<SalesViewModel>();
         services.AddTransient<SaleReturnViewModel>();
         services.AddTransient<PurchaseViewModel>();
+        services.AddTransient<PurchaseReturnViewModel>();
         services.AddTransient<InventoryViewModel>();
         services.AddTransient<MastersViewModel>();
         services.AddTransient<AccountingViewModel>();
@@ -96,6 +113,7 @@ public partial class App : System.Windows.Application
 
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        FocusHighlight.Register();
 
         DispatcherUnhandledException += (_, args) =>
         {
@@ -140,6 +158,11 @@ public partial class App : System.Windows.Application
     {
         try
         {
+            var config = Services.GetRequiredService<IConfiguration>();
+            var cs = config.GetConnectionString("PharmaPosDb");
+            await LocalDbBootstrapper.EnsureStartedAsync(cs);
+            await MasterDatabaseBootstrapper.EnsureRestoredAsync(config);
+
             var seeder = Services.GetRequiredService<DbSeeder>();
             await seeder.SeedAsync();
         }
@@ -147,7 +170,12 @@ public partial class App : System.Windows.Application
         {
             MessageBox.Show(
                 "The application could not connect to or initialize the database.\n\n" +
-                $"{ex.Message}\n\nUpdate the connection string in appsettings.json and restart.",
+                $"{ex.Message}\n\n" +
+                "Fix:\n" +
+                "1. Install SQL Server Express LocalDB (free) if missing.\n" +
+                "2. Or open PowerShell and run:  sqllocaldb start MSSQLLocalDB\n" +
+                "3. Then restart PharmaPOS.\n\n" +
+                "Download: https://go.microsoft.com/fwlink/?LinkID=866658",
                 "Database initialization failed", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

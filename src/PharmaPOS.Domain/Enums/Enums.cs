@@ -82,7 +82,8 @@ public enum PurchaseStatus
     PartiallyReceived = 2,
     Received = 3,
     Returned = 4,
-    Cancelled = 5
+    Cancelled = 5,
+    PartiallyReturned = 6
 }
 
 public enum StockMovementType
@@ -98,7 +99,20 @@ public enum StockMovementType
     Damage = 8,
     Expiry = 9,
     OpeningStock = 10,
-  NonSaleableIn = 11
+    NonSaleableIn = 11
+}
+
+/// <summary>Stock transfer direction for separate-store (package) workflows.</summary>
+public enum StockTransferKind
+{
+    Outbound = 1,
+    Inbound = 2
+}
+
+public enum StockTransferStatus
+{
+    Active = 0,
+    Cancelled = 1
 }
 
 /// <summary>Batch consumption strategy for stock allocation.</summary>

@@ -25,7 +25,8 @@ public partial class SalesView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        Loaded += (_, _) => OnRequestItemFocus(ViewModel?.Cart.FirstOrDefault());
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
         _barcodeWedge.BarcodeScanned += code =>
         {
             Dispatcher.InvokeAsync(async () =>
@@ -37,6 +38,35 @@ public partial class SalesView : UserControl
     }
 
     private SalesViewModel? ViewModel => DataContext as SalesViewModel;
+    private IUiLayoutService? _layout;
+    private DataGridLayoutTracker? _gridLayoutTracker;
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _layout ??= App.Services.GetService(typeof(IUiLayoutService)) as IUiLayoutService;
+        if (_layout is null) return;
+
+        SideColumn.Width = new GridLength(_layout.GetSidePanelWidth(UiLayoutService.SalesKey));
+        _gridLayoutTracker?.Dispose();
+        _gridLayoutTracker = new DataGridLayoutTracker(CartGrid, UiLayoutService.SalesKey, _layout);
+        OnRequestItemFocus(ViewModel?.Cart.FirstOrDefault());
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        PersistSidePanelWidth();
+        _gridLayoutTracker?.Dispose();
+        _gridLayoutTracker = null;
+    }
+
+    private void SideSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+        => PersistSidePanelWidth();
+
+    private void PersistSidePanelWidth()
+    {
+        if (_layout is null || SideColumn.ActualWidth < 1) return;
+        _layout.SetSidePanelWidth(UiLayoutService.SalesKey, SideColumn.ActualWidth);
+    }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
@@ -592,10 +622,11 @@ public partial class SalesView : UserControl
                     e.Handled = true;
                     return;
                 case Key.F9:
-                    if (vm.IsEditing && vm.PrintCommand.CanExecute(null))
-                        vm.PrintCommand.Execute(null);
-                    else if (vm.SaveCommand.CanExecute(null))
+                    // Prefer update/save when editing is allowed; otherwise print the loaded bill.
+                    if (vm.SaveCommand.CanExecute(null))
                         vm.SaveCommand.Execute(null);
+                    else if (vm.IsEditing && vm.PrintCommand.CanExecute(null))
+                        vm.PrintCommand.Execute(null);
                     e.Handled = true;
                     return;
                 case Key.Escape:

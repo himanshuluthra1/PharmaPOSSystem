@@ -1,0 +1,44 @@
+<Window x:Class="PharmaPOS.WPF.Views.BillSharePromptWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Send bill to customer"
+        Height="280" Width="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock x:Name="InvoiceText" FontSize="18" FontWeight="Bold" />
+            <TextBlock x:Name="PhoneText" Margin="0,6,0,0" Opacity="0.85" />
+            <TextBlock x:Name="HintText" Margin="0,10,0,0" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+        </StackPanel>
+
+        <TextBlock Grid.Row="1" Margin="0,16,0,8" FontWeight="SemiBold"
+                   Text="Send via" />
+
+        <UniformGrid Grid.Row="2" Columns="2" Rows="2" Margin="0,0,0,12">
+            <Button x:Name="WhatsAppButton" Margin="0,0,6,6" Padding="12,10"
+                    Style="{StaticResource MaterialDesignRaisedButton}"
+                    Click="WhatsApp_Click" Content="WhatsApp" />
+            <Button x:Name="SmsButton" Margin="6,0,0,6" Padding="12,10"
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Click="Sms_Click" Content="SMS" />
+            <Button x:Name="BothButton" Margin="0,6,6,0" Padding="12,10"
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Click="Both_Click" Content="Both" />
+            <Button Margin="6,6,0,0" Padding="12,10"
+                    Style="{StaticResource MaterialDesignFlatButton}"
+                    Click="Skip_Click" Content="Skip" />
+        </UniformGrid>
+    </Grid>
+</Window>

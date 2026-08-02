@@ -779,6 +779,8 @@ public class SaleReturnService : ISaleReturnService
             CompanyAddress = company?.Address,
             CompanyPhone = company?.Phone,
             CompanyGst = company?.GstNumber,
+            CompanyDrugLicense = company?.DrugLicenseNumber,
+            InvoiceFooter = company?.InvoiceFooter,
             CustomerName = ret.Sale?.BillingCustomerName ?? "Walk-in",
             CustomerPhone = ret.Sale?.BillingCustomerPhone,
             RefundMode = ret.RefundMode,

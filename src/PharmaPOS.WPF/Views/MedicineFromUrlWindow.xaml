@@ -1,0 +1,69 @@
+<Window x:Class="PharmaPOS.WPF.Views.MedicineFromUrlWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Create medicine from website"
+        Height="520" Width="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}">
+    <DockPanel Margin="20">
+        <TextBlock DockPanel.Dock="Top" Text="Create medicine from website" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6" />
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,12"
+                   Text="If the medicine is missing from your master, pick the website, paste the product page URL, download details, then save." />
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button x:Name="CancelButton" Content="Cancel" Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Margin="0,0,8,0" IsCancel="True" Click="CancelButton_Click" />
+            <Button x:Name="SaveButton" Content="Save to master" Style="{StaticResource MaterialDesignRaisedButton}"
+                    IsEnabled="False" Click="SaveButton_Click" />
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Website" FontSize="11" Opacity="0.7" />
+                <ComboBox x:Name="SourceCombo" Margin="0,2,0,10"
+                          Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+
+                <TextBlock Text="Medicine page URL" FontSize="11" Opacity="0.7" />
+                <TextBox x:Name="UrlBox" Margin="0,2,0,8"
+                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                         materialDesign:HintAssist.Hint="Paste product URL here"
+                         AcceptsReturn="False" />
+
+                <Button x:Name="DownloadButton" Content="Download" HorizontalAlignment="Left"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Margin="0,0,0,12" Click="DownloadButton_Click" />
+
+                <TextBlock Text="Review / edit before save" FontWeight="SemiBold" Margin="0,4,0,8" />
+
+                <TextBlock Text="Name *" FontSize="11" Opacity="0.7" />
+                <TextBox x:Name="NameBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+
+                <TextBlock Text="Generic / salt" FontSize="11" Opacity="0.7" />
+                <TextBox x:Name="GenericBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+
+                <TextBlock Text="Brand" FontSize="11" Opacity="0.7" />
+                <TextBox x:Name="BrandBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="MRP" FontSize="11" Opacity="0.7" />
+                        <TextBox x:Name="MrpBox" Margin="0,2,0,0" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="GST %" FontSize="11" Opacity="0.7" />
+                        <TextBox x:Name="GstBox" Text="12" Margin="0,2,0,0" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="#E65100" Margin="0,4,0,0" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

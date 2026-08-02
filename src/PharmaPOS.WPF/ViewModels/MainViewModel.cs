@@ -62,9 +62,21 @@ public class MainViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedItem, value) && value is not null)
+            {
                 _navigation.NavigateTo(value.TargetViewModel);
+                OnPropertyChanged(nameof(ActiveShortcuts));
+                OnPropertyChanged(nameof(HasActiveShortcuts));
+            }
         }
     }
+
+    /// <summary>Shortcuts for the currently selected module (shown in the green app bar).</summary>
+    public IReadOnlyList<ShortcutHint> ActiveShortcuts =>
+        SelectedItem?.TargetViewModel == typeof(PurchaseReturnViewModel)
+            ? PurchaseReturnShortcuts
+            : GetShortcutsForModule(SelectedItem?.Module);
+
+    public bool HasActiveShortcuts => ActiveShortcuts.Count > 0;
 
     public bool IsDarkMode
     {
@@ -94,6 +106,8 @@ public class MainViewModel : ObservableObject
         if (sales is null) return;
         _selectedItem = sales;
         OnPropertyChanged(nameof(SelectedItem));
+        OnPropertyChanged(nameof(ActiveShortcuts));
+        OnPropertyChanged(nameof(HasActiveShortcuts));
         _navigation.NavigateTo(sales.TargetViewModel);
     }
 
@@ -104,8 +118,74 @@ public class MainViewModel : ObservableObject
         if (purchase is null) return;
         _selectedItem = purchase;
         OnPropertyChanged(nameof(SelectedItem));
+        OnPropertyChanged(nameof(ActiveShortcuts));
+        OnPropertyChanged(nameof(HasActiveShortcuts));
         _navigation.NavigateTo(purchase.TargetViewModel);
     }
+
+    private static IReadOnlyList<ShortcutHint> GetShortcutsForModule(string? module) => module switch
+    {
+        "sales" =>
+        [
+            new("F2", "Sales"),
+            new("Esc", "New bill"),
+            new("F3", "Customer / Save"),
+            new("F4", "Medicine details"),
+            new("Ctrl+L", "Medicine ledger"),
+            new("F5", "Substitute"),
+            new("F8", "Sale return"),
+            new("F9", "Save / Print"),
+            new("Enter", "Search item")
+        ],
+        "purchase" =>
+        [
+            new("F2", "Sales"),
+            new("Esc", "New purchase"),
+            new("F9", "Save"),
+            new("Ctrl+L", "Medicine ledger"),
+            new("Enter", "Search item / barcode"),
+            new("Scan bill", "OCR supplier invoice")
+        ],
+        "inventory" =>
+        [
+            new("F2", "Sales"),
+            new("Ctrl+L", "Medicine ledger")
+        ],
+        "masters" =>
+        [
+            new("F2", "Sales"),
+            new("Ctrl+L", "Medicine ledger")
+        ],
+        "accounting" =>
+        [
+            new("F2", "Sales")
+        ],
+        "reports" =>
+        [
+            new("F2", "Sales"),
+            new("Enter", "Open bill")
+        ],
+        "settings" =>
+        [
+            new("F2", "Sales")
+        ],
+        "dashboard" =>
+        [
+            new("F2", "Sales")
+        ],
+        _ =>
+        [
+            new("F2", "Sales")
+        ]
+    };
+
+    private static readonly IReadOnlyList<ShortcutHint> PurchaseReturnShortcuts =
+    [
+        new("F2", "Sales"),
+        new("F3", "Search bill"),
+        new("F9", "Process return"),
+        new("Enter", "Search")
+    ];
 
     private void BuildMenu()
     {
@@ -114,6 +194,7 @@ public class MainViewModel : ObservableObject
             new NavigationItem("Dashboard", "ViewDashboard", typeof(DashboardViewModel), "dashboard"),
             new NavigationItem("Sales (F2)", "PointOfSale", typeof(SalesViewModel), "sales"),
             new NavigationItem("Purchase", "TruckDelivery", typeof(PurchaseViewModel), "purchase"),
+            new NavigationItem("Purchase Return", "AssignmentReturn", typeof(PurchaseReturnViewModel), "purchase"),
             new NavigationItem("Inventory", "PackageVariantClosed", typeof(InventoryViewModel), "inventory"),
             new NavigationItem("Masters", "DatabaseCog", typeof(MastersViewModel), "masters"),
             new NavigationItem("Accounting", "Calculator", typeof(AccountingViewModel), "accounting"),

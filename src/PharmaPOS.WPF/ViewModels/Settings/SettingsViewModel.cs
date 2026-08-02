@@ -19,6 +19,9 @@ public class SettingsViewModel : ObservableObject
         IAuthService auth,
         ICurrentUserService currentUser,
         IThemeService theme,
+        IUiLayoutService layout,
+        IAiBillSettingsService aiSettings,
+        IBillShareSettingsService billShareSettings,
         IDialogService dialog)
     {
         var user = currentUser;
@@ -38,7 +41,7 @@ public class SettingsViewModel : ObservableObject
 
         Company = new CompanyTabViewModel(settings, dialog);
         Branches = new BranchesTabViewModel(settings, dialog);
-        Preferences = new PreferencesTabViewModel(settings, dialog);
+        Preferences = new PreferencesTabViewModel(settings, layout, aiSettings, billShareSettings, dialog);
         MedicineMapping = new MedicineMappingTabViewModel(scopeFactory, dialog);
         RolePermissions = new RolePermissionsTabViewModel(settings, currentUser, dialog);
         Users = new UsersTabViewModel(settings, currentUser, dialog);

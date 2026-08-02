@@ -271,17 +271,20 @@
                         <Button Command="{Binding ProcessReturnCommand}"
                                 Style="{StaticResource MaterialDesignRaisedButton}"
                                 HorizontalAlignment="Stretch"
-                                Padding="0,12"
-                                Margin="0,0,0,8">
-                            <TextBlock Text="Create Return (F9)" FontWeight="SemiBold" />
-                        </Button>
+                                MinHeight="44"
+                                Padding="16,12"
+                                Margin="0,4,0,8"
+                                Foreground="White"
+                                FontWeight="SemiBold"
+                                FontSize="14"
+                                Content="Create Return (F9)" />
 
                         <Button Command="{Binding PrintLastCommand}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
                                 HorizontalAlignment="Stretch"
-                                Padding="0,10">
-                            <TextBlock Text="Reprint Last Return" />
-                        </Button>
+                                MinHeight="40"
+                                Padding="16,10"
+                                Content="Reprint Last Return" />
 
                         <TextBlock Text="{Binding StatusMessage}" Margin="0,12,0,0"
                                    FontSize="12" Opacity="0.75" TextWrapping="Wrap" />

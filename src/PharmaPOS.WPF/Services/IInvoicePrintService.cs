@@ -10,6 +10,10 @@ public interface IInvoicePrintService
     FlowDocument BuildDocument(SaleReceiptDto receipt);
     void ShowPreview(SaleReceiptDto receipt);
     void Print(SaleReceiptDto receipt);
+
+    /// <summary>Renders the printable A4 invoice to a PDF file and returns its path.</summary>
+    string ExportPrintablePdf(SaleReceiptDto receipt);
+
     FlowDocument BuildReturnDocument(SaleReturnReceiptDto receipt);
     void ShowReturnPreview(SaleReturnReceiptDto receipt);
     void PrintReturn(SaleReturnReceiptDto receipt);

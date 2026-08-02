@@ -140,6 +140,8 @@ public class SaleReturnReceiptDto
     public string? CompanyAddress { get; set; }
     public string? CompanyPhone { get; set; }
     public string? CompanyGst { get; set; }
+    public string? CompanyDrugLicense { get; set; }
+    public string? InvoiceFooter { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string? CustomerPhone { get; set; }
     public RefundMode RefundMode { get; set; }

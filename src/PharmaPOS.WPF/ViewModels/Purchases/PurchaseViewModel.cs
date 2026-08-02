@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Purchases;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
@@ -17,11 +18,13 @@ namespace PharmaPOS.WPF.ViewModels.Purchases;
 public class PurchaseViewModel : ObservableObject
 {
     private readonly IPurchaseService _purchaseService;
+    private readonly ISettingsService _settings;
     private readonly IMedicinePickerService _medicinePicker;
     private readonly IPurchaseSearchService _purchaseSearch;
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
     private readonly IBarcodeCameraService _barcodeCamera;
+    private readonly IPurchaseBillScanService _billScan;
 
     private string _supplierSearchText = string.Empty;
     private SupplierLookupDto? _selectedSupplier;
@@ -35,6 +38,7 @@ public class PurchaseViewModel : ObservableObject
     private decimal _headerGrandTotal;
     private bool _isBusy;
     private string? _statusMessage;
+    private bool _allowEditPurchaseBills;
 
     private PurchaseListItemDto? _selectedPurchase;
     private bool _suppressPurchaseSelection;
@@ -45,18 +49,22 @@ public class PurchaseViewModel : ObservableObject
 
     public PurchaseViewModel(
         IPurchaseService purchaseService,
+        ISettingsService settings,
         IMedicinePickerService medicinePicker,
         IPurchaseSearchService purchaseSearch,
         ICurrentUserService currentUser,
         IDialogService dialog,
-        IBarcodeCameraService barcodeCamera)
+        IBarcodeCameraService barcodeCamera,
+        IPurchaseBillScanService billScan)
     {
         _purchaseService = purchaseService;
+        _settings = settings;
         _medicinePicker = medicinePicker;
         _purchaseSearch = purchaseSearch;
         _currentUser = currentUser;
         _dialog = dialog;
         _barcodeCamera = barcodeCamera;
+        _billScan = billScan;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseCreate, AppConstants.Permissions.PurchaseManage);
@@ -66,15 +74,35 @@ public class PurchaseViewModel : ObservableObject
 
         Lines.CollectionChanged += (_, _) => RecalculateTotals();
 
-        RemoveLineCommand = new RelayCommand(p => RemoveLine(p as PurchaseLineViewModel), _ => CanCreate);
+        RemoveLineCommand = new RelayCommand(p => RemoveLine(p as PurchaseLineViewModel), _ => CanModifyBill);
         SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && CanSave());
         NewPurchaseCommand = new RelayCommand(_ => NewPurchase(), _ => CanCreate);
-        ClearSupplierCommand = new RelayCommand(_ => ClearSupplier());
+        ClearSupplierCommand = new RelayCommand(_ => ClearSupplier(), _ => CanModifyBill);
         SearchPurchasesCommand = new AsyncRelayCommand(_ => OpenPurchaseSearchAsync(), _ => CanSearch && !IsBusy);
-        ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanCreate && !IsBusy);
+        ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanModifyBill && !IsBusy);
+        ScanPurchaseBillCommand = new AsyncRelayCommand(_ => ScanPurchaseBillAsync(), _ => CanModifyBill && !IsBusy);
 
         EnsureTrailingEmptyRow();
-        _ = InitializePurchasesAsync();
+        _ = InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
+    {
+        await RefreshEditPolicyAsync();
+        await InitializePurchasesAsync();
+    }
+
+    private async Task RefreshEditPolicyAsync()
+    {
+        try
+        {
+            var prefs = await _settings.GetPreferencesAsync();
+            AllowEditPurchaseBills = prefs.AllowEditPurchaseBills;
+        }
+        catch
+        {
+            AllowEditPurchaseBills = false;
+        }
     }
 
     public bool SuppressPurchaseLoad
@@ -97,9 +125,28 @@ public class PurchaseViewModel : ObservableObject
     public ICommand ClearSupplierCommand { get; }
     public ICommand SearchPurchasesCommand { get; }
     public ICommand ScanBarcodeCameraCommand { get; }
+    public ICommand ScanPurchaseBillCommand { get; }
 
     public bool CanCreate { get; }
     public bool CanSearch { get; }
+
+    public bool AllowEditPurchaseBills
+    {
+        get => _allowEditPurchaseBills;
+        private set
+        {
+            if (SetProperty(ref _allowEditPurchaseBills, value))
+            {
+                OnPropertyChanged(nameof(CanModifyBill));
+                OnPropertyChanged(nameof(IsBillReadOnly));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+    }
+
+    public bool CanModifyBill => CanCreate && (!IsEditing || AllowEditPurchaseBills) && !IsBusy;
+
+    public bool IsBillReadOnly => IsEditing && !AllowEditPurchaseBills;
 
     public bool IsEditing => _editingPurchaseId.HasValue;
 
@@ -306,6 +353,7 @@ public class PurchaseViewModel : ObservableObject
         IsBusy = true;
         try
         {
+            await RefreshEditPolicyAsync();
             await _purchaseGate.WaitAsync(token);
             try
             {
@@ -325,8 +373,10 @@ public class PurchaseViewModel : ObservableObject
                 _selectedPurchase = purchase;
                 OnPropertyChanged(nameof(SelectedPurchase));
                 LoadPurchase(result.Value);
-                StatusMessage = $"Editing purchase {result.Value.InvoiceNumber}.";
-                if (focusGridAfterLoad)
+                StatusMessage = AllowEditPurchaseBills
+                    ? $"Editing purchase {result.Value.InvoiceNumber}. Save to update."
+                    : $"Viewing purchase {result.Value.InvoiceNumber} (edit is off in Settings → Preferences).";
+                if (focusGridAfterLoad && !IsBillReadOnly)
                     RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault(l => l.IsEmpty));
             }
             finally
@@ -356,6 +406,9 @@ public class PurchaseViewModel : ObservableObject
 
         _editingPurchaseId = purchase.PurchaseId;
         OnPropertyChanged(nameof(IsEditing));
+        OnPropertyChanged(nameof(CanModifyBill));
+        OnPropertyChanged(nameof(IsBillReadOnly));
+        CommandManager.InvalidateRequerySuggested();
 
         _headerGrandTotal = purchase.GrandTotal;
         SelectedSupplier = new SupplierLookupDto(
@@ -388,6 +441,8 @@ public class PurchaseViewModel : ObservableObject
 
     public async Task BeginItemSelectionAsync(PurchaseLineViewModel line)
     {
+        if (!CanModifyBill) return;
+
         var lookup = await _medicinePicker.PickMedicineLookupAsync();
         if (lookup is null) return;
 
@@ -406,7 +461,7 @@ public class PurchaseViewModel : ObservableObject
 
     public async Task TryAddByBarcodeAsync(string barcode)
     {
-        if (!CanCreate || IsBusy) return;
+        if (!CanModifyBill || IsBusy) return;
         barcode = barcode.Trim();
         if (barcode.Length < 3) return;
 
@@ -449,6 +504,88 @@ public class PurchaseViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(value))
             return TryAddByBarcodeAsync(value);
         return Task.CompletedTask;
+    }
+
+    private async Task ScanPurchaseBillAsync()
+    {
+        if (!CanModifyBill) return;
+
+        IsBusy = true;
+        try
+        {
+            var draft = await _billScan.ScanAndReviewAsync(_currentUser.CurrentUser?.BranchId);
+            if (draft is null) return;
+            await ApplyScannedDraftAsync(draft);
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task ApplyScannedDraftAsync(ScannedPurchaseDraftDto draft)
+    {
+        NewPurchase();
+
+        SupplierLookupDto? supplier = null;
+        if (draft.MatchedSupplierId is int sid)
+        {
+            var found = await _purchaseService.SearchSuppliersAsync(draft.SupplierName ?? string.Empty);
+            supplier = found.FirstOrDefault(s => s.Id == sid) ?? found.FirstOrDefault();
+        }
+        if (supplier is null && !string.IsNullOrWhiteSpace(draft.SupplierName))
+        {
+            var found = await _purchaseService.SearchSuppliersAsync(draft.SupplierName);
+            supplier = found.FirstOrDefault();
+        }
+
+        if (supplier is not null)
+            SelectedSupplier = supplier;
+        else if (!string.IsNullOrWhiteSpace(draft.SupplierName))
+        {
+            _suppressSupplierSearch = true;
+            SupplierSearchText = draft.SupplierName;
+            _suppressSupplierSearch = false;
+            StatusMessage = "Supplier was not matched — select the supplier before saving.";
+        }
+
+        SupplierInvoiceNumber = draft.SupplierInvoiceNumber;
+        InvoiceDate = draft.InvoiceDate ?? DateTime.Today;
+
+        foreach (var line in Lines.ToList())
+        {
+            line.Changed -= RecalculateTotals;
+            Lines.Remove(line);
+        }
+
+        foreach (var scanned in draft.Lines.Where(l => l.MatchedMedicineId is > 0))
+        {
+            var medicine = await _purchaseService.GetMedicineAsync(scanned.MatchedMedicineId!.Value);
+            if (medicine is null) continue;
+
+            var row = PurchaseLineViewModel.CreateEmpty();
+            row.Changed += RecalculateTotals;
+            row.ApplyMedicine(medicine);
+            row.BatchNumber = scanned.BatchNumber ?? string.Empty;
+            row.ExpiryDate = scanned.ExpiryDate ?? row.ExpiryDate;
+            row.Quantity = scanned.Quantity > 0 ? scanned.Quantity : 1;
+            row.FreeQuantity = scanned.FreeQuantity;
+            if (scanned.PurchasePrice > 0) row.PurchasePrice = scanned.PurchasePrice;
+            if (scanned.Mrp > 0) row.Mrp = scanned.Mrp;
+            if (scanned.SellingPrice > 0) row.SellingPrice = scanned.SellingPrice;
+            if (scanned.GstPercent > 0) row.GstPercent = scanned.GstPercent;
+            if (scanned.DiscountPercent > 0) row.DiscountPercent = scanned.DiscountPercent;
+            Lines.Add(row);
+        }
+
+        EnsureTrailingEmptyRow();
+        RecalculateTotals();
+        StatusMessage = $"Loaded {Lines.Count(l => !l.IsEmpty)} item(s) from scanned bill. Review and press Save (F9).";
+        RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault());
     }
 
     private void EnsureTrailingEmptyRow()
@@ -538,7 +675,14 @@ public class PurchaseViewModel : ObservableObject
     public bool IsBusy
     {
         get => _isBusy;
-        private set => SetProperty(ref _isBusy, value);
+        private set
+        {
+            if (SetProperty(ref _isBusy, value))
+            {
+                OnPropertyChanged(nameof(CanModifyBill));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
     }
 
     public string? StatusMessage
@@ -548,6 +692,7 @@ public class PurchaseViewModel : ObservableObject
     }
 
     private bool CanSave() =>
+        CanModifyBill &&
         SelectedSupplier is not null &&
         Lines.Any(l => !l.IsEmpty) &&
         !IsBusy;
@@ -694,6 +839,8 @@ public class PurchaseViewModel : ObservableObject
         _editingPurchaseId = null;
         _lastDropdownPurchaseId = 0;
         OnPropertyChanged(nameof(IsEditing));
+        OnPropertyChanged(nameof(CanModifyBill));
+        OnPropertyChanged(nameof(IsBillReadOnly));
 
         RecalculateTotals();
         if (clearStatus)

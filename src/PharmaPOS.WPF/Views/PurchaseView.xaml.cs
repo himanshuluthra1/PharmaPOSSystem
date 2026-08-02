@@ -28,7 +28,8 @@ public partial class PurchaseView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
-        Loaded += (_, _) => OnRequestItemFocus(ViewModel?.Lines.FirstOrDefault(l => l.IsEmpty));
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
         _barcodeWedge.BarcodeScanned += code =>
         {
             Dispatcher.InvokeAsync(async () =>
@@ -40,6 +41,35 @@ public partial class PurchaseView : UserControl
     }
 
     private PurchaseViewModel? ViewModel => DataContext as PurchaseViewModel;
+    private IUiLayoutService? _layout;
+    private DataGridLayoutTracker? _gridLayoutTracker;
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _layout ??= App.Services.GetService(typeof(IUiLayoutService)) as IUiLayoutService;
+        if (_layout is null) return;
+
+        SideColumn.Width = new GridLength(_layout.GetSidePanelWidth(UiLayoutService.PurchaseKey));
+        _gridLayoutTracker?.Dispose();
+        _gridLayoutTracker = new DataGridLayoutTracker(PurchaseGrid, UiLayoutService.PurchaseKey, _layout);
+        OnRequestItemFocus(ViewModel?.Lines.FirstOrDefault(l => l.IsEmpty));
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        PersistSidePanelWidth();
+        _gridLayoutTracker?.Dispose();
+        _gridLayoutTracker = null;
+    }
+
+    private void SideSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+        => PersistSidePanelWidth();
+
+    private void PersistSidePanelWidth()
+    {
+        if (_layout is null || SideColumn.ActualWidth < 1) return;
+        _layout.SetSidePanelWidth(UiLayoutService.PurchaseKey, SideColumn.ActualWidth);
+    }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {

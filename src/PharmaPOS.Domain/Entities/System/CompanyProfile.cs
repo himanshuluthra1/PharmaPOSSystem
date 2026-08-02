@@ -28,7 +28,13 @@ public class CompanyProfile : BaseEntity
     public string SalesInvoicePrefix { get; set; } = "INV";
     public string PurchaseInvoicePrefix { get; set; } = "PUR";
     public string SaleReturnPrefix { get; set; } = "SR";
+    public string PurchaseReturnPrefix { get; set; } = "PR";
     public string CreditNotePrefix { get; set; } = "CN";
+
+    /// <summary>When true, completed sale invoices can be opened and saved again.</summary>
+    public bool AllowEditSalesBills { get; set; }
+    /// <summary>When true, received purchase invoices can be opened and saved again.</summary>
+    public bool AllowEditPurchaseBills { get; set; }
 
     // Sale return policy (configurable).
     public int SaleReturnAllowedDays { get; set; } = 30;

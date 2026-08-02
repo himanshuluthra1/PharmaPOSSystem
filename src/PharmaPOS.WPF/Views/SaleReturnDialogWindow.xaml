@@ -131,6 +131,7 @@
             </materialDesign:Card>
 
             <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="14">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel>
                     <TextBlock Text="Refund" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
                     <Grid Margin="0,0,0,12">
@@ -157,16 +158,17 @@
                                    Text="{Binding RefundGrandTotal, StringFormat=N2}" />
                     </Grid>
 
+                    <TextBlock Text="Refund method" FontSize="11" Foreground="#616161" Margin="0,0,0,2" />
                     <ComboBox ItemsSource="{Binding RefundModes}"
                               SelectedItem="{Binding RefundMode}"
-                              materialDesign:HintAssist.Hint="Refund method"
                               Style="{StaticResource MaterialDesignOutlinedComboBox}"
                               Margin="0,0,0,12" />
 
-                    <TextBox materialDesign:HintAssist.Hint="Remarks (optional)"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                    <TextBlock Text="Remarks (optional)" FontSize="11" Foreground="#616161" Margin="0,0,0,2" />
+                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,12" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" />
+                             Margin="0,0,0,12" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44"
+                             Height="Auto" MaxHeight="120" />
 
                     <CheckBox Content="Manager override"
                               IsChecked="{Binding ManagerOverride}"
@@ -180,12 +182,18 @@
 
                     <Button Command="{Binding ProcessReturnCommand}"
                             Style="{StaticResource MaterialDesignRaisedButton}"
-                            HorizontalAlignment="Stretch" Padding="0,12" Margin="0,0,0,8">
-                        <TextBlock Text="Create Return (F9)" FontWeight="SemiBold" />
-                    </Button>
+                            HorizontalAlignment="Stretch"
+                            MinHeight="44"
+                            Padding="16,12"
+                            Margin="0,4,0,8"
+                            Foreground="White"
+                            FontWeight="SemiBold"
+                            FontSize="14"
+                            Content="Create Return (F9)" />
 
                     <TextBlock Text="{Binding StatusMessage}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
                 </StackPanel>
+                </ScrollViewer>
             </materialDesign:Card>
         </Grid>
 

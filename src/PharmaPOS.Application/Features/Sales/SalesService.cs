@@ -318,6 +318,11 @@ public class SalesService : ISalesService
         if (request.Lines.Count == 0)
             return Result.Failure<SaleReceiptDto>("Add at least one item to the bill.");
 
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        if (!prefs.AllowEditSalesBills)
+            return Result.Failure<SaleReceiptDto>(
+                "Editing sale bills is turned off. An admin can enable it under Settings → Preferences.");
+
         try
         {
             var sale = await _uow.ExecuteInTransactionAsync(
@@ -967,16 +972,29 @@ public class SalesService : ISalesService
 
         var due = sale.GrandTotal - Math.Min(sale.PaidAmount, sale.GrandTotal);
         var isCreditTender = request.Payments.Any(p => p.Method == PaymentMethod.Credit);
-        if (due <= 0 && !isCreditTender)
-            return null;
+        var requiresCustomer = due > 0 || isCreditTender;
 
         var name = request.BillingCustomerName?.Trim();
         if (string.IsNullOrWhiteSpace(name))
-            throw new BillingException("Customer name is required for credit / unpaid sales.");
+        {
+            if (requiresCustomer)
+                throw new BillingException("Customer name is required for credit / unpaid sales.");
+            return null;
+        }
+
+        if (IsPlaceholderCustomerName(name))
+        {
+            if (requiresCustomer)
+                throw new BillingException("Enter a real customer / patient name for credit / unpaid sales.");
+            return null;
+        }
 
         var phone = string.IsNullOrWhiteSpace(request.BillingCustomerPhone)
             ? null
             : request.BillingCustomerPhone.Trim();
+        var address = string.IsNullOrWhiteSpace(request.BillingCustomerAddress)
+            ? null
+            : request.BillingCustomerAddress.Trim();
 
         var q = _uow.Repository<Customer>().Query()
             .Where(c => c.Status == EntityStatus.Active);
@@ -991,11 +1009,24 @@ public class SalesService : ISalesService
 
         if (match is not null)
         {
-            if (!string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(match.Phone))
+            var changed = false;
+            if (!string.Equals(match.Name, name, StringComparison.Ordinal))
+            {
+                match.Name = name;
+                changed = true;
+            }
+            if (!string.IsNullOrWhiteSpace(phone) && !string.Equals(match.Phone, phone, StringComparison.Ordinal))
+            {
                 match.Phone = phone;
-            if (!string.IsNullOrWhiteSpace(request.BillingCustomerAddress) &&
-                string.IsNullOrWhiteSpace(match.Address))
-                match.Address = request.BillingCustomerAddress.Trim();
+                changed = true;
+            }
+            if (!string.IsNullOrWhiteSpace(address))
+            {
+                match.Address = address;
+                changed = true;
+            }
+            if (changed)
+                _uow.Repository<Customer>().Update(match);
             return match.Id;
         }
 
@@ -1004,15 +1035,23 @@ public class SalesService : ISalesService
             BranchId = sale.BranchId,
             Name = name,
             Phone = phone,
-            Address = string.IsNullOrWhiteSpace(request.BillingCustomerAddress)
-                ? null
-                : request.BillingCustomerAddress.Trim(),
+            Address = address,
             Type = CustomerType.Retail,
             Status = EntityStatus.Active
         };
         await _uow.Repository<Customer>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
         return created.Id;
+    }
+
+    private static bool IsPlaceholderCustomerName(string name)
+    {
+        var n = name.Trim();
+        return n.Equals("Walk-in", StringComparison.OrdinalIgnoreCase)
+               || n.Equals("Walk-in Customer", StringComparison.OrdinalIgnoreCase)
+               || n.Equals("Walk in Customer", StringComparison.OrdinalIgnoreCase)
+               || n.Equals("Cash", StringComparison.OrdinalIgnoreCase)
+               || n.Equals("Customer", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task ApplyCustomerOutstandingAsync(

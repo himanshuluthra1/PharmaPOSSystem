@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Inventory;
+using PharmaPOS.Application.Features.Masters;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.WPF.ViewModels.Sales;
 using PharmaPOS.WPF.Views;
@@ -28,15 +29,8 @@ public class MedicinePickerService : IMedicinePickerService
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
-
-        var searchVm = new MedicineSearchViewModel(salesService, branchId);
-        var searchWin = new MedicineSearchWindow(searchVm)
-        {
-            Owner = System.Windows.Application.Current.MainWindow
-        };
-
-        if (searchWin.ShowDialog() != true || searchVm.SelectedMedicine is not MedicineLookupDto medicine)
-            return null;
+        var medicine = ShowMedicineSearch(scope, salesService, branchId);
+        if (medicine is null) return null;
 
         return await PickBatchForSaleAsync(salesService, medicine, branchId);
     }
@@ -48,14 +42,8 @@ public class MedicinePickerService : IMedicinePickerService
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
         var inventory = scope.ServiceProvider.GetRequiredService<IInventoryService>();
 
-        var searchVm = new MedicineSearchViewModel(salesService, branchId);
-        var searchWin = new MedicineSearchWindow(searchVm)
-        {
-            Owner = System.Windows.Application.Current.MainWindow
-        };
-
-        if (searchWin.ShowDialog() != true || searchVm.SelectedMedicine is not MedicineLookupDto medicine)
-            return null;
+        var medicine = ShowMedicineSearch(scope, salesService, branchId);
+        if (medicine is null) return null;
 
         var adjustmentBatches = await inventory.GetBatchesForAdjustmentAsync(medicine.Id, branchId);
         if (adjustmentBatches.Count == 0)
@@ -107,17 +95,26 @@ public class MedicinePickerService : IMedicinePickerService
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
+        return Task.FromResult(ShowMedicineSearch(scope, salesService, branchId));
+    }
+
+    private static MedicineLookupDto? ShowMedicineSearch(
+        IServiceScope scope, ISalesService salesService, int? branchId)
+    {
+        var import = scope.ServiceProvider.GetRequiredService<IPharmacyMedicineImportService>();
+        var masters = scope.ServiceProvider.GetRequiredService<IMastersService>();
+        var ledger = scope.ServiceProvider.GetRequiredService<IMedicineLedgerDialogService>();
 
         var searchVm = new MedicineSearchViewModel(salesService, branchId);
-        var searchWin = new MedicineSearchWindow(searchVm)
+        var searchWin = new MedicineSearchWindow(searchVm, import, masters, ledger)
         {
             Owner = System.Windows.Application.Current.MainWindow
         };
 
-        if (searchWin.ShowDialog() != true || searchVm.SelectedMedicine is not MedicineLookupDto medicine)
-            return Task.FromResult<MedicineLookupDto?>(null);
+        if (searchWin.ShowDialog() != true)
+            return null;
 
-        return Task.FromResult<MedicineLookupDto?>(medicine);
+        return searchWin.ResultMedicine;
     }
 
     public async Task<MedicineBatchSelection?> PickBatchForMedicineAsync(MedicineLookupDto medicine)

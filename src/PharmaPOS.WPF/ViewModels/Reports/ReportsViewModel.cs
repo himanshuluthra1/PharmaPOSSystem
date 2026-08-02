@@ -30,6 +30,9 @@ public class ReportsViewModel : ObservableObject
     private string _filterText = string.Empty;
     private FilterOption _selectedFilterOption = FilterOption.All;
     private List<FilterOption> _filterOptions = [FilterOption.All];
+    private string _selectedExpirySupplierKey = "all";
+    private List<FilterOption> _expirySupplierOptions = [FilterOption.All];
+    private DateTime _expiryFilterToday = DateTime.Today;
 
     private List<SalesReportRowDto> _allSales = [];
     private List<PurchaseReportRowDto> _allPurchases = [];
@@ -66,7 +69,7 @@ public class ReportsViewModel : ObservableObject
             new(ReportKind.Profit, "Gross Profit", "Revenue vs estimated cost per sale invoice."),
             new(ReportKind.SalesByMedicine, "Sales by Medicine", "Quantity and revenue ranked by medicine."),
             new(ReportKind.StockValuation, "Stock Valuation", "Current stock value at purchase cost."),
-            new(ReportKind.Expiry, "Expiry Report", "Expired and near-expiry batches."),
+            new(ReportKind.Expiry, "Expiry Report", "Expired stock and batches expiring within 1–12 months."),
             new(ReportKind.LowStock, "Low Stock", "Medicines at or below reorder level."),
             new(ReportKind.SaleReturns, "Sale Returns", "Return transactions for the selected period."),
             new(ReportKind.MedicineReturns, "Medicine-wise Returns", "Returned quantities grouped by medicine and batch.")
@@ -146,7 +149,7 @@ public class ReportsViewModel : ObservableObject
         ReportKind.Purchases => "Filter by invoice # or supplier...",
         ReportKind.GstSummary => "Filter by invoice # or party...",
         ReportKind.SalesByMedicine or ReportKind.LowStock => "Filter by medicine or generic...",
-        ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine or batch...",
+        ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine, batch, or supplier...",
         ReportKind.SaleReturns => "Filter by return #, invoice, or customer...",
         ReportKind.MedicineReturns => "Filter by medicine or batch...",
         _ => "Filter results..."
@@ -176,9 +179,26 @@ public class ReportsViewModel : ObservableObject
 
     public bool ShowFilterOption => FilterOptions.Count > 1;
 
+    public IReadOnlyList<FilterOption> ExpirySupplierOptions => _expirySupplierOptions;
+
+    /// <summary>Supplier filter key: "all" or supplier id as string.</summary>
+    public string SelectedExpirySupplierKey
+    {
+        get => _selectedExpirySupplierKey;
+        set
+        {
+            var key = string.IsNullOrWhiteSpace(value) ? "all" : value;
+            if (SetProperty(ref _selectedExpirySupplierKey, key))
+                ApplyFilters();
+        }
+    }
+
+    public bool ShowExpirySupplierFilter => ShowExpiryGrid && HasSourceData;
+
     public bool HasActiveFilter =>
         !string.IsNullOrWhiteSpace(FilterText) ||
-        SelectedFilterOption.Key != "all";
+        SelectedFilterOption.Key != "all" ||
+        (ShowExpirySupplierFilter && SelectedExpirySupplierKey != "all");
 
     public DateTime FromDate
     {
@@ -294,9 +314,19 @@ public class ReportsViewModel : ObservableObject
             ],
             ReportKind.Expiry =>
             [
-                FilterOption.All,
                 new("expired", "Expired"),
-                new("near", "Near expiry")
+                new("1", "1 month"),
+                new("2", "2 months"),
+                new("3", "3 months"),
+                new("4", "4 months"),
+                new("5", "5 months"),
+                new("6", "6 months"),
+                new("7", "7 months"),
+                new("8", "8 months"),
+                new("9", "9 months"),
+                new("10", "10 months"),
+                new("11", "11 months"),
+                new("12", "12 months")
             ],
             ReportKind.LowStock =>
             [
@@ -325,8 +355,10 @@ public class ReportsViewModel : ObservableObject
     {
         _filterText = string.Empty;
         _selectedFilterOption = FilterOptions.FirstOrDefault() ?? FilterOption.All;
+        _selectedExpirySupplierKey = "all";
         OnPropertyChanged(nameof(FilterText));
         OnPropertyChanged(nameof(SelectedFilterOption));
+        OnPropertyChanged(nameof(SelectedExpirySupplierKey));
         OnPropertyChanged(nameof(HasActiveFilter));
         if (apply) ApplyFilters();
     }
@@ -419,6 +451,7 @@ public class ReportsViewModel : ObservableObject
                         var expiry = await _reports.GetExpiryReportAsync(_branchId, token);
                         if (runId != _runId) return;
                         _allExpiry = expiry.Rows;
+                        _expiryFilterToday = DateTime.Today;
                         Summary = expiry.Summary;
                         SetActiveGrid("Expiry");
                         break;
@@ -539,15 +572,15 @@ public class ReportsViewModel : ObservableObject
                 break;
 
             case "Expiry":
-                Fill(ExpiryRows, _allExpiry.Where(r =>
-                    Matches(term, r.MedicineName, r.BatchNumber, r.ExpiryStatus) &&
-                    option switch
-                    {
-                        "expired" => r.ExpiryStatus.Contains("Expired", StringComparison.OrdinalIgnoreCase),
-                        "near" => r.ExpiryStatus.Contains("Near", StringComparison.OrdinalIgnoreCase),
-                        _ => true
-                    }));
+            {
+                // Build supplier list from the expiry-window (+ text) result set first,
+                // then apply the supplier filter. Do not rebuild the combo after selecting
+                // a supplier — replacing ItemsSource clears SelectedValue and empties the grid.
+                var windowRows = _allExpiry.Where(MatchesExpiryWindowAndText).ToList();
+                RefreshExpirySupplierOptions(windowRows);
+                Fill(ExpiryRows, windowRows.Where(MatchesSelectedSupplier));
                 break;
+            }
 
             case "LowStock":
                 Fill(LowStockRows, _allLowStock.Where(r =>
@@ -583,8 +616,78 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasData));
         OnPropertyChanged(nameof(HasSourceData));
         OnPropertyChanged(nameof(ShowFilters));
+        OnPropertyChanged(nameof(ShowExpirySupplierFilter));
         OnPropertyChanged(nameof(HasNoFilterMatches));
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    private bool MatchesExpiryWindowAndText(ExpiryReportRowDto row)
+    {
+        if (!Matches(FilterText.Trim(), row.MedicineName, row.BatchNumber, row.ExpiryStatus, row.SupplierName))
+            return false;
+
+        if (row.ExpiryDate is null) return false;
+        var expiry = row.ExpiryDate.Value.Date;
+        var today = _expiryFilterToday.Date;
+        var key = SelectedFilterOption.Key;
+
+        if (key == "expired")
+            return expiry < today;
+
+        if (int.TryParse(key, out var months) && months is >= 1 and <= 12)
+        {
+            if (expiry < today) return false;
+            return expiry <= today.AddMonths(months);
+        }
+
+        return true;
+    }
+
+    private bool MatchesSelectedSupplier(ExpiryReportRowDto row)
+    {
+        if (SelectedExpirySupplierKey == "all")
+            return true;
+
+        // Match by id, or by the selected option's label (name) as a fallback.
+        if (string.Equals(row.SupplierId?.ToString(), SelectedExpirySupplierKey, StringComparison.Ordinal))
+            return true;
+
+        var selectedLabel = _expirySupplierOptions
+            .FirstOrDefault(o => o.Key == SelectedExpirySupplierKey)?.Label;
+        return !string.IsNullOrWhiteSpace(selectedLabel) &&
+               !string.IsNullOrWhiteSpace(row.SupplierName) &&
+               string.Equals(row.SupplierName.Trim(), selectedLabel.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Supplier combo shows only suppliers present in the current expiry window (+ text filter).
+    /// </summary>
+    private void RefreshExpirySupplierOptions(IReadOnlyList<ExpiryReportRowDto> windowRows)
+    {
+        var options = windowRows
+            .Where(r => r.SupplierId is > 0 && !string.IsNullOrWhiteSpace(r.SupplierName))
+            .GroupBy(r => r.SupplierId!.Value)
+            .OrderBy(g => g.First().SupplierName)
+            .Select(g => new FilterOption(g.Key.ToString(), g.First().SupplierName!.Trim()))
+            .ToList();
+
+        var newKeys = options.Select(o => o.Key).Append("all").ToHashSet(StringComparer.Ordinal);
+        var oldKeys = _expirySupplierOptions.Select(o => o.Key).ToHashSet(StringComparer.Ordinal);
+
+        if (newKeys.SetEquals(oldKeys))
+        {
+            // Keep instances stable so the ComboBox selection is not cleared.
+            return;
+        }
+
+        _expirySupplierOptions = [FilterOption.All, .. options];
+        OnPropertyChanged(nameof(ExpirySupplierOptions));
+
+        if (!newKeys.Contains(SelectedExpirySupplierKey))
+        {
+            _selectedExpirySupplierKey = "all";
+            OnPropertyChanged(nameof(SelectedExpirySupplierKey));
+        }
     }
 
     private int GetSourceCount() => ActiveGrid switch
@@ -675,6 +778,7 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowStockSummaryKpis));
         OnPropertyChanged(nameof(ShowGenericSummaryKpis));
         OnPropertyChanged(nameof(ShowTaxDiscountKpis));
+        OnPropertyChanged(nameof(ShowExpirySupplierFilter));
     }
 
     private static string GridNameFor(ReportKind kind) => kind switch
@@ -714,6 +818,11 @@ public class ReportsViewModel : ObservableObject
         _allLowStock = [];
         _allSaleReturns = [];
         _allMedicineReturns = [];
+        _expirySupplierOptions = [FilterOption.All];
+        _selectedExpirySupplierKey = "all";
+        OnPropertyChanged(nameof(ExpirySupplierOptions));
+        OnPropertyChanged(nameof(SelectedExpirySupplierKey));
+        OnPropertyChanged(nameof(ShowExpirySupplierFilter));
         Summary = new ReportSummaryDto();
     }
 

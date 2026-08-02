@@ -20,6 +20,7 @@ x86/
 [Aa][Rr][Mm]64/
 publish/
 artifacts/
+*.bak
 
 ## Test results
 [Tt]est[Rr]esult*/

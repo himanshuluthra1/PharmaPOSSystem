@@ -29,6 +29,8 @@ public class AppPreferencesDto
     public int DefaultLowStockThreshold { get; set; } = 10;
     public string SalesInvoicePrefix { get; set; } = "INV";
     public string PurchaseInvoicePrefix { get; set; } = "PUR";
+    public bool AllowEditSalesBills { get; set; }
+    public bool AllowEditPurchaseBills { get; set; }
 }
 
 public record BranchListDto(int Id, string Code, string Name, string? City, bool IsHeadOffice, EntityStatus Status);

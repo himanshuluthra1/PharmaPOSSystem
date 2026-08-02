@@ -11,8 +11,9 @@
              PreviewKeyDown="SalesView_PreviewKeyDown">
     <Grid Margin="4">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="3*" MinWidth="600" />
-            <ColumnDefinition Width="1.05*" MinWidth="340" />
+            <ColumnDefinition Width="*" MinWidth="400" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition x:Name="SideColumn" Width="250" MinWidth="200" MaxWidth="480" />
         </Grid.ColumnDefinitions>
 
         <!-- LEFT: cart grid -->
@@ -171,6 +172,7 @@
 
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
+                          CanUserResizeColumns="True"
                           HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                           RowHeight="28"
                           ColumnHeaderHeight="30"
@@ -180,7 +182,7 @@
                           MouseDoubleClick="CartGrid_MouseDoubleClick"
                           BeginningEdit="CartGrid_BeginningEdit"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                          IsReadOnly="False">
+                          IsReadOnly="{Binding IsBillReadOnly}">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Item" Width="2*" MinWidth="200">
                             <DataGridTemplateColumn.CellTemplate>
@@ -256,8 +258,18 @@
             </DockPanel>
         </materialDesign:Card>
 
+        <GridSplitter Grid.Column="1"
+                      Width="6"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      ResizeBehavior="PreviousAndNext"
+                      ShowsPreview="True"
+                      Background="Transparent"
+                      ToolTip="Drag to resize panels"
+                      DragCompleted="SideSplitter_DragCompleted" />
+
         <!-- RIGHT: totals, customer, payment -->
-        <materialDesign:Card Grid.Column="1" Margin="2" UniformCornerRadius="12" Padding="12"
+        <materialDesign:Card Grid.Column="2" Margin="2" UniformCornerRadius="12" Padding="12"
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <DockPanel LastChildFill="True">
                 <!-- Actions (bottom) -->
@@ -298,7 +310,7 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
                                     <Setter Property="Visibility" Value="Visible" />
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                        <DataTrigger Binding="{Binding ShowSaveButton}" Value="False">
                                             <Setter Property="Visibility" Value="Collapsed" />
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -306,7 +318,18 @@
                             </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                <TextBlock Text="Save &amp; Print (F9)" Margin="6,0,0,0" />
+                                <TextBlock Margin="6,0,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Save &amp; Print (F9)" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                    <Setter Property="Text" Value="Update (F9)" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
                         </Button>
                     </Grid>

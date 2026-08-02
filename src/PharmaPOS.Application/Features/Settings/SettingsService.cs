@@ -67,7 +67,9 @@ public class SettingsService : ISettingsService
                 NearExpiryDays = c.NearExpiryDays,
                 DefaultLowStockThreshold = c.DefaultLowStockThreshold,
                 SalesInvoicePrefix = c.SalesInvoicePrefix,
-                PurchaseInvoicePrefix = c.PurchaseInvoicePrefix
+                PurchaseInvoicePrefix = c.PurchaseInvoicePrefix,
+                AllowEditSalesBills = c.AllowEditSalesBills,
+                AllowEditPurchaseBills = c.AllowEditPurchaseBills
             })
             .FirstOrDefaultAsync(ct);
 
@@ -103,6 +105,8 @@ public class SettingsService : ISettingsService
         entity.DefaultLowStockThreshold = dto.DefaultLowStockThreshold;
         entity.SalesInvoicePrefix = dto.SalesInvoicePrefix.Trim().ToUpperInvariant();
         entity.PurchaseInvoicePrefix = dto.PurchaseInvoicePrefix.Trim().ToUpperInvariant();
+        entity.AllowEditSalesBills = dto.AllowEditSalesBills;
+        entity.AllowEditPurchaseBills = dto.AllowEditPurchaseBills;
         _uow.Repository<CompanyProfile>().Update(entity);
         await _uow.SaveChangesAsync(ct);
         return Result.Success();

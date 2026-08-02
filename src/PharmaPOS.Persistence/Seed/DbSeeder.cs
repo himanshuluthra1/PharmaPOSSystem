@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Accounting;
 using PharmaPOS.Domain.Entities.Identity;
@@ -16,17 +17,19 @@ namespace PharmaPOS.Persistence.Seed;
 /// <summary>
 /// Ensures the database exists and is populated with the baseline data required
 /// to run: permissions, roles, a head-office branch, the default admin user,
-/// company profile, chart of accounts and a little sample master data.
+/// company profile, chart of accounts and optional sample master data.
 /// </summary>
 public class DbSeeder
 {
     private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IConfiguration _configuration;
 
-    public DbSeeder(ApplicationDbContext context, IPasswordHasher passwordHasher)
+    public DbSeeder(ApplicationDbContext context, IPasswordHasher passwordHasher, IConfiguration configuration)
     {
         _context = context;
         _passwordHasher = passwordHasher;
+        _configuration = configuration;
     }
 
     public async Task SeedAsync(CancellationToken ct = default)
@@ -43,8 +46,14 @@ public class DbSeeder
         await SeedCompanyProfileAsync(ct);
         await SeedAccountsAsync(ct);
         await SeedReturnReasonsAsync(ct);
-        await SeedSampleMastersAsync(branch, ct);
-        await EnsureDefaultSupplierAsync(branch, ct);
+
+        // Customer installs ship a master-data backup; skip tiny demo catalogue there.
+        var seedSample = _configuration.GetValue("App:SeedSampleData", true);
+        if (seedSample)
+        {
+            await SeedSampleMastersAsync(branch, ct);
+            await EnsureDefaultSupplierAsync(branch, ct);
+        }
 
         await _context.SaveChangesAsync(ct);
     }

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
@@ -17,6 +18,7 @@ namespace PharmaPOS.WPF.ViewModels.Sales;
 public class SalesViewModel : ObservableObject
 {
     private readonly ISalesService _salesService;
+    private readonly ISettingsService _settings;
     private readonly IMedicinePickerService _picker;
     private readonly IBillSearchService _billSearch;
     private readonly ISaleReturnDialogService _saleReturnDialog;
@@ -24,6 +26,7 @@ public class SalesViewModel : ObservableObject
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
     private readonly IBarcodeCameraService _barcodeCamera;
+    private readonly IBillShareService _billShare;
 
     private string _customerName = string.Empty;
     private string? _customerMobile;
@@ -31,6 +34,7 @@ public class SalesViewModel : ObservableObject
     private string? _doctorName;
 
     private int? _editingSaleId;
+    private bool _allowEditSalesBills;
     private bool _suppressBillSelection;
     private SaleListItemDto? _selectedBill;
     private int? _lastDropdownSaleId;
@@ -51,15 +55,18 @@ public class SalesViewModel : ObservableObject
 
     public SalesViewModel(
         ISalesService salesService,
+        ISettingsService settings,
         IMedicinePickerService picker,
         IBillSearchService billSearch,
         ISaleReturnDialogService saleReturnDialog,
         ICurrentUserService currentUser,
         IDialogService dialog,
         IInvoicePrintService printService,
-        IBarcodeCameraService barcodeCamera)
+        IBarcodeCameraService barcodeCamera,
+        IBillShareService billShare)
     {
         _salesService = salesService;
+        _settings = settings;
         _picker = picker;
         _billSearch = billSearch;
         _saleReturnDialog = saleReturnDialog;
@@ -67,6 +74,7 @@ public class SalesViewModel : ObservableObject
         _dialog = dialog;
         _printService = printService;
         _barcodeCamera = barcodeCamera;
+        _billShare = billShare;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesCreate, AppConstants.Permissions.SalesManage);
@@ -81,18 +89,37 @@ public class SalesViewModel : ObservableObject
 
         Cart.CollectionChanged += (_, _) => RecalculateTotals();
 
-        RemoveLineCommand = new RelayCommand(p => RemoveLine(p as CartLineViewModel), _ => CanCreate);
-        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && !IsEditing && Cart.Any(l => !l.IsEmpty) && !IsBusy);
+        RemoveLineCommand = new RelayCommand(p => RemoveLine(p as CartLineViewModel), _ => CanModifyBill);
+        SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanSaveBill);
         PrintCommand = new AsyncRelayCommand(_ => PrintAsync(), _ => CanPrint && IsEditing && !IsBusy);
         NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
         SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
         OpenSaleReturnCommand = new AsyncRelayCommand(_ => OpenInlineReturnAsync(),
             _ => CanReturn && IsEditing && !IsBusy);
         LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
-        ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanCreate && !IsBusy);
+        ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanModifyBill && !IsBusy);
 
         EnsureTrailingEmptyRow();
-        _ = InitializeBillsAsync();
+        _ = InitializeAsync();
+    }
+
+    private async Task InitializeAsync()
+    {
+        await RefreshEditPolicyAsync();
+        await InitializeBillsAsync();
+    }
+
+    private async Task RefreshEditPolicyAsync()
+    {
+        try
+        {
+            var prefs = await _settings.GetPreferencesAsync();
+            AllowEditSalesBills = prefs.AllowEditSalesBills;
+        }
+        catch
+        {
+            AllowEditSalesBills = false;
+        }
     }
 
     /// <summary>Asks the view to focus the Item column on the given (or last empty) line.</summary>
@@ -120,6 +147,30 @@ public class SalesViewModel : ObservableObject
     public bool CanApplyDiscount { get; }
     public bool CanPrint { get; }
     public bool CanReturn { get; }
+
+    public bool AllowEditSalesBills
+    {
+        get => _allowEditSalesBills;
+        private set
+        {
+            if (SetProperty(ref _allowEditSalesBills, value))
+            {
+                OnPropertyChanged(nameof(CanModifyBill));
+                OnPropertyChanged(nameof(ShowSaveButton));
+                OnPropertyChanged(nameof(IsBillReadOnly));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+    }
+
+    /// <summary>True when the loaded bill can be changed (new bill, or edit allowed).</summary>
+    public bool CanModifyBill => CanCreate && (!IsEditing || AllowEditSalesBills) && !IsBusy;
+
+    public bool CanSaveBill => CanModifyBill && Cart.Any(l => !l.IsEmpty);
+
+    public bool ShowSaveButton => CanCreate && (!IsEditing || AllowEditSalesBills);
+
+    public bool IsBillReadOnly => IsEditing && !AllowEditSalesBills;
 
     public bool CanLoadOlderBills => _nextOlderBillDate is not null && !IsLoadingOlderBills && !IsBusy;
 
@@ -156,7 +207,7 @@ public class SalesViewModel : ObservableObject
 
     public async Task BeginItemSelectionAsync(CartLineViewModel line)
     {
-        if (line.IsReturnLine) return;
+        if (!CanModifyBill || line.IsReturnLine) return;
 
         var selection = await _picker.PickMedicineAsync();
         if (selection is null) return;
@@ -188,7 +239,7 @@ public class SalesViewModel : ObservableObject
 
     public async Task TryAddByBarcodeAsync(string barcode)
     {
-        if (!CanCreate || IsBusy) return;
+        if (!CanModifyBill || IsBusy) return;
         barcode = barcode.Trim();
         if (barcode.Length < 3) return;
 
@@ -446,6 +497,8 @@ public class SalesViewModel : ObservableObject
             if (SetProperty(ref _isBusy, value))
             {
                 OnPropertyChanged(nameof(CanLoadOlderBills));
+                OnPropertyChanged(nameof(CanModifyBill));
+                OnPropertyChanged(nameof(CanSaveBill));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -655,9 +708,10 @@ public class SalesViewModel : ObservableObject
         _billLoadCts = new CancellationTokenSource();
         var token = _billLoadCts.Token;
 
-        IsBusy = true;
+                IsBusy = true;
         try
         {
+            await RefreshEditPolicyAsync();
             await _salesGate.WaitAsync(token);
             try
             {
@@ -710,8 +764,7 @@ public class SalesViewModel : ObservableObject
         Cart.Clear();
 
         _editingSaleId = sale.SaleId;
-        OnPropertyChanged(nameof(IsEditing));
-        CommandManager.InvalidateRequerySuggested();
+        NotifyBillEditStateChanged();
 
         CustomerName = sale.BillingCustomerName ?? string.Empty;
         CustomerMobile = sale.BillingCustomerPhone;
@@ -729,8 +782,21 @@ public class SalesViewModel : ObservableObject
 
         EnsureTrailingEmptyRow();
         RecalculateTotals();
-        if (focusGridAfterLoad)
+        StatusMessage = AllowEditSalesBills
+            ? $"Editing invoice {sale.InvoiceNumber}. Save to update."
+            : $"Viewing invoice {sale.InvoiceNumber} (edit is off in Settings → Preferences).";
+        if (focusGridAfterLoad && !IsBillReadOnly)
             RequestItemFocus?.Invoke(Cart.FirstOrDefault());
+    }
+
+    private void NotifyBillEditStateChanged()
+    {
+        OnPropertyChanged(nameof(IsEditing));
+        OnPropertyChanged(nameof(CanModifyBill));
+        OnPropertyChanged(nameof(CanSaveBill));
+        OnPropertyChanged(nameof(ShowSaveButton));
+        OnPropertyChanged(nameof(IsBillReadOnly));
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private async Task SaveAsync()
@@ -820,6 +886,9 @@ public class SalesViewModel : ObservableObject
                 if (CanPrint && _dialog.Confirm($"Invoice {receipt.InvoiceNumber} saved.\n\nPrint / preview it now?", "Invoice saved"))
                     _printService.ShowPreview(receipt);
 
+                if (_billShare.ShouldOfferAfterSave(receipt))
+                    _billShare.OfferShareAfterSave(receipt);
+
                 await RefreshBillHistoryCoreAsync(selectNewBill: true);
                 ResetBillForm(clearStatus: false);
             }
@@ -890,8 +959,7 @@ public class SalesViewModel : ObservableObject
         Cart.Clear();
         _editingSaleId = null;
         _lastDropdownSaleId = null;
-        OnPropertyChanged(nameof(IsEditing));
-        CommandManager.InvalidateRequerySuggested();
+        NotifyBillEditStateChanged();
         EnsureTrailingEmptyRow();
         CustomerName = string.Empty;
         CustomerMobile = null;
