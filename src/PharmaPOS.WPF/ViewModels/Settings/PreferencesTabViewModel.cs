@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -11,6 +12,9 @@ public class PreferencesTabViewModel : ObservableObject
     private readonly IUiLayoutService _layout;
     private readonly IAiBillSettingsService _aiSettings;
     private readonly IBillShareSettingsService _billShareSettings;
+    private readonly IMySqlSyncSettingsService _mySqlSyncSettings;
+    private readonly IMySqlReportingPublisher _mySqlPublisher;
+    private readonly IStoreIdentityService _storeIdentity;
     private readonly IDialogService _dialog;
     private AppPreferencesDto _editor = new();
     private bool _isBusy;
@@ -32,21 +36,38 @@ public class PreferencesTabViewModel : ObservableObject
     private string _sftpPassword = string.Empty;
     private string _sftpRemoteDirectory = "/var/www/bills";
     private bool _enableTinyUrl = true;
+    private bool _enableMySqlSync;
+    private string _mySqlHost = string.Empty;
+    private int _mySqlPort = 3306;
+    private string _mySqlDatabase = "pharmapos_reporting";
+    private string _mySqlUsername = string.Empty;
+    private string _mySqlPassword = string.Empty;
+    private bool _mySqlUseSsl;
+    private string _storeIdentityCode = string.Empty;
+    private string _storeIdentityId = string.Empty;
+    private string _mySqlSyncStatusText = string.Empty;
 
     public PreferencesTabViewModel(
         ISettingsService settings,
         IUiLayoutService layout,
         IAiBillSettingsService aiSettings,
         IBillShareSettingsService billShareSettings,
+        IMySqlSyncSettingsService mySqlSyncSettings,
+        IMySqlReportingPublisher mySqlPublisher,
+        IStoreIdentityService storeIdentity,
         IDialogService dialog)
     {
         _settings = settings;
         _layout = layout;
         _aiSettings = aiSettings;
         _billShareSettings = billShareSettings;
+        _mySqlSyncSettings = mySqlSyncSettings;
+        _mySqlPublisher = mySqlPublisher;
+        _storeIdentity = storeIdentity;
         _dialog = dialog;
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
         ResetLayoutCommand = new RelayCommand(ResetLayout);
+        TestMySqlConnectionCommand = new AsyncRelayCommand(TestMySqlConnectionAsync, () => !IsBusy);
     }
 
     public AppPreferencesDto Editor
@@ -152,6 +173,67 @@ public class PreferencesTabViewModel : ObservableObject
         set => SetProperty(ref _enableTinyUrl, value);
     }
 
+    public bool EnableMySqlSync
+    {
+        get => _enableMySqlSync;
+        set => SetProperty(ref _enableMySqlSync, value);
+    }
+
+    public string MySqlHost
+    {
+        get => _mySqlHost;
+        set => SetProperty(ref _mySqlHost, value ?? string.Empty);
+    }
+
+    public int MySqlPort
+    {
+        get => _mySqlPort;
+        set => SetProperty(ref _mySqlPort, value <= 0 ? 3306 : value);
+    }
+
+    public string MySqlDatabase
+    {
+        get => _mySqlDatabase;
+        set => SetProperty(ref _mySqlDatabase,
+            string.IsNullOrWhiteSpace(value) ? "pharmapos_reporting" : value.Trim());
+    }
+
+    public string MySqlUsername
+    {
+        get => _mySqlUsername;
+        set => SetProperty(ref _mySqlUsername, value ?? string.Empty);
+    }
+
+    public string MySqlPassword
+    {
+        get => _mySqlPassword;
+        set => SetProperty(ref _mySqlPassword, value ?? string.Empty);
+    }
+
+    public bool MySqlUseSsl
+    {
+        get => _mySqlUseSsl;
+        set => SetProperty(ref _mySqlUseSsl, value);
+    }
+
+    public string StoreIdentityCode
+    {
+        get => _storeIdentityCode;
+        private set => SetProperty(ref _storeIdentityCode, value ?? string.Empty);
+    }
+
+    public string StoreIdentityId
+    {
+        get => _storeIdentityId;
+        private set => SetProperty(ref _storeIdentityId, value ?? string.Empty);
+    }
+
+    public string MySqlSyncStatusText
+    {
+        get => _mySqlSyncStatusText;
+        private set => SetProperty(ref _mySqlSyncStatusText, value ?? string.Empty);
+    }
+
     public IReadOnlyList<string> GeminiModelOptions { get; } =
     [
         "gemini-flash-lite-latest",
@@ -174,6 +256,7 @@ public class PreferencesTabViewModel : ObservableObject
 
     public ICommand SaveCommand { get; }
     public ICommand ResetLayoutCommand { get; }
+    public ICommand TestMySqlConnectionCommand { get; }
 
     public async Task EnsureLoadedAsync()
     {
@@ -186,8 +269,17 @@ public class PreferencesTabViewModel : ObservableObject
             LoadLayoutEditor();
             LoadAiEditor();
             LoadBillShareEditor();
+            LoadMySqlSyncEditor();
+            LoadStoreIdentity();
         }
         finally { IsBusy = false; }
+    }
+
+    private void LoadStoreIdentity()
+    {
+        _storeIdentity.Load();
+        StoreIdentityCode = _storeIdentity.StoreCode ?? string.Empty;
+        StoreIdentityId = _storeIdentity.StoreId ?? string.Empty;
     }
 
     private void LoadLayoutEditor()
@@ -221,6 +313,48 @@ public class PreferencesTabViewModel : ObservableObject
         SftpPassword = s.SftpPassword;
         SftpRemoteDirectory = s.SftpRemoteDirectory;
         EnableTinyUrl = s.EnableTinyUrl;
+    }
+
+    private void LoadMySqlSyncEditor()
+    {
+        _mySqlSyncSettings.Load();
+        var s = _mySqlSyncSettings.Current;
+        EnableMySqlSync = s.Enabled;
+        MySqlHost = s.Host;
+        MySqlPort = s.Port;
+        MySqlDatabase = s.Database;
+        MySqlUsername = s.Username;
+        MySqlPassword = s.Password;
+        MySqlUseSsl = s.UseSsl;
+        MySqlSyncStatusText = FormatSyncStatus(s);
+    }
+
+    private static string FormatSyncStatus(MySqlSyncSettings s)
+    {
+        if (s.LastSuccessAtUtc is DateTime ok)
+            return $"Last sync OK: {ok.ToLocalTime():g}";
+        if (!string.IsNullOrWhiteSpace(s.LastError))
+            return $"Last error: {s.LastError}";
+        return s.Enabled ? "Waiting for first sync…" : string.Empty;
+    }
+
+    private async Task TestMySqlConnectionAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            // Persist current form values so the publisher uses them for the test.
+            _mySqlSyncSettings.Save(BuildMySqlSettings());
+            await _mySqlPublisher.TestConnectionAsync();
+            MySqlSyncStatusText = "Connection OK.";
+            _dialog.ShowInfo("Connected to MySQL successfully.", "MySQL sync");
+        }
+        catch (Exception ex)
+        {
+            MySqlSyncStatusText = $"Connection failed: {ex.Message}";
+            _dialog.ShowError($"Could not connect to MySQL.\n\n{ex.Message}");
+        }
+        finally { IsBusy = false; }
     }
 
     private async Task SaveAsync()
@@ -263,12 +397,32 @@ public class PreferencesTabViewModel : ObservableObject
                 EnableTinyUrl = EnableTinyUrl
             });
 
-            StatusMessage = EnableVpsUpload && _billShareSettings.IsVpsUploadConfigured
-                ? "Preferences saved. Bill PDFs will upload to your VPS and a short link will be shared on WhatsApp."
-                : "Preferences saved.";
+            var mySql = BuildMySqlSettings();
+            _mySqlSyncSettings.Save(mySql);
+            MySqlSyncStatusText = FormatSyncStatus(_mySqlSyncSettings.Current);
+
+            StatusMessage = EnableMySqlSync && _mySqlSyncSettings.IsConfigured
+                ? "Preferences saved. Reporting sync will upload queued events to MySQL in the background."
+                : EnableVpsUpload && _billShareSettings.IsVpsUploadConfigured
+                    ? "Preferences saved. Bill PDFs will upload to your VPS and a short link will be shared on WhatsApp."
+                    : "Preferences saved.";
         }
         finally { IsBusy = false; }
     }
+
+    private MySqlSyncSettings BuildMySqlSettings() => new()
+    {
+        Enabled = EnableMySqlSync,
+        Host = MySqlHost.Trim(),
+        Port = MySqlPort,
+        Database = MySqlDatabase.Trim(),
+        Username = MySqlUsername.Trim(),
+        Password = MySqlPassword,
+        UseSsl = MySqlUseSsl,
+        StoreCodeOverride = null,
+        LastSuccessAtUtc = _mySqlSyncSettings.Current.LastSuccessAtUtc,
+        LastError = _mySqlSyncSettings.Current.LastError
+    };
 
     private void ResetLayout()
     {

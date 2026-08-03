@@ -6,6 +6,7 @@ using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Purchases;
@@ -20,12 +21,18 @@ public class PurchaseService : IPurchaseService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
+    private readonly IReportingSyncService _reportingSync;
 
-    public PurchaseService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
+    public PurchaseService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        ISettingsService settings,
+        IReportingSyncService reportingSync)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
+        _reportingSync = reportingSync;
     }
 
     public async Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
@@ -131,6 +138,7 @@ public class PurchaseService : IPurchaseService
         var purchase = await _uow.Repository<Purchase>().Query().AsNoTracking()
             .Include(p => p.Items)
             .Include(p => p.Supplier)
+            .Include(p => p.LinkedPurchaseReturn)
             .FirstOrDefaultAsync(p => p.Id == purchaseId && p.Status == PurchaseStatus.Received, ct);
 
         if (purchase is null)
@@ -156,7 +164,12 @@ public class PurchaseService : IPurchaseService
             SupplierName = purchase.Supplier?.Name ?? $"Supplier #{purchase.SupplierId}",
             SupplierPhone = purchase.Supplier?.Phone,
             GrandTotal = purchase.GrandTotal,
-            PaidAmount = purchase.PaidAmount,
+            // UI "Amount paid" is cash/bank only; return credit is re-applied on save.
+            PaidAmount = Math.Max(0m, purchase.PaidAmount - purchase.ReturnCreditApplied),
+            ReturnCreditApplied = purchase.ReturnCreditApplied,
+            PartialPaymentReason = purchase.PartialPaymentReason,
+            PartialPaymentNotes = purchase.PartialPaymentNotes,
+            LinkedReturnNumber = purchase.LinkedPurchaseReturn?.ReturnNumber,
             PaymentMethod = PaymentMethod.Cash,
             Lines = purchase.Items.Select(i =>
             {
@@ -290,6 +303,8 @@ public class PurchaseService : IPurchaseService
             var purchase = await _uow.ExecuteInTransactionAsync(
                 token => BuildAndPersistPurchaseAsync(request, branchId, token), ct);
 
+            await _reportingSync.EnqueuePurchaseAsync(purchase.Id, ct);
+
             return await BuildReceiptAsync(purchase, ct);
         }
         catch (PurchaseException pex)
@@ -319,6 +334,8 @@ public class PurchaseService : IPurchaseService
             var purchase = await _uow.ExecuteInTransactionAsync(
                 token => UpdateAndPersistPurchaseAsync(request, branchId, token), ct);
 
+            await _reportingSync.EnqueuePurchaseAsync(purchase.Id, ct);
+
             return await BuildReceiptAsync(purchase, ct);
         }
         catch (PurchaseException pex)
@@ -345,6 +362,7 @@ public class PurchaseService : IPurchaseService
             ?? throw new PurchaseException("The original supplier no longer exists.");
 
         AdjustSupplierBalance(oldSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: true);
+        await ReverseLinkedReturnCreditAsync(purchase, ct);
 
         await RestorePurchaseStockAsync(purchase, branchId, ct);
 
@@ -364,6 +382,7 @@ public class PurchaseService : IPurchaseService
 
         var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
         ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
+        await ApplyPartialPaymentReasonAsync(purchase, request, ct);
 
         AdjustSupplierBalance(newSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: false);
 
@@ -442,6 +461,7 @@ public class PurchaseService : IPurchaseService
 
         var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
         ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
+        await ApplyPartialPaymentReasonAsync(purchase, request, ct);
 
         purchase.InvoiceNumber = await GenerateInvoiceNumberAsync(branchId, ct);
         await _uow.Repository<Purchase>().AddAsync(purchase, ct);
@@ -575,9 +595,122 @@ public class PurchaseService : IPurchaseService
         purchase.IgstAmount = 0m;
         purchase.RoundOff = rounded - netTotal;
         purchase.GrandTotal = rounded;
-        purchase.PaidAmount = paidAmount;
-        purchase.PaymentStatus = paidAmount >= rounded ? PaymentStatus.Paid
-            : paidAmount > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
+        purchase.PaidAmount = Math.Clamp(paidAmount, 0m, rounded);
+        purchase.PaymentStatus = purchase.PaidAmount >= rounded ? PaymentStatus.Paid
+            : purchase.PaidAmount > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
+        purchase.PartialPaymentReason = null;
+        purchase.PartialPaymentNotes = null;
+        purchase.LinkedPurchaseReturnId = null;
+        purchase.ReturnCreditApplied = 0m;
+    }
+
+    /// <summary>
+    /// When cash/bank paid is below grand total, require a reason. Against-return
+    /// applies remaining supplier-credit onto PaidAmount.
+    /// </summary>
+    private async Task ApplyPartialPaymentReasonAsync(
+        Purchase purchase, CreatePurchaseRequest request, CancellationToken ct)
+    {
+        var cashPaid = purchase.PaidAmount;
+        var due = purchase.GrandTotal - cashPaid;
+        if (due <= 0)
+            return;
+
+        if (request.PartialPaymentReason is null)
+            throw new PurchaseException("Select a reason for the unpaid / partial amount.");
+
+        var reason = request.PartialPaymentReason.Value;
+        var notes = string.IsNullOrWhiteSpace(request.PartialPaymentNotes)
+            ? null
+            : request.PartialPaymentNotes.Trim();
+
+        if (reason == PurchasePartialPaymentReason.Other && string.IsNullOrWhiteSpace(notes))
+            throw new PurchaseException("Enter a note explaining the partial payment.");
+
+        purchase.PartialPaymentReason = reason;
+        purchase.PartialPaymentNotes = notes;
+
+        if (reason != PurchasePartialPaymentReason.AgainstPurchaseReturn)
+            return;
+
+        if (request.LinkedPurchaseReturnId is not int returnId || returnId <= 0)
+            throw new PurchaseException("Select a purchase return to apply against this bill.");
+
+        var purchaseReturn = await _uow.Repository<PurchaseReturn>().Query()
+            .FirstOrDefaultAsync(r => r.Id == returnId, ct)
+            ?? throw new PurchaseException("The selected purchase return was not found.");
+
+        if (purchaseReturn.SupplierId != purchase.SupplierId)
+            throw new PurchaseException("The purchase return belongs to a different supplier.");
+        if (purchaseReturn.SettlementMode != PurchaseReturnSettlementMode.SupplierCredit)
+            throw new PurchaseException("Only supplier-credit returns can settle a purchase bill.");
+        if (purchaseReturn.Status == PurchaseReturnStatus.Cancelled)
+            throw new PurchaseException("The selected purchase return is cancelled.");
+
+        var remaining = purchaseReturn.RemainingCredit;
+        if (remaining <= 0)
+            throw new PurchaseException("The selected purchase return has no remaining credit.");
+
+        var applied = Math.Min(due, remaining);
+        purchase.ReturnCreditApplied = applied;
+        purchase.LinkedPurchaseReturnId = returnId;
+        purchase.PaidAmount = Math.Clamp(cashPaid + applied, 0m, purchase.GrandTotal);
+        purchase.PaymentStatus = purchase.PaidAmount >= purchase.GrandTotal ? PaymentStatus.Paid
+            : purchase.PaidAmount > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
+
+        purchaseReturn.CreditAppliedAmount += applied;
+        _uow.Repository<PurchaseReturn>().Update(purchaseReturn);
+    }
+
+    private async Task ReverseLinkedReturnCreditAsync(Purchase purchase, CancellationToken ct)
+    {
+        if (purchase.ReturnCreditApplied <= 0 || purchase.LinkedPurchaseReturnId is not int returnId)
+        {
+            purchase.ReturnCreditApplied = 0m;
+            purchase.LinkedPurchaseReturnId = null;
+            purchase.PartialPaymentReason = null;
+            purchase.PartialPaymentNotes = null;
+            return;
+        }
+
+        var purchaseReturn = await _uow.Repository<PurchaseReturn>().GetByIdAsync(returnId, ct);
+        if (purchaseReturn is not null)
+        {
+            purchaseReturn.CreditAppliedAmount = Math.Max(0m,
+                purchaseReturn.CreditAppliedAmount - purchase.ReturnCreditApplied);
+            _uow.Repository<PurchaseReturn>().Update(purchaseReturn);
+        }
+
+        purchase.PaidAmount = Math.Max(0m, purchase.PaidAmount - purchase.ReturnCreditApplied);
+        purchase.ReturnCreditApplied = 0m;
+        purchase.LinkedPurchaseReturnId = null;
+        purchase.PartialPaymentReason = null;
+        purchase.PartialPaymentNotes = null;
+    }
+
+    public async Task<List<OpenPurchaseReturnCreditDto>> ListOpenPurchaseReturnCreditsAsync(
+        int supplierId, int? branchId, CancellationToken ct = default)
+    {
+        if (supplierId <= 0) return [];
+
+        var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+            .Where(r => r.SupplierId == supplierId
+                        && r.SettlementMode == PurchaseReturnSettlementMode.SupplierCredit
+                        && r.Status != PurchaseReturnStatus.Cancelled
+                        && r.CreditAmount > r.CreditAppliedAmount);
+        if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
+
+        return await q
+            .OrderByDescending(r => r.ReturnDate)
+            .ThenByDescending(r => r.Id)
+            .Select(r => new OpenPurchaseReturnCreditDto(
+                r.Id,
+                r.ReturnNumber,
+                r.ReturnDate,
+                r.CreditAmount,
+                r.CreditAmount - r.CreditAppliedAmount))
+            .Take(100)
+            .ToListAsync(ct);
     }
 
     /// <summary>Signals a recoverable, user-facing purchase validation failure.</summary>
@@ -621,7 +754,9 @@ public class PurchaseService : IPurchaseService
             RoundOff = purchase.RoundOff,
             GrandTotal = purchase.GrandTotal,
             PaidAmount = purchase.PaidAmount,
-            BalanceDue = purchase.GrandTotal > purchase.PaidAmount ? purchase.GrandTotal - purchase.PaidAmount : 0m
+            BalanceDue = purchase.GrandTotal > purchase.PaidAmount ? purchase.GrandTotal - purchase.PaidAmount : 0m,
+            ReturnCreditApplied = purchase.ReturnCreditApplied,
+            PartialPaymentReason = purchase.PartialPaymentReason
         };
 
         return Result.Success(receipt);

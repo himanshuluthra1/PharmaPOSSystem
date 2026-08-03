@@ -3,8 +3,11 @@ using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
+using PharmaPOS.Domain.Entities.Purchases;
+using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Inventory;
@@ -14,12 +17,18 @@ public class InventoryService : IInventoryService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
+    private readonly IReportingSyncService _reportingSync;
 
-    public InventoryService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
+    public InventoryService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        ISettingsService settings,
+        IReportingSyncService reportingSync)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
+        _reportingSync = reportingSync;
     }
 
     public async Task<StockSummaryDto> GetStockSummaryAsync(int? branchId, CancellationToken ct = default)
@@ -187,6 +196,10 @@ public class InventoryService : IInventoryService
         CancellationToken ct = default)
     {
         term = term?.Trim() ?? string.Empty;
+        // Treat 0 as "no filter" — cart/purchase rows often expose BatchId = 0.
+        if (batchId is <= 0) batchId = null;
+        if (medicineId is <= 0) medicineId = null;
+
         var q = _uow.Repository<StockMovement>().Query().AsNoTracking();
         if (branchId.HasValue) q = q.Where(m => m.BranchId == branchId);
         if (medicineId.HasValue) q = q.Where(m => m.MedicineId == medicineId.Value);
@@ -201,10 +214,10 @@ public class InventoryService : IInventoryService
                 (m.Remarks != null && m.Remarks.Replace(" ", "").Contains(normalized)));
         }
 
-        return await q
+        var rows = await q
             .OrderByDescending(m => m.MovementDateUtc)
             .ThenByDescending(m => m.Id)
-            .Take(take)
+            .Take(Math.Max(take, 2000))
             .Select(m => new StockLedgerRowDto(
                 m.Id,
                 m.MovementDateUtc,
@@ -216,6 +229,298 @@ public class InventoryService : IInventoryService
                 m.UnitCost,
                 m.ReferenceNumber,
                 m.Remarks))
+            .ToListAsync(ct);
+
+        // MedWin import wrote Sales/Purchases but not StockMovements. For a medicine
+        // ledger (Ctrl+L), merge document history so purchase/sale lines appear.
+        if (medicineId.HasValue && string.IsNullOrWhiteSpace(term) && batchId is null)
+        {
+            rows = await MergeDocumentHistoryAsync(rows, medicineId.Value, branchId, take, ct);
+        }
+        else if (rows.Count == 0 && medicineId.HasValue)
+        {
+            rows = await BuildBatchStockFallbackAsync(medicineId.Value, batchId, branchId, take, ct);
+        }
+        else if (rows.Count > take)
+        {
+            rows = rows.Take(take).ToList();
+        }
+
+        return rows;
+    }
+
+    private async Task<List<StockLedgerRowDto>> MergeDocumentHistoryAsync(
+        List<StockLedgerRowDto> movementRows,
+        int medicineId,
+        int? branchId,
+        int take,
+        CancellationToken ct)
+    {
+        var docRows = await BuildDocumentLedgerRowsAsync(medicineId, branchId, ct);
+
+        // Prefer real stock movements; skip document rows already covered by a movement reference.
+        var coveredRefs = movementRows
+            .Where(r => !string.IsNullOrWhiteSpace(r.ReferenceNumber))
+            .Select(r => r.ReferenceNumber!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Ignore placeholder current-stock snapshot rows when we have purchase/sale history.
+        var coreMovements = movementRows
+            .Where(r => !(r.MovementType == StockMovementType.OpeningStock
+                          && (string.Equals(r.ReferenceNumber, "OPENING", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(r.ReferenceNumber, "STOCK", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(r.Remarks, "MedWin opening stock", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(r.Remarks, "MedWin current stock snapshot", StringComparison.OrdinalIgnoreCase)
+                              || (r.Remarks != null && r.Remarks.Contains("no movement history", StringComparison.OrdinalIgnoreCase)))))
+            .ToList();
+
+        var extraDocs = docRows
+            .Where(d => string.IsNullOrWhiteSpace(d.ReferenceNumber)
+                        || !coveredRefs.Contains(d.ReferenceNumber))
+            .ToList();
+
+        var merged = coreMovements.Concat(extraDocs).ToList();
+        if (merged.Count == 0)
+            return await BuildBatchStockFallbackAsync(medicineId, null, branchId, take, ct);
+
+        return await ApplyRunningBalancesAsync(merged, medicineId, branchId, take, ct);
+    }
+
+    private async Task<List<StockLedgerRowDto>> BuildDocumentLedgerRowsAsync(
+        int medicineId, int? branchId, CancellationToken ct)
+    {
+        var medicine = await _uow.Repository<Medicine>().Query().AsNoTracking()
+            .Where(m => m.Id == medicineId)
+            .Select(m => new { m.Name })
+            .FirstOrDefaultAsync(ct);
+        var medicineName = medicine?.Name ?? $"Medicine #{medicineId}";
+
+        var fyStartLocal = GetIndianFinancialYearStart(_clock.Today);
+
+        var purchaseQuery = _uow.Repository<PurchaseItem>().Query().AsNoTracking()
+            .Where(i => i.MedicineId == medicineId
+                        && i.Purchase != null
+                        && i.Purchase.Status == PurchaseStatus.Received
+                        && i.Purchase.InvoiceDate >= fyStartLocal);
+        if (branchId.HasValue)
+            purchaseQuery = purchaseQuery.Where(i => i.Purchase!.BranchId == branchId);
+
+        var purchaseRows = await purchaseQuery
+            .Select(i => new
+            {
+                i.Id,
+                i.Purchase!.InvoiceDate,
+                i.Purchase.InvoiceNumber,
+                i.BatchNumber,
+                Qty = i.Quantity + i.FreeQuantity,
+                i.PurchasePrice
+            })
+            .ToListAsync(ct);
+
+        var saleQuery = _uow.Repository<SaleItem>().Query().AsNoTracking()
+            .Where(i => i.MedicineId == medicineId
+                        && i.Sale != null
+                        && i.Sale.Status != SaleStatus.Cancelled
+                        && i.Quantity != 0
+                        && i.Sale.InvoiceDate >= fyStartLocal);
+        if (branchId.HasValue)
+            saleQuery = saleQuery.Where(i => i.Sale!.BranchId == branchId);
+
+        var saleRows = await saleQuery
+            .Select(i => new
+            {
+                i.Id,
+                i.Sale!.InvoiceDate,
+                i.Sale.InvoiceNumber,
+                i.BatchNumber,
+                i.Quantity,
+                i.UnitPrice
+            })
+            .ToListAsync(ct);
+
+        var returnQuery = _uow.Repository<PurchaseReturnItem>().Query().AsNoTracking()
+            .Where(i => i.MedicineId == medicineId
+                        && i.PurchaseReturn != null
+                        && i.PurchaseReturn.Status == PurchaseReturnStatus.Completed
+                        && i.PurchaseReturn.ReturnDate >= fyStartLocal);
+        if (branchId.HasValue)
+            returnQuery = returnQuery.Where(i => i.PurchaseReturn!.BranchId == branchId);
+
+        var returnRows = await returnQuery
+            .Select(i => new
+            {
+                i.Id,
+                i.PurchaseReturn!.ReturnDate,
+                i.PurchaseReturn.ReturnNumber,
+                i.BatchNumber,
+                Qty = i.ReturnedQuantity + i.ReturnedFreeQuantity,
+                i.PurchasePrice
+            })
+            .ToListAsync(ct);
+
+        var rows = new List<StockLedgerRowDto>(purchaseRows.Count + saleRows.Count + returnRows.Count);
+
+        foreach (var p in purchaseRows.Where(x => x.Qty != 0))
+        {
+            rows.Add(new StockLedgerRowDto(
+                p.Id,
+                ToUtc(p.InvoiceDate),
+                StockMovementType.PurchaseIn,
+                medicineName,
+                p.BatchNumber,
+                Math.Abs(p.Qty),
+                0m,
+                p.PurchasePrice,
+                p.InvoiceNumber,
+                null));
+        }
+
+        foreach (var s in saleRows)
+        {
+            var isReturn = s.Quantity < 0;
+            // Quantities are stored in the same units as stock (MedWin import keeps loose units).
+            rows.Add(new StockLedgerRowDto(
+                s.Id,
+                ToUtc(s.InvoiceDate),
+                isReturn ? StockMovementType.SaleReturn : StockMovementType.SaleOut,
+                medicineName,
+                s.BatchNumber,
+                Math.Abs(s.Quantity),
+                0m,
+                s.UnitPrice,
+                s.InvoiceNumber,
+                isReturn ? "Sale return (from bill)" : null));
+        }
+
+        foreach (var r in returnRows.Where(x => x.Qty != 0))
+        {
+            rows.Add(new StockLedgerRowDto(
+                r.Id,
+                ToUtc(r.ReturnDate),
+                StockMovementType.PurchaseReturn,
+                medicineName,
+                r.BatchNumber,
+                Math.Abs(r.Qty),
+                0m,
+                r.PurchasePrice,
+                r.ReturnNumber,
+                "Purchase return"));
+        }
+
+        return rows;
+    }
+
+    private async Task<List<StockLedgerRowDto>> ApplyRunningBalancesAsync(
+        List<StockLedgerRowDto> rows,
+        int medicineId,
+        int? branchId,
+        int take,
+        CancellationToken ct)
+    {
+        var currentStockQuery = _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+            .Where(b => b.MedicineId == medicineId);
+        if (branchId.HasValue)
+            currentStockQuery = currentStockQuery.Where(b => b.BranchId == branchId);
+        var currentStock = await currentStockQuery.SumAsync(b => (decimal?)b.QuantityAvailable, ct) ?? 0m;
+
+        var fyStartLocal = GetIndianFinancialYearStart(_clock.Today);
+        var fyStartUtc = ToUtc(fyStartLocal);
+
+        var chronological = rows
+            .OrderBy(r => r.MovementDateUtc)
+            .ThenBy(r => r.MovementId)
+            .ToList();
+
+        var net = chronological.Sum(r => SignedLedgerQuantity(r.MovementType, r.Quantity));
+        var opening = currentStock - net;
+        var medicineName = chronological.FirstOrDefault()?.MedicineName ?? $"Medicine #{medicineId}";
+
+        // Always show FY opening row (MedWin "FINANCIAL YEAR OPENING"), even when zero.
+        chronological.Insert(0, new StockLedgerRowDto(
+            0,
+            fyStartUtc,
+            opening >= 0 ? StockMovementType.OpeningStock : StockMovementType.AdjustmentOut,
+            medicineName,
+            null,
+            Math.Abs(opening),
+            0m,
+            0m,
+            "OPENING",
+            opening >= 0
+                ? $"Financial year opening ({fyStartLocal:dd/MM/yyyy})"
+                : "Opening adjustment (history incomplete)"));
+
+        decimal balance = 0m;
+        var withBalance = new List<StockLedgerRowDto>(chronological.Count);
+        foreach (var row in chronological)
+        {
+            balance += SignedLedgerQuantity(row.MovementType, row.Quantity);
+            withBalance.Add(row with { BalanceAfter = balance });
+        }
+
+        return withBalance
+            .OrderByDescending(r => r.MovementDateUtc)
+            .ThenByDescending(r => r.MovementId)
+            .Take(take)
+            .ToList();
+    }
+
+    /// <summary>Indian FY starts 1 April.</summary>
+    private static DateTime GetIndianFinancialYearStart(DateTime localDate)
+    {
+        var year = localDate.Month >= 4 ? localDate.Year : localDate.Year - 1;
+        return new DateTime(year, 4, 1, 0, 0, 0, DateTimeKind.Local);
+    }
+
+    private static decimal SignedLedgerQuantity(StockMovementType type, decimal quantity)
+    {
+        var abs = Math.Abs(quantity);
+        return IsInboundMovement(type) ? abs : -abs;
+    }
+
+    private static bool IsInboundMovement(StockMovementType type) => type switch
+    {
+        StockMovementType.PurchaseIn => true,
+        StockMovementType.SaleReturn => true,
+        StockMovementType.AdjustmentIn => true,
+        StockMovementType.TransferIn => true,
+        StockMovementType.OpeningStock => true,
+        StockMovementType.NonSaleableIn => true,
+        _ => false
+    };
+
+    private static DateTime ToUtc(DateTime value)
+        => value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime()
+            : value.ToUniversalTime();
+
+    private async Task<List<StockLedgerRowDto>> BuildBatchStockFallbackAsync(
+        int medicineId,
+        int? batchId,
+        int? branchId,
+        int take,
+        CancellationToken ct)
+    {
+        var bq = _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+            .Where(b => b.MedicineId == medicineId);
+        if (branchId.HasValue) bq = bq.Where(b => b.BranchId == branchId);
+        if (batchId.HasValue) bq = bq.Where(b => b.Id == batchId.Value);
+
+        return await bq
+            .OrderByDescending(b => b.CreatedAtUtc)
+            .ThenBy(b => b.BatchNumber)
+            .Take(take)
+            .Select(b => new StockLedgerRowDto(
+                b.Id,
+                b.CreatedAtUtc,
+                StockMovementType.OpeningStock,
+                b.Medicine != null ? b.Medicine.Name : $"Medicine #{medicineId}",
+                b.BatchNumber,
+                b.QuantityAvailable,
+                b.QuantityAvailable,
+                b.PurchasePrice,
+                "STOCK",
+                "Current batch stock (no movement history yet)"))
             .ToListAsync(ct);
     }
 
@@ -269,6 +574,7 @@ public class InventoryService : IInventoryService
         };
         await _uow.Repository<MedicineBatch>().AddAsync(batch, ct);
         await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueMedicineBatchAsync(batch.Id, ct);
 
         return
         [
@@ -357,6 +663,13 @@ public class InventoryService : IInventoryService
                     LinesAdjusted = lines.Count
                 };
             }, ct);
+
+            var movementIds = await _uow.Repository<StockMovement>().Query().AsNoTracking()
+                .Where(m => m.ReferenceType == nameof(StockAdjustment) && m.ReferenceId == receipt.AdjustmentId)
+                .Select(m => m.Id)
+                .ToListAsync(ct);
+            foreach (var movementId in movementIds)
+                await _reportingSync.EnqueueStockMovementAsync(movementId, ct);
 
             return Result.Success(receipt);
         }

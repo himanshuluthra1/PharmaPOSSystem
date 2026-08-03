@@ -89,6 +89,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
+    public DbSet<SyncOutboxEntry> SyncOutboxEntries => Set<SyncOutboxEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

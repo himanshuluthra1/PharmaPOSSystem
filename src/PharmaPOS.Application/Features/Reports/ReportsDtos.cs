@@ -61,8 +61,16 @@ public record PurchaseReportRowDto(
     decimal SgstAmount,
     decimal IgstAmount,
     decimal GrandTotal,
+    /// <summary>Total settled (cash/bank + return credit applied).</summary>
     decimal PaidAmount,
-    decimal BalanceDue)
+    /// <summary>Cash/bank paid only (excludes return credit).</summary>
+    decimal CashPaid,
+    /// <summary>Supplier return credit applied toward this bill.</summary>
+    decimal ReturnCreditApplied,
+    /// <summary>Net amount still payable after cash and return credit.</summary>
+    decimal BalanceDue,
+    /// <summary>Why the bill was left unpaid / partially paid.</summary>
+    string DueReason)
 {
     public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
     public decimal TaxAmount => CgstAmount + SgstAmount + IgstAmount;

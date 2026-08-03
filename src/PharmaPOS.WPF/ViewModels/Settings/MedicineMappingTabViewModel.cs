@@ -24,6 +24,10 @@ public class MedicineMappingTabViewModel : ObservableObject
 
     private readonly IDialogService _dialog;
 
+    private readonly IAiBillSettingsService _aiSettings;
+
+    private readonly IGeminiMedicineMappingMatcher _geminiMatcher;
+
     private readonly HashSet<int> _pendingMedWinIds = new();
 
     private readonly SemaphoreSlim _oneMgLoadGate = new(1, 1);
@@ -31,6 +35,8 @@ public class MedicineMappingTabViewModel : ObservableObject
     private readonly SemaphoreSlim _medWinLoadGate = new(1, 1);
 
     private CancellationTokenSource? _medWinSearchCts;
+
+    private CancellationTokenSource? _oneMgSuggestCts;
 
     private bool _suppressMedWinSelection;
 
@@ -64,13 +70,21 @@ public class MedicineMappingTabViewModel : ObservableObject
 
 
 
-    public MedicineMappingTabViewModel(IServiceScopeFactory scopeFactory, IDialogService dialog)
+    public MedicineMappingTabViewModel(
+        IServiceScopeFactory scopeFactory,
+        IDialogService dialog,
+        IAiBillSettingsService aiSettings,
+        IGeminiMedicineMappingMatcher geminiMatcher)
 
     {
 
         _scopeFactory = scopeFactory;
 
         _dialog = dialog;
+
+        _aiSettings = aiSettings;
+
+        _geminiMatcher = geminiMatcher;
 
         MapCommand = new RelayCommand(_ => QueueMapping(), _ => CanMap);
 
@@ -655,6 +669,16 @@ public class MedicineMappingTabViewModel : ObservableObject
 
     {
 
+        _oneMgSuggestCts?.Cancel();
+
+        _oneMgSuggestCts?.Dispose();
+
+        _oneMgSuggestCts = new CancellationTokenSource();
+
+        var suggestCt = _oneMgSuggestCts.Token;
+
+
+
         await _oneMgLoadGate.WaitAsync();
 
         try
@@ -719,7 +743,7 @@ public class MedicineMappingTabViewModel : ObservableObject
 
 
 
-            if (SelectedMedWin?.Id != medWin.Id)
+            if (SelectedMedWin?.Id != medWin.Id || suggestCt.IsCancellationRequested)
 
                 return;
 
@@ -731,9 +755,19 @@ public class MedicineMappingTabViewModel : ObservableObject
 
                 OneMgItems.Add(item);
 
-            SelectedOneMg = OneMgItems.FirstOrDefault();
 
-            StatusMessage = $"Showing {OneMgItems.Count} OneMG match(es) for brand prefix \"{brandPrefix}\".";
+
+            SelectedOneMg = await PickSuggestedOneMgAsync(medWin, items, brandPrefix, suggestCt);
+            if (SelectedOneMg is not null)
+                MoveOneMgItemToTop(SelectedOneMg);
+
+        }
+
+        catch (OperationCanceledException)
+
+        {
+
+            // Selection changed while Gemini was running.
 
         }
 
@@ -754,6 +788,174 @@ public class MedicineMappingTabViewModel : ObservableObject
             _oneMgLoadGate.Release();
 
         }
+
+    }
+
+
+
+
+    private void MoveOneMgItemToTop(MedicineMappingListItemDto item)
+    {
+        var existing = OneMgItems.FirstOrDefault(i => i.Id == item.Id) ?? item;
+        var index = OneMgItems.IndexOf(existing);
+        if (index < 0)
+        {
+            OneMgItems.Insert(0, existing);
+            return;
+        }
+        if (index == 0) return;
+        OneMgItems.Move(index, 0);
+    }
+
+    private async Task<MedicineMappingListItemDto?> PickSuggestedOneMgAsync(
+
+        MedicineMappingListItemDto medWin,
+
+        IReadOnlyList<MedicineMappingListItemDto> items,
+
+        string brandPrefix,
+
+        CancellationToken ct)
+
+    {
+
+        if (items.Count == 0)
+
+        {
+
+            StatusMessage = $"No OneMG matches for brand prefix \"{brandPrefix}\".";
+
+            return null;
+
+        }
+
+
+
+        _aiSettings.Load();
+
+        if (_aiSettings.IsGeminiReady)
+
+        {
+
+            StatusMessage = $"Asking Gemini to match \"{medWin.Name}\" among {items.Count} OneMG candidate(s)...";
+
+            try
+
+            {
+
+                var suggestion = await _geminiMatcher.SuggestAsync(medWin, items, ct);
+
+                if (SelectedMedWin?.Id != medWin.Id || ct.IsCancellationRequested)
+
+                    return null;
+
+
+
+                if (suggestion?.OneMgMedicineId is int geminiId)
+
+                {
+
+                    var chosen = OneMgItems.FirstOrDefault(i => i.Id == geminiId)
+
+                                 ?? items.FirstOrDefault(i => i.Id == geminiId);
+
+                    if (chosen is not null)
+
+                    {
+
+                        var conf = suggestion.Confidence is > 0
+
+                            ? $" ({suggestion.Confidence:P0})"
+
+                            : string.Empty;
+
+                        var reason = string.IsNullOrWhiteSpace(suggestion.Reason)
+
+                            ? string.Empty
+
+                            : $" — {suggestion.Reason.Trim()}";
+
+                        StatusMessage =
+
+                            $"Gemini selected \"{chosen.Name}\"{conf}{reason}";
+
+                        return chosen;
+
+                    }
+
+                }
+
+
+
+                if (suggestion is not null && suggestion.OneMgMedicineId is null)
+
+                {
+
+                    StatusMessage =
+
+                        string.IsNullOrWhiteSpace(suggestion.Reason)
+
+                            ? $"Gemini found no confident OneMG match among {items.Count} candidate(s)."
+
+                            : $"Gemini: {suggestion.Reason.Trim()}";
+
+                    return items.Count == 1 ? items[0] : null;
+
+                }
+
+            }
+
+            catch (OperationCanceledException)
+
+            {
+
+                throw;
+
+            }
+
+            catch
+
+            {
+
+                // Fall through to deterministic pick.
+
+            }
+
+        }
+
+
+
+        var deterministic = MedicineMappingHelper.PickBestOneMgMatch(
+
+            medWin.Name, medWin.GenericName, items);
+
+        if (deterministic is not null)
+
+        {
+
+            StatusMessage =
+
+                $"Suggested \"{deterministic.Name}\" for brand prefix \"{brandPrefix}\" " +
+
+                $"(name / salt / strength rules). {items.Count} candidate(s) listed.";
+
+            return OneMgItems.FirstOrDefault(i => i.Id == deterministic.Id) ?? deterministic;
+
+        }
+
+
+
+        StatusMessage =
+
+            _aiSettings.IsGeminiReady
+
+                ? $"Showing {items.Count} OneMG candidate(s) for \"{brandPrefix}\". Select the best match."
+
+                : $"Showing {items.Count} OneMG match(es) for brand prefix \"{brandPrefix}\". " +
+
+                  "Enable Gemini in Preferences for AI selection.";
+
+        return items.Count == 1 ? OneMgItems.FirstOrDefault() ?? items[0] : null;
 
     }
 

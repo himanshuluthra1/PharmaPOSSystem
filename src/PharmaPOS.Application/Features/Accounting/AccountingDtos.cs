@@ -15,6 +15,12 @@ public enum VoucherKind
     Expense
 }
 
+public enum PaymentAllocationMode
+{
+    Fifo = 0,
+    BillWise = 1
+}
+
 public sealed class VoucherKindOption(VoucherKind kind, string label)
 {
     public VoucherKind Kind { get; } = kind;
@@ -63,6 +69,12 @@ public record AccountLookupDto(
     public string DisplayLabel => $"{Code} — {Name}";
 }
 
+public class BillPaymentAllocationDto
+{
+    public int PurchaseId { get; set; }
+    public decimal Amount { get; set; }
+}
+
 public class CreatePaymentRequest
 {
     public int SupplierId { get; set; }
@@ -70,7 +82,10 @@ public class CreatePaymentRequest
     public int CashOrBankAccountId { get; set; }
     public DateTime EntryDate { get; set; } = DateTime.Today;
     public string? Narration { get; set; }
+    public PaymentAllocationMode AllocationMode { get; set; } = PaymentAllocationMode.Fifo;
+    public List<BillPaymentAllocationDto> BillAllocations { get; set; } = new();
 }
+
 
 public class CreateReceiptRequest
 {

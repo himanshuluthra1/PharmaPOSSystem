@@ -2,16 +2,16 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal static class OneMgDuplicateCleaner
+public static class OneMgDuplicateCleaner
 {
     private sealed record MedicineRow(int Id, string Name, int SaleCount, int StockBatchCount);
 
     public static async Task RunAsync(MedWinImportContext ctx, SqlConnection target, bool dryRun)
     {
-        Console.WriteLine($"\n[dedupe-onemg] Removing duplicate OneMG medicines (dry-run={dryRun})...");
+        ctx.Log($"\n[dedupe-onemg] Removing duplicate OneMG medicines (dry-run={dryRun})...");
 
         var groups = await LoadDuplicateGroupsAsync(target);
-        Console.WriteLine($"  Duplicate name groups: {groups.Count:N0}");
+        ctx.Log($"  Duplicate name groups: {groups.Count:N0}");
 
         var toDelete = new List<MedicineRow>();
         var kept = 0;
@@ -31,20 +31,20 @@ internal static class OneMgDuplicateCleaner
             toDelete.AddRange(rows.Where(r => r.Id != keeper.Id));
         }
 
-        Console.WriteLine($"  Keeping {kept:N0} rows, removing {toDelete.Count:N0} duplicate rows with no sale bills.");
+        ctx.Log($"  Keeping {kept:N0} rows, removing {toDelete.Count:N0} duplicate rows with no sale bills.");
 
         if (toDelete.Count == 0)
         {
-            Console.WriteLine("  Nothing to remove.");
+            ctx.Log("  Nothing to remove.");
             return;
         }
 
         if (dryRun)
         {
             foreach (var sample in toDelete.Take(10))
-                Console.WriteLine($"    would delete Id={sample.Id} ({sample.Name})");
+                ctx.Log($"    would delete Id={sample.Id} ({sample.Name})");
             if (toDelete.Count > 10)
-                Console.WriteLine($"    ... and {toDelete.Count - 10:N0} more");
+                ctx.Log($"    ... and {toDelete.Count - 10:N0} more");
             return;
         }
 
@@ -73,7 +73,7 @@ internal static class OneMgDuplicateCleaner
             await medCmd.ExecuteNonQueryAsync();
         }
 
-        Console.WriteLine($"  Soft-deleted {toDelete.Count:N0} duplicate OneMG medicines.");
+        ctx.Log($"  Soft-deleted {toDelete.Count:N0} duplicate OneMG medicines.");
     }
 
     private static async Task<List<(string Name, List<MedicineRow> Rows)>> LoadDuplicateGroupsAsync(SqlConnection target)

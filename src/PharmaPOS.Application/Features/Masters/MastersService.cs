@@ -3,6 +3,7 @@ using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Masters;
@@ -13,8 +14,13 @@ public class MastersService : IMastersService
     private const int DefaultTake = 50;
 
     private readonly IUnitOfWork _uow;
+    private readonly IReportingSyncService _reportingSync;
 
-    public MastersService(IUnitOfWork uow) => _uow = uow;
+    public MastersService(IUnitOfWork uow, IReportingSyncService reportingSync)
+    {
+        _uow = uow;
+        _reportingSync = reportingSync;
+    }
 
     #region Suppliers
 
@@ -119,6 +125,7 @@ public class MastersService : IMastersService
             ApplyCustomer(entity, dto);
             _uow.Repository<Customer>().Update(entity);
             await _uow.SaveChangesAsync(ct);
+            await _reportingSync.EnqueueCustomerAsync(entity.Id, ct);
             return Result.Success(entity.Id);
         }
 
@@ -126,6 +133,7 @@ public class MastersService : IMastersService
         ApplyCustomer(created, dto);
         await _uow.Repository<Customer>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueCustomerAsync(created.Id, ct);
         return Result.Success(created.Id);
     }
 
@@ -430,6 +438,7 @@ public class MastersService : IMastersService
             ApplyMedicine(entity, dto);
             _uow.Repository<Medicine>().Update(entity);
             await _uow.SaveChangesAsync(ct);
+            await _reportingSync.EnqueueMedicineAsync(entity.Id, ct);
             return Result.Success(entity.Id);
         }
 
@@ -437,6 +446,7 @@ public class MastersService : IMastersService
         ApplyMedicine(created, dto);
         await _uow.Repository<Medicine>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueMedicineAsync(created.Id, ct);
         return Result.Success(created.Id);
     }
 

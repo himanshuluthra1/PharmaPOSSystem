@@ -7,6 +7,7 @@ using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Sales;
@@ -31,12 +32,18 @@ public class SalesService : ISalesService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
+    private readonly IReportingSyncService _reportingSync;
 
-    public SalesService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
+    public SalesService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        ISettingsService settings,
+        IReportingSyncService reportingSync)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
+        _reportingSync = reportingSync;
     }
 
     public async Task<MedicineLookupDto?> FindMedicineByBarcodeAsync(
@@ -300,6 +307,8 @@ public class SalesService : ISalesService
             var sale = await _uow.ExecuteInTransactionAsync(
                 token => BuildAndPersistSaleAsync(request, branchId, token), ct);
 
+            await _reportingSync.EnqueueSaleAsync(sale.Id, ct);
+
             // Receipt is composed from committed data via read-only queries.
             return await BuildReceiptAsync(sale, ct);
         }
@@ -327,6 +336,8 @@ public class SalesService : ISalesService
         {
             var sale = await _uow.ExecuteInTransactionAsync(
                 token => UpdateAndPersistSaleAsync(request, branchId, token), ct);
+
+            await _reportingSync.EnqueueSaleAsync(sale.Id, ct);
 
             return await BuildReceiptAsync(sale, ct);
         }

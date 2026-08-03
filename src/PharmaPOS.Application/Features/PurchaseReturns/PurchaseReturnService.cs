@@ -6,6 +6,7 @@ using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.PurchaseReturns;
@@ -14,11 +15,13 @@ public class PurchaseReturnService : IPurchaseReturnService
 {
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly IReportingSyncService _reportingSync;
 
-    public PurchaseReturnService(IUnitOfWork uow, IDateTimeProvider clock)
+    public PurchaseReturnService(IUnitOfWork uow, IDateTimeProvider clock, IReportingSyncService reportingSync)
     {
         _uow = uow;
         _clock = clock;
+        _reportingSync = reportingSync;
     }
 
     public Task<List<ReturnReasonOptionDto>> ListReturnReasonsAsync(CancellationToken ct = default)
@@ -127,7 +130,9 @@ public class PurchaseReturnService : IPurchaseReturnService
     {
         try
         {
-            return Result.Success(await PersistReturnAsync(request, branchId, userName, ct));
+            var receipt = await PersistReturnAsync(request, branchId, userName, ct);
+            await _reportingSync.EnqueuePurchaseReturnAsync(receipt.PurchaseReturnId, ct);
+            return Result.Success(receipt);
         }
         catch (PurchaseReturnException ex)
         {
@@ -140,7 +145,9 @@ public class PurchaseReturnService : IPurchaseReturnService
     {
         try
         {
-            return Result.Success(await PersistDirectReturnAsync(request, branchId, userName, ct));
+            var receipt = await PersistDirectReturnAsync(request, branchId, userName, ct);
+            await _reportingSync.EnqueuePurchaseReturnAsync(receipt.PurchaseReturnId, ct);
+            return Result.Success(receipt);
         }
         catch (PurchaseReturnException ex)
         {

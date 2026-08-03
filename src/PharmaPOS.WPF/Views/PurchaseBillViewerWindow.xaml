@@ -32,22 +32,26 @@
             <DockPanel>
                 <Button DockPanel.Dock="Right" Content="Close" IsCancel="True" Click="CloseButton_Click"
                         Style="{StaticResource MaterialDesignRaisedButton}" Padding="20,8" />
-                <UniformGrid Columns="4" HorizontalAlignment="Left">
+                <UniformGrid Columns="5" HorizontalAlignment="Left">
                     <StackPanel Margin="0,0,24,0">
                         <TextBlock Text="Grand Total" Opacity="0.6" FontSize="11" />
                         <TextBlock Text="{Binding GrandTotal, StringFormat=N2}" FontSize="18" FontWeight="Bold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Paid" Opacity="0.6" FontSize="11" />
-                        <TextBlock Text="{Binding PaidAmount, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Cash Paid" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding CashPaid, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Balance Due" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Return Credit" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding ReturnCreditApplied, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,24,0">
+                        <TextBlock Text="Net Due" Opacity="0.6" FontSize="11" />
                         <TextBlock Text="{Binding BalanceDue, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel>
-                        <TextBlock Text="Payment" Opacity="0.6" FontSize="11" />
-                        <TextBlock Text="{Binding PaymentMethod}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="Due Reason" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="{Binding DueReason}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
                     </StackPanel>
                 </UniformGrid>
             </DockPanel>

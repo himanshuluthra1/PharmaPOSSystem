@@ -3,6 +3,7 @@ using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Identity;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
 
@@ -13,11 +14,13 @@ public class SettingsService : ISettingsService
 {
     private readonly IUnitOfWork _uow;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IReportingSyncService _reportingSync;
 
-    public SettingsService(IUnitOfWork uow, IPasswordHasher passwordHasher)
+    public SettingsService(IUnitOfWork uow, IPasswordHasher passwordHasher, IReportingSyncService reportingSync)
     {
         _uow = uow;
         _passwordHasher = passwordHasher;
+        _reportingSync = reportingSync;
     }
 
     public async Task<CompanyProfileDto?> GetCompanyProfileAsync(CancellationToken ct = default)
@@ -166,6 +169,7 @@ public class SettingsService : ISettingsService
         if (dto.Id > 0)
             _uow.Repository<Branch>().Update(entity);
         await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueBranchAsync(entity.Id, ct);
         return Result.Success(entity.Id);
     }
 

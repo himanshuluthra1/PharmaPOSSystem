@@ -7,6 +7,7 @@ using PharmaPOS.Domain.Entities.Identity;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Inventory;
@@ -22,11 +23,13 @@ public sealed class StockTransferService : IStockTransferService
 
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly IReportingSyncService _reportingSync;
 
-    public StockTransferService(IUnitOfWork uow, IDateTimeProvider clock)
+    public StockTransferService(IUnitOfWork uow, IDateTimeProvider clock, IReportingSyncService reportingSync)
     {
         _uow = uow;
         _clock = clock;
+        _reportingSync = reportingSync;
     }
 
     public async Task<string> PreviewNextTransferNumberAsync(int? fromBranchId, CancellationToken ct = default)
@@ -225,6 +228,7 @@ public sealed class StockTransferService : IStockTransferService
                 };
             }, ct);
 
+            await _reportingSync.EnqueueStockTransferAsync(receipt.TransferId, ct);
             return Result.Success(receipt);
         }
         catch (TransferException ex)
@@ -315,6 +319,7 @@ public sealed class StockTransferService : IStockTransferService
                 };
             }, ct);
 
+            await _reportingSync.EnqueueStockTransferAsync(receipt.TransferId, ct);
             return Result.Success(receipt);
         }
         catch (TransferException ex)
@@ -754,6 +759,7 @@ public sealed class StockTransferService : IStockTransferService
                 };
             }, ct);
 
+            await _reportingSync.EnqueueStockTransferAsync(receipt.TransferId, ct);
             return Result.Success(receipt);
         }
         catch (TransferException ex)

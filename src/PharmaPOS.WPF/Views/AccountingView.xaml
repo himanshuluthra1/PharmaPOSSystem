@@ -173,6 +173,8 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" MinHeight="0" />
                             </Grid.RowDefinitions>
 
                             <Grid Grid.Row="0" Margin="0,0,0,8">
@@ -233,7 +235,38 @@
                                 </Border>
                             </StackPanel>
 
-                            <Grid Grid.Row="2">
+                            <StackPanel Grid.Row="2" Margin="0,0,0,8"
+                                        Visibility="{Binding ShowPaymentAllocation, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Allocate payment to bills" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <RadioButton Content="FIFO (oldest bills first)" IsChecked="{Binding IsFifoAllocation}" Margin="0,0,16,0" />
+                                    <RadioButton Content="Bill-wise" IsChecked="{Binding IsBillWiseAllocation}" />
+                                </StackPanel>
+                                <DockPanel Visibility="{Binding ShowBillWiseAllocation, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,6">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Content="Fill FIFO on checked" Command="{Binding FillFifoCheckedCommand}"
+                                                Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,6,0" Padding="8,2" />
+                                        <Button Content="Full due on checked" Command="{Binding ApplyFullDueCheckedCommand}"
+                                                Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,2" />
+                                    </StackPanel>
+                                    <TextBlock Text="Check bills and enter Apply amounts (must total the payment)." Opacity="0.65" FontSize="11" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </StackPanel>
+
+                            <DataGrid Grid.Row="3" Margin="0,0,0,8" MaxHeight="180"
+                                      ItemsSource="{Binding BillAllocations}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column"
+                                      Visibility="{Binding ShowBillWiseAllocation, Converter={StaticResource BoolToVisibility}}">
+                                <DataGrid.Columns>
+                                    <DataGridCheckBoxColumn Header="" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36" />
+                                    <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="120" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="130" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="90" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Apply" Binding="{Binding ApplyAmount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="90" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <Grid Grid.Row="4" VerticalAlignment="Top">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />

@@ -13,12 +13,13 @@ namespace PharmaPOS.WPF.Services;
 public interface IMedicineLedgerDialogService
 {
     /// <summary>
-    /// If focus is on a medicine-bearing grid row, shows that medicine's stock ledger.
-    /// Returns true when the shortcut was handled (even if nothing to show).
+    /// If focus is on a medicine-bearing grid row, shows that medicine's stock ledger
+    /// (all batches). Returns true when the shortcut was handled (even if nothing to show).
     /// </summary>
     Task<bool> TryShowForFocusedMedicineAsync();
 
-    Task ShowAsync(int medicineId, string? medicineName = null, int? batchId = null);
+    /// <summary>Shows the medicine stock ledger for all batches of the item.</summary>
+    Task ShowAsync(int medicineId, string? medicineName = null);
 }
 
 public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
@@ -39,7 +40,7 @@ public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
 
     public async Task<bool> TryShowForFocusedMedicineAsync()
     {
-        if (!TryResolveFocusedMedicine(out var medicineId, out var medicineName, out var batchId))
+        if (!TryResolveFocusedMedicine(out var medicineId, out var medicineName))
             return false;
 
         if (medicineId <= 0)
@@ -48,11 +49,11 @@ public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
             return true;
         }
 
-        await ShowAsync(medicineId, medicineName, batchId);
+        await ShowAsync(medicineId, medicineName);
         return true;
     }
 
-    public async Task ShowAsync(int medicineId, string? medicineName = null, int? batchId = null)
+    public async Task ShowAsync(int medicineId, string? medicineName = null)
     {
         using var scope = _scopeFactory.CreateScope();
         var inventory = scope.ServiceProvider.GetRequiredService<IInventoryService>();
@@ -65,10 +66,11 @@ public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
             medicineName = med?.Name ?? $"Medicine #{medicineId}";
         }
 
+        // Always medicine-level: never filter by batch.
         var rows = await inventory.GetStockLedgerAsync(
             term: null,
             medicineId: medicineId,
-            batchId: batchId,
+            batchId: null,
             branchId: branchId,
             take: 500);
 
@@ -81,11 +83,10 @@ public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
         window.ShowDialog();
     }
 
-    private static bool TryResolveFocusedMedicine(out int medicineId, out string? medicineName, out int? batchId)
+    private static bool TryResolveFocusedMedicine(out int medicineId, out string? medicineName)
     {
         medicineId = 0;
         medicineName = null;
-        batchId = null;
 
         var focused = Keyboard.FocusedElement as DependencyObject;
         var grid = FindAncestor<DataGrid>(focused);
@@ -93,7 +94,7 @@ public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
             grid = FindDescendantDataGridWithSelection(Window.GetWindow(fe));
 
         if (grid?.SelectedItem is not null)
-            return TryReadMedicineFromRow(grid.SelectedItem, out medicineId, out medicineName, out batchId);
+            return TryReadMedicineFromRow(grid.SelectedItem, out medicineId, out medicineName);
 
         // Medicine search popup uses a ListBox, not a DataGrid.
         var list = FindAncestor<ListBox>(focused);
@@ -101,20 +102,19 @@ public sealed class MedicineLedgerDialogService : IMedicineLedgerDialogService
             list = FindDescendantListBoxWithSelection(Window.GetWindow(fe2));
 
         if (list?.SelectedItem is not null)
-            return TryReadMedicineFromRow(list.SelectedItem, out medicineId, out medicineName, out batchId);
+            return TryReadMedicineFromRow(list.SelectedItem, out medicineId, out medicineName);
 
         return false;
     }
 
     private static bool TryReadMedicineFromRow(
-        object row, out int medicineId, out string? medicineName, out int? batchId)
+        object row, out int medicineId, out string? medicineName)
     {
         medicineId = 0;
         medicineName = GetStringProp(row, "MedicineName")
                        ?? GetStringProp(row, "Name")
                        ?? GetStringProp(row, "OcrItemName")
                        ?? GetStringProp(row, "MatchedMedicineName");
-        batchId = GetNullableIntProp(row, "BatchId") ?? GetNullableIntProp(row, "MedicineBatchId");
 
         var mid = GetNullableIntProp(row, "MedicineId");
         if (mid is > 0)

@@ -32,8 +32,12 @@
                                              VerticalAlignment="Center" />
                     <TextBlock Text="PharmaPOS" FontSize="20" FontWeight="Bold"
                                VerticalAlignment="Center" Margin="10,0,0,0" />
+                    <TextBlock Text="{Binding StoreCodeDisplay}" VerticalAlignment="Center"
+                               Margin="16,0,0,0"
+                               FontSize="13" FontWeight="SemiBold"
+                               Opacity="0.95" />
                     <TextBlock Text="{Binding BranchName}" VerticalAlignment="Center"
-                               Margin="16,0,0,0" Opacity="0.85"
+                               Margin="12,0,0,0" Opacity="0.75"
                                FontSize="13" />
 
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -137,6 +141,8 @@
 
         <!-- Active content -->
         <ContentControl Grid.Row="2" Margin="6,2,6,6"
-                        Content="{Binding CurrentViewModel}" />
+                        Content="{Binding CurrentViewModel}"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
     </Grid>
 </Window>

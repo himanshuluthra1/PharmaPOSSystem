@@ -5,11 +5,11 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal static class MedicineMatchReporter
+public static class MedicineMatchReporter
 {
     public static async Task ExportAsync(MedWinImportContext ctx, SqlConnection target, string csvPath)
     {
-        Console.WriteLine($"\n[medicine-match] Generating match report (no DB changes)...");
+        ctx.Log($"\n[medicine-match] Generating match report (no DB changes)...");
         await MedWinMasterImporter.LoadExistingMedicineMapAsync(ctx, target);
         var matcher = await MedicineCatalogMatcher.LoadAsync(target);
 
@@ -19,12 +19,13 @@ internal static class MedicineMatchReporter
         var activeIds = MedWinMasterImporter.LoadActiveMedicineIds(med);
         var stockSelling = MedWinMasterImporter.LoadStockSellingPrices(med);
         var saleSelling = MedWinMasterImporter.LoadSaleSellingPrices(med);
+        var saltByGroup = MedWinMasterImporter.LoadItemGroupSalts(med);
 
-        Console.WriteLine($"  Active MedWin medicines: {activeIds.Count:N0}");
+        ctx.Log($"  Active MedWin medicines: {activeIds.Count:N0}");
 
         using var cmd = new OleDbCommand("""
-            SELECT m.numbercd, m.medcode, m.medname, m.medname1, m.mgamma, m.mrprate, m.fpurrat, m.purrate, m.wrate, m.specialrate
-            FROM mednmas m
+            SELECT numbercd, medcode, medname, medname1, mgamma, medgrp, mrprate, fpurrat, purrate, wrate, specialrate
+            FROM mednmas
             """, med);
         using var reader = cmd.ExecuteReader();
 
@@ -48,7 +49,10 @@ internal static class MedicineMatchReporter
 
             var medName = Convert.ToString(reader["medname"]);
             var medName1 = Convert.ToString(reader["medname1"]);
-            var genericName = Convert.ToString(reader["mgamma"]);
+            var saltGroup = Convert.ToString(reader["mgamma"]);
+            var medGrp = (Convert.ToString(reader["medgrp"]) ?? "").Trim();
+            saltByGroup.TryGetValue(medGrp, out var saltName);
+            var genericName = !string.IsNullOrWhiteSpace(saltName) ? saltName : saltGroup;
             var barcode = Convert.ToString(reader["medcode"]);
 
             var mrp = ImportHelpers.Dec(reader["mrprate"]);
@@ -88,8 +92,8 @@ internal static class MedicineMatchReporter
             rows++;
         }
 
-        Console.WriteLine($"  Report rows: {rows:N0} (proposed match {proposedMatch:N0}, insert {proposedInsert:N0}, would change {wouldChange:N0})");
-        Console.WriteLine($"  CSV written: {Path.GetFullPath(csvPath)}");
+        ctx.Log($"  Report rows: {rows:N0} (proposed match {proposedMatch:N0}, insert {proposedInsert:N0}, would change {wouldChange:N0})");
+        ctx.Log($"  CSV written: {Path.GetFullPath(csvPath)}");
     }
 
     private static string FirstNormalizedKey(params string?[] names)

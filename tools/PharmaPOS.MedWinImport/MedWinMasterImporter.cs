@@ -4,11 +4,11 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal static class MedWinMasterImporter
+public static class MedWinMasterImporter
 {
     public static async Task ImportMedicinesAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[medicines] Importing active MedWin medicines (in stock or sold), matching OneMG catalogue...");
+        ctx.Log("\n[medicines] Importing active MedWin medicines (in stock or sold), matching OneMG catalogue...");
         await LoadCategoriesAsync(ctx, target);
         await LoadManufacturersAsync(ctx, target);
 
@@ -23,17 +23,18 @@ internal static class MedWinMasterImporter
         med.Open();
 
         var activeIds = LoadActiveMedicineIds(med);
-        Console.WriteLine($"  Active MedWin medicines (stock or sold): {activeIds.Count:N0}");
+        ctx.Log($"  Active MedWin medicines (stock or sold): {activeIds.Count:N0}");
 
         var stockSelling = LoadStockSellingPrices(med);
         var saleSelling = LoadSaleSellingPrices(med);
+        // Access Jet rejects multi LEFT JOIN without nested parentheses — load lookups separately.
+        var saltByGroup = LoadItemGroupSalts(med);
+        var gstByCategory = LoadCategoryGst(med);
 
         using var cmd = new OleDbCommand("""
-            SELECT m.numbercd, m.medcode, m.medname, m.medname1, m.mcomp, m.mgamma, m.mstrngth, m.medsize, m.sizefact,
-                   m.mrprate, m.fpurrat, m.purrate, m.wrate, m.specialrate, m.medloct, m.item_catcode, m.remarks,
-                   c.cgst, c.sgst, c.cattax, c.igst
-            FROM mednmas m
-            LEFT JOIN category c ON m.item_catcode = c.catcode
+            SELECT numbercd, medcode, medname, medname1, mcomp, mgamma, medgrp, mstrngth, medsize, sizefact,
+                   mrprate, fpurrat, purrate, wrate, specialrate, medloct, item_catcode, remarks
+            FROM mednmas
             """, med);
         using var reader = cmd.ExecuteReader();
 
@@ -50,8 +51,14 @@ internal static class MedWinMasterImporter
             if (string.IsNullOrWhiteSpace(name)) { skipped++; continue; }
 
             var medName1 = Convert.ToString(reader["medname1"]);
-            var genericName = Convert.ToString(reader["mgamma"]);
+            // mgamma is a salt-group code (ATO/MIN/...), not the actual salt.
+            // Real salt/composition is itemgrp.itemgrds via medgrp.
+            var saltGroupCode = Convert.ToString(reader["mgamma"]);
+            var medGrp = (Convert.ToString(reader["medgrp"]) ?? "").Trim();
+            saltByGroup.TryGetValue(medGrp, out var saltName);
+            var genericName = !string.IsNullOrWhiteSpace(saltName) ? saltName : saltGroupCode;
             var barcode = Convert.ToString(reader["medcode"]);
+            var packInfo = ImportHelpers.Trunc(Convert.ToString(reader["medsize"]), 200);
 
             var mrp = ImportHelpers.Dec(reader["mrprate"]);
             var purchase = ImportHelpers.Dec(reader["fpurrat"]);
@@ -85,19 +92,16 @@ internal static class MedWinMasterImporter
             if (!string.IsNullOrWhiteSpace(catCode) && ctx.CategoryMap.TryGetValue(catCode, out var cid))
                 categoryId = cid;
 
-            var cgst = ImportHelpers.Dec(reader["cgst"]);
-            var sgst = ImportHelpers.Dec(reader["sgst"]);
-            var gst = cgst + sgst;
-            if (gst <= 0) gst = ImportHelpers.Dec(reader["cattax"]);
-            if (gst <= 0) gst = ImportHelpers.Dec(reader["igst"]);
-            if (gst <= 0) gst = 12m;
+            var gst = 12m;
+            if (!string.IsNullOrWhiteSpace(catCode) && gstByCategory.TryGetValue(catCode, out var catGst) && catGst > 0)
+                gst = catGst;
 
             var row = table.NewRow();
             row["Name"] = name;
             row["GenericName"] = (object?)ImportHelpers.Trunc(genericName, 200) ?? DBNull.Value;
             row["Brand"] = (object?)ImportHelpers.Trunc(mcomp, 200) ?? DBNull.Value;
             row["Strength"] = (object?)ImportHelpers.Trunc(Convert.ToString(reader["mstrngth"]), 100) ?? DBNull.Value;
-            row["Composition"] = DBNull.Value;
+            row["Composition"] = (object?)ImportHelpers.Trunc(genericName, 500) ?? DBNull.Value;
             row["DosageForm"] = 0;
             row["CategoryId"] = (object?)categoryId ?? DBNull.Value;
             row["ManufacturerId"] = (object?)manufacturerId ?? DBNull.Value;
@@ -117,6 +121,7 @@ internal static class MedWinMasterImporter
             row["UnitOfMeasure"] = "Nos";
             row["ReorderLevel"] = 0;
             row["ReorderQuantity"] = 0;
+            row["PackInfo"] = (object?)packInfo ?? DBNull.Value;
             row["Notes"] = ImportHelpers.MedWinMedicineNote(medWinId);
             row["Status"] = 1;
             row["CreatedAtUtc"] = ctx.NowUtc;
@@ -124,8 +129,9 @@ internal static class MedWinMasterImporter
             table.Rows.Add(row);
             inserted++;
 
-            if (table.Rows.Count >= 5000)
+            if (table.Rows.Count >= 2000)
             {
+                ctx.Log($"  …flushing {table.Rows.Count:N0} new medicine row(s)…");
                 await FlushMedicinesAsync(target, table);
                 table.Clear();
             }
@@ -137,12 +143,98 @@ internal static class MedWinMasterImporter
             await FlushMedicineUpdatesAsync(ctx, target, pendingUpdates);
 
         await LoadExistingMedicineMapAsync(ctx, target);
-        Console.WriteLine($"  Active scanned {read:N0}: matched OneMG {matched:N0}, new inserts {inserted:N0}, mapped {ctx.MedicineMap.Count:N0}, skipped {skipped:N0}.");
+        ctx.Log($"  Active scanned {read:N0}: matched OneMG {matched:N0}, new inserts {inserted:N0}, mapped {ctx.MedicineMap.Count:N0}, skipped {skipped:N0}.");
+    }
+
+    /// <summary>
+    /// Re-applies real salt (itemgrp.itemgrds), pack (medsize), and strength onto existing MedWin-only medicine rows.
+    /// </summary>
+    public static async Task BackfillSaltsAsync(MedWinImportContext ctx, SqlConnection target)
+    {
+        ctx.Log("\n[backfill-salts] Refreshing GenericName/Composition/PackInfo from MedWin itemgrp...");
+        ctx.ThrowIfCancellationRequested();
+
+        var groups = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var byMw = new Dictionary<int, (string Salt, string? Pack, string? Strength)>();
+
+        using (var med = ctx.OpenMedWin())
+        {
+            med.Open();
+            using (var gcmd = new OleDbCommand("SELECT itemgrcd, itemgrds FROM itemgrp", med))
+            using (var gr = gcmd.ExecuteReader())
+            {
+                while (gr.Read())
+                {
+                    var code = (Convert.ToString(gr["itemgrcd"]) ?? "").Trim();
+                    var name = (Convert.ToString(gr["itemgrds"]) ?? "").Trim();
+                    if (code.Length > 0 && name.Length > 0)
+                        groups[code] = name;
+                }
+            }
+
+            using var mcmd = new OleDbCommand("SELECT numbercd, medgrp, medsize, mstrngth FROM mednmas", med);
+            using var mr = mcmd.ExecuteReader();
+            while (mr.Read())
+            {
+                var id = Convert.ToInt32(Convert.ToDecimal(mr["numbercd"]));
+                var grp = (Convert.ToString(mr["medgrp"]) ?? "").Trim();
+                groups.TryGetValue(grp, out var salt);
+                byMw[id] = (
+                    salt ?? "",
+                    string.IsNullOrWhiteSpace(Convert.ToString(mr["medsize"])) ? null : Convert.ToString(mr["medsize"])!.Trim(),
+                    string.IsNullOrWhiteSpace(Convert.ToString(mr["mstrngth"])) ? null : Convert.ToString(mr["mstrngth"])!.Trim());
+            }
+        }
+
+        await using var setOpts = new SqlCommand("SET QUOTED_IDENTIFIER ON; SET ANSI_NULLS ON;", target);
+        await setOpts.ExecuteNonQueryAsync(ctx.CancellationToken);
+
+        await using var list = new SqlCommand("""
+            SELECT Id, Notes FROM Medicines
+            WHERE IsDeleted = 0 AND Notes LIKE 'MedWinId:%' AND Notes NOT LIKE '%|%'
+            """, target);
+        var rows = new List<(int Id, int Mw)>();
+        await using (var reader = await list.ExecuteReaderAsync(ctx.CancellationToken))
+        {
+            while (await reader.ReadAsync(ctx.CancellationToken))
+            {
+                var notes = reader.GetString(1).Trim();
+                if (!int.TryParse(notes.AsSpan("MedWinId:".Length), out var mw)) continue;
+                rows.Add((reader.GetInt32(0), mw));
+            }
+        }
+
+        var updated = 0;
+        await using var tx = (SqlTransaction)await target.BeginTransactionAsync(ctx.CancellationToken);
+        foreach (var row in rows)
+        {
+            ctx.ThrowIfCancellationRequested();
+            if (!byMw.TryGetValue(row.Mw, out var info)) continue;
+            if (info.Salt.Length == 0 && info.Pack is null && info.Strength is null) continue;
+
+            await using var upd = new SqlCommand("""
+                UPDATE Medicines SET
+                  GenericName = CASE WHEN @hasSalt = 1 THEN @salt ELSE GenericName END,
+                  Composition = CASE WHEN @hasSalt = 1 THEN @salt ELSE Composition END,
+                  PackInfo = COALESCE(@pack, PackInfo),
+                  Strength = COALESCE(@strength, Strength)
+                WHERE Id = @id
+                """, target, tx);
+            upd.Parameters.AddWithValue("@hasSalt", info.Salt.Length > 0 ? 1 : 0);
+            upd.Parameters.AddWithValue("@salt", info.Salt.Length > 0 ? info.Salt : (object)DBNull.Value);
+            upd.Parameters.AddWithValue("@pack", (object?)info.Pack ?? DBNull.Value);
+            upd.Parameters.AddWithValue("@strength", (object?)info.Strength ?? DBNull.Value);
+            upd.Parameters.AddWithValue("@id", row.Id);
+            updated += await upd.ExecuteNonQueryAsync(ctx.CancellationToken);
+        }
+
+        await tx.CommitAsync(ctx.CancellationToken);
+        ctx.Log($"  Salt/pack backfill updated {updated:N0} of {rows.Count:N0} MedWin medicine(s).");
     }
 
     private sealed record MedicinePriceUpdate(int MedicineId, int MedWinId, decimal Mrp, decimal Purchase, decimal Selling, string? ExistingNotes);
 
-    internal static HashSet<int> LoadActiveMedicineIds(OleDbConnection med)
+    public static HashSet<int> LoadActiveMedicineIds(OleDbConnection med)
     {
         var ids = new HashSet<int>();
         using (var cmd = new OleDbCommand("SELECT DISTINCT stkcode FROM stockmas", med))
@@ -152,6 +244,40 @@ internal static class MedWinMasterImporter
         using (var r = cmd.ExecuteReader())
             while (r.Read()) { var id = ImportHelpers.Int(r[0]); if (id > 0) ids.Add(id); }
         return ids;
+    }
+
+    /// <summary>itemgrp.itemgrcd → itemgrds (real salt). Keys are trimmed.</summary>
+    public static Dictionary<string, string> LoadItemGroupSalts(OleDbConnection med)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var cmd = new OleDbCommand("SELECT itemgrcd, itemgrds FROM itemgrp", med);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var code = (Convert.ToString(r["itemgrcd"]) ?? "").Trim();
+            var name = (Convert.ToString(r["itemgrds"]) ?? "").Trim();
+            if (code.Length > 0 && name.Length > 0)
+                map[code] = name;
+        }
+        return map;
+    }
+
+    /// <summary>category.catcode → GST % (cgst+sgst, else cattax, else igst).</summary>
+    public static Dictionary<string, decimal> LoadCategoryGst(OleDbConnection med)
+    {
+        var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        using var cmd = new OleDbCommand("SELECT catcode, cgst, sgst, cattax, igst FROM category", med);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var code = (Convert.ToString(r["catcode"]) ?? "").Trim();
+            if (code.Length == 0) continue;
+            var gst = ImportHelpers.Dec(r["cgst"]) + ImportHelpers.Dec(r["sgst"]);
+            if (gst <= 0) gst = ImportHelpers.Dec(r["cattax"]);
+            if (gst <= 0) gst = ImportHelpers.Dec(r["igst"]);
+            if (gst > 0) map[code] = gst;
+        }
+        return map;
     }
 
     private static async Task FlushMedicineUpdatesAsync(MedWinImportContext ctx, SqlConnection target, List<MedicinePriceUpdate> updates)
@@ -178,7 +304,7 @@ internal static class MedWinMasterImporter
         }
     }
 
-    internal static decimal ResolveSellingPrice(
+    public static decimal ResolveSellingPrice(
         int medWinId,
         OleDbDataReader reader,
         Dictionary<int, decimal> stockSelling,
@@ -198,7 +324,7 @@ internal static class MedWinMasterImporter
         return mrp;
     }
 
-    internal static Dictionary<int, decimal> LoadStockSellingPrices(OleDbConnection med)
+    public static Dictionary<int, decimal> LoadStockSellingPrices(OleDbConnection med)
     {
         var map = new Dictionary<int, decimal>();
         using var cmd = new OleDbCommand("""
@@ -217,7 +343,7 @@ internal static class MedWinMasterImporter
         return map;
     }
 
-    internal static Dictionary<int, decimal> LoadSaleSellingPrices(OleDbConnection med)
+    public static Dictionary<int, decimal> LoadSaleSellingPrices(OleDbConnection med)
     {
         var map = new Dictionary<int, decimal>();
         using var cmd = new OleDbCommand("""
@@ -245,7 +371,7 @@ internal static class MedWinMasterImporter
 
     public static async Task ImportSuppliersAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[suppliers] Importing suppliers from subgroup...");
+        ctx.Log("\n[suppliers] Importing suppliers from subgroup...");
         using var med = ctx.OpenMedWin();
         med.Open();
         using var cmd = new OleDbCommand("""
@@ -307,12 +433,12 @@ internal static class MedWinMasterImporter
             added++;
         }
 
-        Console.WriteLine($"  Suppliers ready ({added} new, {ctx.SupplierMap.Count:N0} mapped).");
+        ctx.Log($"  Suppliers ready ({added} new, {ctx.SupplierMap.Count:N0} mapped).");
     }
 
     public static async Task ImportCustomersAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[customers] Importing customers...");
+        ctx.Log("\n[customers] Importing customers...");
         using var med = ctx.OpenMedWin();
         med.Open();
 
@@ -382,14 +508,23 @@ internal static class MedWinMasterImporter
                 await EnsureCustomerAsync(Convert.ToString(r["cashcustname"]), Convert.ToString(r["cashcustphone"]), CustomerKind.Retail);
         }
 
-        Console.WriteLine($"  Customers ready ({added} new).");
+        ctx.Log($"  Customers ready ({added} new).");
     }
 
     public static async Task ImportStockAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[stock] Importing stock batches from stockmas...");
+        ctx.Log("\n[stock] Importing stock batches from stockmas...");
         if (ctx.MedicineMap.Count == 0)
             await LoadExistingMedicineMapAsync(ctx, target);
+
+        var gstByMedicine = new Dictionary<int, decimal>();
+        await using (var gstCmd = new SqlCommand(
+                         "SELECT Id, GstPercent FROM Medicines WHERE IsDeleted = 0", target))
+        await using (var gstReader = await gstCmd.ExecuteReaderAsync())
+        {
+            while (await gstReader.ReadAsync())
+                gstByMedicine[gstReader.GetInt32(0)] = gstReader.GetDecimal(1);
+        }
 
         using var med = ctx.OpenMedWin();
         med.Open();
@@ -423,7 +558,7 @@ internal static class MedWinMasterImporter
             if (selling <= 0) selling = mrp;
             var qty = ImportHelpers.Dec(reader["stkqty"]);
 
-            var gst = await GetMedicineGstAsync(target, medicineId);
+            var gst = gstByMedicine.TryGetValue(medicineId, out var g) ? g : 12m;
 
             await using var ins = new SqlCommand("""
                 INSERT INTO MedicineBatches
@@ -446,10 +581,30 @@ internal static class MedWinMasterImporter
             ins.Parameters.AddWithValue("@Now", ctx.NowUtc);
             var batchId = (int)await ins.ExecuteScalarAsync();
             ctx.BatchMap[key] = batchId;
+
+            await using var mv = new SqlCommand("""
+                INSERT INTO StockMovements
+                    (BranchId, MedicineId, MedicineBatchId, MovementType, Quantity, BalanceAfter,
+                     UnitCost, ReferenceType, ReferenceNumber, Remarks, MovementDateUtc,
+                     CreatedAtUtc, IsDeleted)
+                VALUES
+                    (@BranchId, @MedicineId, @BatchId, @MovementType, @Qty, @Qty,
+                     @UnitCost, N'MedWinImport', N'STOCK', N'MedWin current stock snapshot', @Now,
+                     @Now, 0)
+                """, target);
+            mv.Parameters.AddWithValue("@BranchId", ctx.BranchId);
+            mv.Parameters.AddWithValue("@MedicineId", medicineId);
+            mv.Parameters.AddWithValue("@BatchId", batchId);
+            mv.Parameters.AddWithValue("@MovementType", 10); // StockMovementType.OpeningStock
+            mv.Parameters.AddWithValue("@Qty", qty);
+            mv.Parameters.AddWithValue("@UnitCost", purchase);
+            mv.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            await mv.ExecuteNonQueryAsync();
+
             added++;
         }
 
-        Console.WriteLine($"  Stock batches imported: {added:N0} ({skipped:N0} skipped — medicine not mapped).");
+        ctx.Log($"  Stock batches imported: {added:N0} ({skipped:N0} skipped — medicine not mapped).");
     }
 
     private static async Task LoadCategoriesAsync(MedWinImportContext ctx, SqlConnection target)
@@ -510,7 +665,7 @@ internal static class MedWinMasterImporter
 
     private static async Task RemoveOrphanMedWinMedicinesAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("  --force: removing prior MedWin-only medicine rows for rematch...");
+        ctx.Log("  --force: removing prior MedWin-only medicine rows for rematch...");
         await using var cmd = new SqlCommand("""
             UPDATE Medicines SET IsDeleted = 1, DeletedAtUtc = @Now
             WHERE IsDeleted = 0
@@ -520,11 +675,11 @@ internal static class MedWinMasterImporter
             """, target);
         cmd.Parameters.AddWithValue("@Now", ctx.NowUtc);
         var removed = await cmd.ExecuteNonQueryAsync();
-        Console.WriteLine($"  Soft-deleted {removed:N0} orphan MedWin-only medicines.");
+        ctx.Log($"  Soft-deleted {removed:N0} orphan MedWin-only medicines.");
         ctx.MedicineMap.Clear();
     }
 
-    internal static async Task LoadExistingMedicineMapAsync(MedWinImportContext ctx, SqlConnection target)
+    public static async Task LoadExistingMedicineMapAsync(MedWinImportContext ctx, SqlConnection target)
     {
         await using var cmd = new SqlCommand("SELECT Id, Notes FROM Medicines WHERE Notes LIKE '%MedWinId:%' AND IsDeleted = 0", target);
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -571,6 +726,7 @@ internal static class MedWinMasterImporter
         t.Columns.Add("UnitOfMeasure", typeof(string));
         t.Columns.Add("ReorderLevel", typeof(int));
         t.Columns.Add("ReorderQuantity", typeof(int));
+        t.Columns.Add("PackInfo", typeof(string));
         t.Columns.Add("Notes", typeof(string));
         t.Columns.Add("Status", typeof(int));
         t.Columns.Add("CreatedAtUtc", typeof(DateTime));
@@ -584,7 +740,7 @@ internal static class MedWinMasterImporter
         {
             DestinationTableName = "Medicines",
             BulkCopyTimeout = 600,
-            BatchSize = 2000
+            BatchSize = 1000
         };
         foreach (DataColumn col in table.Columns)
             bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);

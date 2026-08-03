@@ -49,7 +49,17 @@ public class MedicineMappingService : IMedicineMappingService
 
         var linkedMedWinIds = await _linkedMedWinIdCache.GetAsync(ct);
         var rows = await query.OrderBy(m => m.Name).Take(fetchSize)
-            .Select(m => new { m.Id, m.Name, m.GenericName, m.PackInfo, m.Notes })
+            .Select(m => new
+            {
+                m.Id,
+                m.Name,
+                m.GenericName,
+                m.PackInfo,
+                m.Strength,
+                m.UnitsPerPack,
+                m.Mrp,
+                m.Notes
+            })
             .ToListAsync(ct);
 
         return rows
@@ -58,7 +68,10 @@ public class MedicineMappingService : IMedicineMappingService
             .Select(m =>
             {
                 var medWinId = MedicineNotesHelper.ParseMedWinId(m.Notes);
-                return ToDto(m.Id, m.Name, m.GenericName, m.PackInfo, medWinId?.ToString(), false);
+                var pack = ResolvePackInfo(m.PackInfo, m.Notes);
+                return ToDto(
+                    m.Id, m.Name, m.GenericName, pack, medWinId?.ToString(), false,
+                    m.Strength, m.UnitsPerPack, m.Mrp);
             }).ToList();
     }
 
@@ -102,15 +115,26 @@ public class MedicineMappingService : IMedicineMappingService
         }
 
         var rows = await query.OrderBy(m => m.Name).Take(DefaultTake)
-            .Select(m => new { m.Id, m.Name, m.GenericName, m.PackInfo, m.Notes })
+            .Select(m => new
+            {
+                m.Id,
+                m.Name,
+                m.GenericName,
+                m.PackInfo,
+                m.Strength,
+                m.UnitsPerPack,
+                m.Mrp,
+                m.Notes
+            })
             .ToListAsync(ct);
 
         var mappedOneMgIds = await GetMappedOneMgIdsAsync(rows.Select(r => r.Id), ct);
 
         return rows.Select(m => ToDto(
-            m.Id, m.Name, m.GenericName, m.PackInfo,
+            m.Id, m.Name, m.GenericName, ResolvePackInfo(m.PackInfo, m.Notes),
             MedicineNotesHelper.ParseOneMgId(m.Notes),
-            mappedOneMgIds.Contains(m.Id))).ToList();
+            mappedOneMgIds.Contains(m.Id),
+            m.Strength, m.UnitsPerPack, m.Mrp)).ToList();
     }
 
     public async Task<List<MedicineMappingListItemDto>> SearchOneMgMedicinesAsync(
@@ -134,15 +158,26 @@ public class MedicineMappingService : IMedicineMappingService
         query = query.WhereMedicineMatches(normalized, prefixOnly: false);
 
         var rows = await query.OrderBy(m => m.Name).Take(DefaultTake)
-            .Select(m => new { m.Id, m.Name, m.GenericName, m.PackInfo, m.Notes })
+            .Select(m => new
+            {
+                m.Id,
+                m.Name,
+                m.GenericName,
+                m.PackInfo,
+                m.Strength,
+                m.UnitsPerPack,
+                m.Mrp,
+                m.Notes
+            })
             .ToListAsync(ct);
 
         var mappedOneMgIds = await GetMappedOneMgIdsAsync(rows.Select(r => r.Id), ct);
 
         return rows.Select(m => ToDto(
-            m.Id, m.Name, m.GenericName, m.PackInfo,
+            m.Id, m.Name, m.GenericName, ResolvePackInfo(m.PackInfo, m.Notes),
             MedicineNotesHelper.ParseOneMgId(m.Notes),
-            mappedOneMgIds.Contains(m.Id))).ToList();
+            mappedOneMgIds.Contains(m.Id),
+            m.Strength, m.UnitsPerPack, m.Mrp)).ToList();
     }
 
     public async Task<List<MedicineMappingListItemDto>> SearchMedWinMedicinesAsync(
@@ -171,7 +206,17 @@ public class MedicineMappingService : IMedicineMappingService
             : null;
 
         var rows = await query.OrderBy(m => m.Name).Take(DefaultTake)
-            .Select(m => new { m.Id, m.Name, m.GenericName, m.PackInfo, m.Notes })
+            .Select(m => new
+            {
+                m.Id,
+                m.Name,
+                m.GenericName,
+                m.PackInfo,
+                m.Strength,
+                m.UnitsPerPack,
+                m.Mrp,
+                m.Notes
+            })
             .ToListAsync(ct);
 
         return rows
@@ -180,9 +225,10 @@ public class MedicineMappingService : IMedicineMappingService
             {
                 var medWinId = MedicineNotesHelper.ParseMedWinId(m.Notes);
                 return ToDto(
-                    m.Id, m.Name, m.GenericName, m.PackInfo,
+                    m.Id, m.Name, m.GenericName, ResolvePackInfo(m.PackInfo, m.Notes),
                     medWinId?.ToString(),
-                    MedicineNotesHelper.HasOneMgLink(m.Notes));
+                    MedicineNotesHelper.HasOneMgLink(m.Notes),
+                    m.Strength, m.UnitsPerPack, m.Mrp);
             }).ToList();
     }
 
@@ -247,7 +293,17 @@ public class MedicineMappingService : IMedicineMappingService
                         && EF.Functions.Like(m.Notes!, "MedWinId:%")
                         && !EF.Functions.Like(m.Notes!, "%|%"))
             .OrderBy(m => m.Name)
-            .Select(m => new { m.Id, m.Name, m.GenericName, m.Notes })
+            .Select(m => new
+            {
+                m.Id,
+                m.Name,
+                m.GenericName,
+                m.PackInfo,
+                m.Strength,
+                m.UnitsPerPack,
+                m.Mrp,
+                m.Notes
+            })
             .ToListAsync(ct);
 
         var pendingOrphans = medWinRows
@@ -260,9 +316,12 @@ public class MedicineMappingService : IMedicineMappingService
                 m.Id,
                 m.Name,
                 m.GenericName,
-                MedicineNotesHelper.ExtractPackInfo(m.Notes),
+                ResolvePackInfo(m.PackInfo, m.Notes),
                 MedicineNotesHelper.ParseMedWinId(m.Notes)?.ToString(),
-                false))
+                false,
+                m.Strength,
+                m.UnitsPerPack,
+                m.Mrp))
             .ToList();
 
         var suggestions = new List<AutoMapSuggestion>();
@@ -517,8 +576,21 @@ public class MedicineMappingService : IMedicineMappingService
     }
 
     private static MedicineMappingListItemDto ToDto(
-        int id, string name, string? genericName, string? packInfo, string? externalId, bool isMatched)
-        => new(id, name, genericName, packInfo, externalId, isMatched);
+        int id,
+        string name,
+        string? genericName,
+        string? packInfo,
+        string? externalId,
+        bool isMatched,
+        string? strength = null,
+        int? packSize = null,
+        decimal? mrp = null)
+        => new(id, name, genericName, packInfo, externalId, isMatched, strength, packSize, mrp);
+
+    private static string? ResolvePackInfo(string? packInfo, string? notes)
+        => !string.IsNullOrWhiteSpace(packInfo)
+            ? packInfo.Trim()
+            : MedicineNotesHelper.ExtractPackInfo(notes);
 
     private static bool IsPlaceholderMedWinName(string? name)
         => !string.IsNullOrWhiteSpace(name)

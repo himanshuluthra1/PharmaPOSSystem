@@ -9,6 +9,54 @@ using PharmaPOS.WPF.Services;
 
 namespace PharmaPOS.WPF.ViewModels.Accounting;
 
+public sealed class BillAllocationLineViewModel : ObservableObject
+{
+    private bool _isSelected;
+    private decimal _applyAmount;
+
+    public BillAllocationLineViewModel(PartyBillRowDto bill)
+    {
+        PurchaseId = bill.TransactionId;
+        InvoiceNumber = bill.InvoiceNumber;
+        InvoiceDateLabel = bill.InvoiceDateLabel;
+        BalanceDue = bill.BalanceDue;
+    }
+
+    public int PurchaseId { get; }
+    public string InvoiceNumber { get; }
+    public string InvoiceDateLabel { get; }
+    public decimal BalanceDue { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (!SetProperty(ref _isSelected, value)) return;
+            if (!value) ApplyAmount = 0m;
+            SelectionChanged?.Invoke();
+        }
+    }
+
+    public decimal ApplyAmount
+    {
+        get => _applyAmount;
+        set
+        {
+            var clamped = Math.Clamp(value, 0m, BalanceDue);
+            if (SetProperty(ref _applyAmount, clamped))
+            {
+                if (clamped > 0 && !_isSelected)
+                    SetProperty(ref _isSelected, true, nameof(IsSelected));
+                AmountChanged?.Invoke();
+            }
+        }
+    }
+
+    public Action? SelectionChanged { get; set; }
+    public Action? AmountChanged { get; set; }
+}
+
 public class VoucherTabViewModel : ObservableObject
 {
     private readonly IAccountingService _accounting;
@@ -29,6 +77,7 @@ public class VoucherTabViewModel : ObservableObject
     private bool _isBusy;
     private string? _statusMessage;
     private CancellationTokenSource? _searchCts;
+    private PaymentAllocationMode _allocationMode = PaymentAllocationMode.Fifo;
 
     public VoucherTabViewModel(
         IAccountingService accounting,
@@ -49,6 +98,8 @@ public class VoucherTabViewModel : ObservableObject
 
         SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => !IsBusy && CanSave());
         NewCommand = new RelayCommand(_ => ResetForm());
+        FillFifoCheckedCommand = new RelayCommand(_ => FillFifoAmongChecked(), _ => ShowBillWiseAllocation);
+        ApplyFullDueCheckedCommand = new RelayCommand(_ => ApplyFullDueOnChecked(), _ => ShowBillWiseAllocation);
         _ = InitializeAsync();
     }
 
@@ -57,6 +108,7 @@ public class VoucherTabViewModel : ObservableObject
     public ObservableCollection<PartyLedgerRowDto> PartySuggestions { get; } = new();
     public ObservableCollection<AccountLookupDto> CashAccounts { get; } = new();
     public ObservableCollection<AccountLookupDto> ExpenseAccounts { get; } = new();
+    public ObservableCollection<BillAllocationLineViewModel> BillAllocations { get; } = new();
 
     public VoucherKindOption SelectedKind
     {
@@ -66,6 +118,8 @@ public class VoucherTabViewModel : ObservableObject
             if (!SetProperty(ref _selectedKind, value)) return;
             OnPropertyChanged(nameof(ShowPartyFields));
             OnPropertyChanged(nameof(ShowExpenseFields));
+            OnPropertyChanged(nameof(ShowPaymentAllocation));
+            OnPropertyChanged(nameof(ShowBillWiseAllocation));
             OnPropertyChanged(nameof(PartyHint));
             ClearParty();
             _ = PreviewVoucherAsync();
@@ -74,10 +128,38 @@ public class VoucherTabViewModel : ObservableObject
 
     public bool ShowPartyFields => SelectedKind.Kind is VoucherKind.Payment or VoucherKind.Receipt;
     public bool ShowExpenseFields => SelectedKind.Kind == VoucherKind.Expense;
+    public bool ShowPaymentAllocation => SelectedKind.Kind == VoucherKind.Payment && _selectedPartyId.HasValue;
+    public bool ShowBillWiseAllocation => ShowPaymentAllocation && AllocationMode == PaymentAllocationMode.BillWise;
 
     public string PartyHint => SelectedKind.Kind == VoucherKind.Payment
         ? "Search supplier"
         : "Search customer";
+
+    public PaymentAllocationMode AllocationMode
+    {
+        get => _allocationMode;
+        set
+        {
+            if (!SetProperty(ref _allocationMode, value)) return;
+            OnPropertyChanged(nameof(IsFifoAllocation));
+            OnPropertyChanged(nameof(IsBillWiseAllocation));
+            OnPropertyChanged(nameof(ShowBillWiseAllocation));
+            if (value == PaymentAllocationMode.BillWise)
+                _ = LoadOpenBillsAsync();
+        }
+    }
+
+    public bool IsFifoAllocation
+    {
+        get => AllocationMode == PaymentAllocationMode.Fifo;
+        set { if (value) AllocationMode = PaymentAllocationMode.Fifo; }
+    }
+
+    public bool IsBillWiseAllocation
+    {
+        get => AllocationMode == PaymentAllocationMode.BillWise;
+        set { if (value) AllocationMode = PaymentAllocationMode.BillWise; }
+    }
 
     public string PartySearchText
     {
@@ -104,7 +186,11 @@ public class VoucherTabViewModel : ObservableObject
     public decimal Amount
     {
         get => _amount;
-        set => SetProperty(ref _amount, value);
+        set
+        {
+            if (SetProperty(ref _amount, value))
+                CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     public AccountLookupDto? SelectedCashAccount
@@ -144,6 +230,8 @@ public class VoucherTabViewModel : ObservableObject
 
     public ICommand SaveCommand { get; }
     public ICommand NewCommand { get; }
+    public ICommand FillFifoCheckedCommand { get; }
+    public ICommand ApplyFullDueCheckedCommand { get; }
 
     /// <summary>Raised after a payment, receipt, or expense voucher is saved.</summary>
     public event Func<Task>? VoucherSaved;
@@ -178,6 +266,12 @@ public class VoucherTabViewModel : ObservableObject
         _partyOutstanding = outstanding;
         PartySearchText = name;
         OnPropertyChanged(nameof(PartyOutstandingLabel));
+        OnPropertyChanged(nameof(ShowPaymentAllocation));
+        OnPropertyChanged(nameof(ShowBillWiseAllocation));
+        if (SelectedKind.Kind == VoucherKind.Payment)
+            _ = LoadOpenBillsAsync();
+        else
+            BillAllocations.Clear();
     }
 
     private void ClearParty()
@@ -187,8 +281,60 @@ public class VoucherTabViewModel : ObservableObject
         _partyOutstanding = 0;
         PartySearchText = string.Empty;
         PartySuggestions.Clear();
+        BillAllocations.Clear();
         OnPropertyChanged(nameof(PartyOutstandingLabel));
         OnPropertyChanged(nameof(ShowPartySuggestions));
+        OnPropertyChanged(nameof(ShowPaymentAllocation));
+        OnPropertyChanged(nameof(ShowBillWiseAllocation));
+    }
+
+    private async Task LoadOpenBillsAsync()
+    {
+        BillAllocations.Clear();
+        if (_selectedPartyId is not int supplierId || SelectedKind.Kind != VoucherKind.Payment)
+            return;
+
+        try
+        {
+            var bills = await _accounting.ListPartyBillsAsync(
+                PartyLedgerKind.Supplier, supplierId, _branchId);
+            foreach (var bill in bills.OrderBy(b => b.InvoiceDate).ThenBy(b => b.TransactionId))
+            {
+                var line = new BillAllocationLineViewModel(bill);
+                line.SelectionChanged = () => CommandManager.InvalidateRequerySuggested();
+                line.AmountChanged = () => CommandManager.InvalidateRequerySuggested();
+                BillAllocations.Add(line);
+            }
+            OnPropertyChanged(nameof(ShowBillWiseAllocation));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+        }
+    }
+
+    private void FillFifoAmongChecked()
+    {
+        var remaining = Amount;
+        foreach (var line in BillAllocations)
+        {
+            if (!line.IsSelected || remaining <= 0)
+            {
+                if (line.IsSelected && remaining <= 0) line.ApplyAmount = 0;
+                continue;
+            }
+
+            var apply = Math.Min(remaining, line.BalanceDue);
+            line.ApplyAmount = apply;
+            remaining -= apply;
+        }
+    }
+
+    private void ApplyFullDueOnChecked()
+    {
+        foreach (var line in BillAllocations.Where(l => l.IsSelected))
+            line.ApplyAmount = line.BalanceDue;
+        Amount = BillAllocations.Where(l => l.IsSelected).Sum(l => l.ApplyAmount);
     }
 
     private async Task InitializeAsync()
@@ -263,13 +409,29 @@ public class VoucherTabViewModel : ObservableObject
         return SelectedKind.Kind switch
         {
             VoucherKind.Expense => SelectedExpenseAccount is not null,
+            VoucherKind.Payment => _selectedPartyId.HasValue && CanSavePaymentAllocation(),
             _ => _selectedPartyId.HasValue
         };
+    }
+
+    private bool CanSavePaymentAllocation()
+    {
+        if (AllocationMode != PaymentAllocationMode.BillWise) return true;
+        var applied = BillAllocations.Where(b => b.ApplyAmount > 0).Sum(b => b.ApplyAmount);
+        return Math.Abs(applied - Amount) <= 0.01m;
     }
 
     private async Task SaveAsync()
     {
         if (SelectedCashAccount is null) return;
+
+        if (SelectedKind.Kind == VoucherKind.Payment
+            && AllocationMode == PaymentAllocationMode.BillWise
+            && !CanSavePaymentAllocation())
+        {
+            _dialog.ShowError("Bill-wise apply amounts must equal the payment amount.");
+            return;
+        }
 
         IsBusy = true;
         StatusMessage = "Saving voucher...";
@@ -284,7 +446,16 @@ public class VoucherTabViewModel : ObservableObject
                         Amount = Amount,
                         CashOrBankAccountId = SelectedCashAccount.Id,
                         EntryDate = EntryDate,
-                        Narration = Narration
+                        Narration = Narration,
+                        AllocationMode = AllocationMode,
+                        BillAllocations = BillAllocations
+                            .Where(b => b.ApplyAmount > 0)
+                            .Select(b => new BillPaymentAllocationDto
+                            {
+                                PurchaseId = b.PurchaseId,
+                                Amount = b.ApplyAmount
+                            })
+                            .ToList()
                     }, _branchId),
 
                 VoucherKind.Receipt when _selectedPartyId is int customerId =>
@@ -337,6 +508,7 @@ public class VoucherTabViewModel : ObservableObject
     {
         Amount = 0;
         Narration = null;
+        AllocationMode = PaymentAllocationMode.Fifo;
         ClearParty();
         EntryDate = DateTime.Today;
         StatusMessage = null;

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels.Sales;
@@ -23,6 +24,7 @@ public class MainViewModel : ObservableObject
     private readonly INavigationService _navigation;
     private readonly ICurrentUserService _currentUser;
     private readonly IThemeService _themeService;
+    private readonly IStoreIdentityService _storeIdentity;
 
     private NavigationItem? _selectedItem;
     private bool _isDarkMode;
@@ -30,11 +32,13 @@ public class MainViewModel : ObservableObject
     public MainViewModel(
         INavigationService navigation,
         ICurrentUserService currentUser,
-        IThemeService themeService)
+        IThemeService themeService,
+        IStoreIdentityService storeIdentity)
     {
         _navigation = navigation;
         _currentUser = currentUser;
         _themeService = themeService;
+        _storeIdentity = storeIdentity;
 
         _navigation.CurrentChanged += () => OnPropertyChanged(nameof(CurrentViewModel));
 
@@ -55,6 +59,12 @@ public class MainViewModel : ObservableObject
     public string UserName => _currentUser.CurrentUser?.FullName ?? "Guest";
     public string RoleName => _currentUser.CurrentUser?.RoleName ?? string.Empty;
     public string BranchName => _currentUser.CurrentUser?.BranchName ?? "Head Office";
+    public string StoreCodeDisplay =>
+        string.IsNullOrWhiteSpace(_storeIdentity.StoreCode)
+            ? "Store code: (not set)"
+            : string.IsNullOrWhiteSpace(_storeIdentity.StoreId)
+                ? $"Store: {_storeIdentity.StoreCode}"
+                : $"Store: {_storeIdentity.StoreCode}  ·  ID: {_storeIdentity.StoreId}";
 
     public NavigationItem? SelectedItem
     {

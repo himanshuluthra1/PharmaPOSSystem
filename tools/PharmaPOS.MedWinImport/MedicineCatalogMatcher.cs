@@ -2,12 +2,12 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal sealed record CatalogMedicine(int Id, string Name, string? GenericName, string? Barcode, string? Notes);
+public sealed record CatalogMedicine(int Id, string Name, string? GenericName, string? Barcode, string? Notes);
 
-internal sealed record MedicineMatchResult(int MedicineId, string MatchMethod, string NormalizedKey, CatalogMedicine Matched);
+public sealed record MedicineMatchResult(int MedicineId, string MatchMethod, string NormalizedKey, CatalogMedicine Matched);
 
 /// <summary>Matches MedWin medicines to the existing OneMG catalogue in PharmaPOS.</summary>
-internal sealed class MedicineCatalogMatcher
+public sealed class MedicineCatalogMatcher
 {
     private readonly Dictionary<string, List<CatalogMedicine>> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _byBarcode = new(StringComparer.OrdinalIgnoreCase);

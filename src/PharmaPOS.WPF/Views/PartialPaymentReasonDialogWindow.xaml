@@ -1,0 +1,72 @@
+<Window x:Class="PharmaPOS.WPF.Views.PartialPaymentReasonDialogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Partial payment reason"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        SizeToContent="Height"
+        Width="460"
+        ShowInTaskbar="False">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,12" Opacity="0.75"
+                   Text="This bill is not fully paid. Select why the balance remains unpaid." />
+
+        <TextBlock Grid.Row="1" FontWeight="SemiBold" Margin="0,0,0,12"
+                   Text="{Binding BalanceDue, StringFormat=Balance due: ₹{0:N2}}" />
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,10">
+            <TextBlock Text="Reason" Opacity="0.7" FontSize="11" Margin="0,0,0,4" />
+            <ComboBox ItemsSource="{Binding ReasonChoices}"
+                      SelectedItem="{Binding SelectedReason}"
+                      DisplayMemberPath="Label"
+                      Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Margin="0,0,0,10"
+                    Visibility="{Binding ShowReturnPicker, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="Purchase return (supplier credit)" Opacity="0.7" FontSize="11" Margin="0,0,0,4" />
+            <ComboBox ItemsSource="{Binding OpenReturns}"
+                      SelectedItem="{Binding SelectedReturn}"
+                      DisplayMemberPath="DisplayLabel"
+                      Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+            <TextBlock Text="No open supplier-credit returns for this supplier."
+                       Foreground="#C62828" FontSize="12" Margin="0,6,0,0"
+                       Visibility="{Binding HasNoOpenReturns, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Margin="0,0,0,16">
+            <TextBlock Opacity="0.7" FontSize="11" Margin="0,0,0,4">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Text" Value="Notes (optional)" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowNotesHint}" Value="True">
+                                <Setter Property="Text" Value="Notes (required)" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                     AcceptsReturn="True" MinHeight="64" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Command="{Binding CancelCommand}"
+                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0" IsCancel="True" />
+            <Button Content="Continue" Command="{Binding OkCommand}"
+                    Style="{StaticResource MaterialDesignRaisedButton}" IsDefault="True" />
+        </StackPanel>
+    </Grid>
+</Window>

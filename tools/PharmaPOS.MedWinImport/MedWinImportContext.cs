@@ -4,7 +4,7 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal sealed class MedWinImportContext
+public sealed class MedWinImportContext
 {
     public required string MedWinPath { get; init; }
     public required string MedWinPassword { get; init; }
@@ -12,6 +12,11 @@ internal sealed class MedWinImportContext
     public bool Force { get; init; }
     public bool ForceMedicines { get; set; }
     public string? ReportCsvPath { get; init; }
+
+    /// <summary>Optional sink for UI progress (CLI still writes to Console).</summary>
+    public Action<string>? LogSink { get; init; }
+
+    public CancellationToken CancellationToken { get; init; }
 
     public int BranchId { get; set; }
     public int CashierRoleId { get; set; }
@@ -33,7 +38,15 @@ internal sealed class MedWinImportContext
     public async Task<SqlConnection> OpenTargetAsync()
     {
         var conn = new SqlConnection(TargetConnectionString);
-        await conn.OpenAsync();
+        await conn.OpenAsync(CancellationToken);
         return conn;
     }
+
+    public void Log(string message)
+    {
+        try { LogSink?.Invoke(message); } catch { /* ignore UI sink errors */ }
+        try { Console.WriteLine(message); } catch { /* no console (WPF) */ }
+    }
+
+    public void ThrowIfCancellationRequested() => CancellationToken.ThrowIfCancellationRequested();
 }

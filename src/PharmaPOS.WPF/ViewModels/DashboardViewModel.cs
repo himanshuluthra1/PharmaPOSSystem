@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Dashboard;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.WPF.Mvvm;
 
 namespace PharmaPOS.WPF.ViewModels;
@@ -11,14 +12,19 @@ public class DashboardViewModel : ObservableObject
 {
     private readonly IDashboardService _dashboardService;
     private readonly ICurrentUserService _currentUser;
+    private readonly IStoreIdentityService _storeIdentity;
 
     private DashboardDto _data = new();
     private bool _isLoading;
 
-    public DashboardViewModel(IDashboardService dashboardService, ICurrentUserService currentUser)
+    public DashboardViewModel(
+        IDashboardService dashboardService,
+        ICurrentUserService currentUser,
+        IStoreIdentityService storeIdentity)
     {
         _dashboardService = dashboardService;
         _currentUser = currentUser;
+        _storeIdentity = storeIdentity;
         RefreshCommand = new AsyncRelayCommand(_ => LoadAsync());
         _ = LoadAsync();
     }
@@ -39,6 +45,13 @@ public class DashboardViewModel : ObservableObject
     public ObservableCollection<MonthlySalesDto> MonthlySales { get; } = new();
 
     public string Greeting => BuildGreeting();
+
+    public string StoreCodeDisplay =>
+        string.IsNullOrWhiteSpace(_storeIdentity.StoreCode)
+            ? "Store code not set"
+            : string.IsNullOrWhiteSpace(_storeIdentity.StoreId)
+                ? $"Store code: {_storeIdentity.StoreCode}"
+                : $"Store code: {_storeIdentity.StoreCode}  ·  Store ID: {_storeIdentity.StoreId}";
 
     public ICommand RefreshCommand { get; }
 

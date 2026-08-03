@@ -22,6 +22,8 @@
             <DockPanel Margin="8,4,8,16">
                 <StackPanel>
                     <TextBlock Text="{Binding Greeting}" FontSize="24" FontWeight="Bold" />
+                    <TextBlock Text="{Binding StoreCodeDisplay}" FontSize="14" FontWeight="SemiBold"
+                               Margin="0,4,0,0" Opacity="0.9" />
                     <TextBlock Text="Here's what's happening in your store today"
                                Opacity="0.6" Margin="0,2,0,0" />
                 </StackPanel>

@@ -10,6 +10,7 @@ using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Application.Features.PurchaseReturns;
 using PharmaPOS.Application.Features.SaleReturns;
+using PharmaPOS.Application.Features.ReportingSync;
 
 namespace PharmaPOS.Application;
 
@@ -33,6 +34,8 @@ public static class DependencyInjection
         services.AddTransient<IAccountingService, AccountingService>();
         services.AddTransient<IReportsService, ReportsService>();
         services.AddTransient<ISettingsService, SettingsService>();
+        services.AddSingleton<IReportingSyncGate, NullReportingSyncGate>();
+        services.AddTransient<IReportingSyncService, ReportingSyncService>();
         return services;
     }
 }

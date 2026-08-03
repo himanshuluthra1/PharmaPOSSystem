@@ -6,7 +6,10 @@ public record MedicineMappingListItemDto(
     string? GenericName,
     string? PackInfo,
     string? ExternalId,
-    bool IsMatched);
+    bool IsMatched,
+    string? Strength = null,
+    int? PackSize = null,
+    decimal? Mrp = null);
 
 public record MedicineMappingPair(int OneMgMedicineId, int MedWinMedicineId);
 

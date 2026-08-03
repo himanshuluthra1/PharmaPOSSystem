@@ -1,5 +1,6 @@
 using System.Windows;
 using PharmaPOS.Application.Features.Purchases;
+using PharmaPOS.Domain.Enums;
 
 namespace PharmaPOS.WPF.Views;
 
@@ -28,10 +29,31 @@ public sealed class PurchaseBillViewerModel
         SupplierName = p.SupplierName;
         SupplierPhone = string.IsNullOrWhiteSpace(p.SupplierPhone) ? "—" : p.SupplierPhone!;
         GrandTotal = p.GrandTotal;
-        PaidAmount = p.PaidAmount;
-        BalanceDue = Math.Max(0m, p.GrandTotal - p.PaidAmount);
+        CashPaid = p.PaidAmount;
+        ReturnCreditApplied = p.ReturnCreditApplied;
+        PaidAmount = p.PaidAmount + p.ReturnCreditApplied;
+        BalanceDue = Math.Max(0m, p.GrandTotal - PaidAmount);
         PaymentMethod = p.PaymentMethod.ToString();
+        DueReason = FormatDueReason(p);
         Lines = p.Lines.Select(l => new PurchaseBillLineModel(l)).ToList();
+    }
+
+    private static string FormatDueReason(PurchaseLoadDto p)
+    {
+        if (p.PartialPaymentReason is null)
+            return "—";
+
+        return p.PartialPaymentReason switch
+        {
+            PurchasePartialPaymentReason.CreditPayLater => "Credit / pay later",
+            PurchasePartialPaymentReason.AgainstPurchaseReturn =>
+                string.IsNullOrWhiteSpace(p.LinkedReturnNumber)
+                    ? "Against purchase return"
+                    : $"Against return {p.LinkedReturnNumber}",
+            PurchasePartialPaymentReason.Other =>
+                string.IsNullOrWhiteSpace(p.PartialPaymentNotes) ? "Other" : p.PartialPaymentNotes.Trim(),
+            _ => p.PartialPaymentReason.ToString() ?? "—"
+        };
     }
 
     public string InvoiceNumber { get; }
@@ -41,8 +63,11 @@ public sealed class PurchaseBillViewerModel
     public string SupplierPhone { get; }
     public string PaymentMethod { get; }
     public decimal GrandTotal { get; }
+    public decimal CashPaid { get; }
+    public decimal ReturnCreditApplied { get; }
     public decimal PaidAmount { get; }
     public decimal BalanceDue { get; }
+    public string DueReason { get; }
     public IReadOnlyList<PurchaseBillLineModel> Lines { get; }
 }
 

@@ -3,11 +3,11 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal static class MedWinTransactionImporter
+public static class MedWinTransactionImporter
 {
     public static async Task ImportSalesAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[sales] Importing sales from salemaster/dsalemaster...");
+        ctx.Log("\n[sales] Importing sales from salemaster/dsalemaster...");
         if (ctx.MedicineMap.Count == 0)
         {
             await MedWinMasterImporter.LoadExistingMedicineMapAsync(ctx, target);
@@ -26,7 +26,7 @@ internal static class MedWinTransactionImporter
             var sourceCount = ImportHelpers.Int(countCmd.ExecuteScalar());
             if (existing >= sourceCount && sourceCount > 0)
             {
-                Console.WriteLine($"  MedWin sales already imported ({existing:N0}). Use --force to import again.");
+                ctx.Log($"  MedWin sales already imported ({existing:N0}). Use --force to import again.");
                 return;
             }
         }
@@ -85,20 +85,22 @@ internal static class MedWinTransactionImporter
             var saleId = (int)await insSale.ExecuteScalarAsync();
             ctx.SaleMap[billNo] = saleId;
 
-            await ImportSaleLinesAsync(ctx, target, med, billNo, saleId);
+            await ImportSaleLinesAsync(ctx, target, med, billNo, saleId, invoice, invoiceDate);
             await RecalculateImportedSaleHeaderAsync(target, saleId);
             imported++;
-            if (imported % 500 == 0) Console.WriteLine($"  ...{imported:N0} sales");
+            if (imported % 500 == 0) ctx.Log($"  ...{imported:N0} sales");
         }
 
-        Console.WriteLine($"  Sales imported: {imported:N0} ({skipped:N0} skipped as existing).");
+        ctx.Log($"  Sales imported: {imported:N0} ({skipped:N0} skipped as existing).");
     }
 
-    private static async Task ImportSaleLinesAsync(MedWinImportContext ctx, SqlConnection target, OleDbConnection med, int billNo, int saleId)
+    private static async Task ImportSaleLinesAsync(
+        MedWinImportContext ctx, SqlConnection target, OleDbConnection med,
+        int billNo, int saleId, string invoiceNumber, DateTime invoiceDate)
     {
         using var cmd = new OleDbCommand("""
             SELECT dpmedcod, dpqty, dpbatch, dpfmrp, mrprate, dpamt, dptax, dtaxamt, dnetamt, dpsize,
-                   dpexmon, dpexyear, dpdisc, dpcost
+                   dpexmon, dpexyear, dpdisc, dpcost, dpfree
             FROM dsalemaster
             WHERE dpurblno = ?
             """, med);
@@ -110,22 +112,27 @@ internal static class MedWinTransactionImporter
             if (!ctx.MedicineMap.TryGetValue(medWinId, out var medicineId)) continue;
 
             var batchNo = ImportHelpers.Trunc(Convert.ToString(r["dpbatch"]), 60) ?? "BATCH";
-            int? batchId = ResolveBatchId(ctx, medWinId, batchNo);
+            int? batchId = await ResolveBatchIdAsync(ctx, target, medWinId, medicineId, batchNo);
 
+            // Keep MedWin units (same as stockmas / item ledger). Do NOT divide by dpsize.
             var qty = ImportHelpers.Dec(r["dpqty"]);
+            var free = ImportHelpers.Dec(r["dpfree"]);
             var pack = Math.Max(1, ImportHelpers.Int(r["dpsize"]));
-            if (pack > 1) qty = qty / pack;
 
             var mrp = ImportHelpers.Dec(r["mrprate"]);
             if (mrp <= 0) mrp = ImportHelpers.Dec(r["dpfmrp"]);
+            // MedWin MRP is usually per pack; store per-unit to match unit qty.
+            if (pack > 1 && mrp > 0)
+                mrp = Math.Round(mrp / pack, 4);
+
             var lineTotal = ImportHelpers.Dec(r["dpamt"]);
-            if (lineTotal <= 0) lineTotal = ImportHelpers.Dec(r["dnetamt"]);
+            if (lineTotal <= 0 && qty > 0) lineTotal = ImportHelpers.Dec(r["dnetamt"]);
             var gstPercent = ImportHelpers.Dec(r["dptax"]);
             var taxAmount = ImportHelpers.Dec(r["dtaxamt"]);
-            if (taxAmount <= 0 && gstPercent > 0 && lineTotal > 0)
+            if (taxAmount <= 0 && gstPercent > 0 && lineTotal != 0)
                 taxAmount = Math.Round(lineTotal * gstPercent / (100m + gstPercent), 2);
-            var taxable = Math.Max(0, lineTotal - taxAmount);
-            var unitPrice = qty > 0 ? Math.Round(lineTotal / qty, 2) : lineTotal;
+            var taxable = lineTotal - taxAmount;
+            var unitPrice = qty != 0 ? Math.Round(lineTotal / qty, 4) : 0m;
             var discount = ImportHelpers.Dec(r["dpdisc"]);
 
             DateTime? expiry = ImportHelpers.ParseExpiryMonthYear(
@@ -160,7 +167,7 @@ internal static class MedWinTransactionImporter
 
     public static async Task ImportPurchasesAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[purchases] Importing purchases from purchase/dpurchas...");
+        ctx.Log("\n[purchases] Importing purchases from purchase/dpurchas...");
         if (ctx.SupplierMap.Count == 0)
             await MedWinMasterImporter.ImportSuppliersAsync(ctx, target);
         if (ctx.MedicineMap.Count == 0)
@@ -181,11 +188,11 @@ internal static class MedWinTransactionImporter
             var sourceCount = ImportHelpers.Int(countCmd.ExecuteScalar());
             if (existing >= sourceCount && sourceCount > 0)
             {
-                Console.WriteLine($"  MedWin purchases already imported ({existing:N0}). Use --force to import again.");
+                ctx.Log($"  MedWin purchases already imported ({existing:N0}). Use --force to import again.");
                 return;
             }
             if (existing > 0 && existing < sourceCount)
-                Console.WriteLine($"  Resuming purchases ({existing:N0}/{sourceCount:N0} already imported)...");
+                ctx.Log($"  Resuming purchases ({existing:N0}/{sourceCount:N0} already imported)...");
         }
 
         using var headerCmd = new OleDbCommand("""
@@ -217,9 +224,10 @@ internal static class MedWinTransactionImporter
             var grandTotal = ImportHelpers.Dec(headers["pactamt"]);
             var subTotal = ImportHelpers.Dec(headers["pgrossamt"]);
             if (subTotal <= 0) subTotal = grandTotal;
-            var taxTotal = ImportHelpers.Dec(headers["purtaxam"]);
-            var taxable = Math.Max(0, grandTotal - taxTotal);
-            var cgst = taxTotal / 2m;
+            // MedWin "purtaxam" is usually TAXABLE amount (large). Rarely it holds the tax amount (small).
+            var (taxable, taxTotal) = ImportHelpers.ResolveMedWinPurchaseTax(
+                grandTotal, subTotal, ImportHelpers.Dec(headers["purtaxam"]));
+            var cgst = Math.Round(taxTotal / 2m, 2);
             var sgst = taxTotal - cgst;
             var paid = ImportHelpers.ResolveMedWinPurchasePaidAmount(
                 grandTotal,
@@ -254,14 +262,162 @@ internal static class MedWinTransactionImporter
             ins.Parameters.AddWithValue("@Now", ctx.NowUtc);
             var purchaseId = (int)await ins.ExecuteScalarAsync();
 
-            await ImportPurchaseLinesAsync(ctx, target, med, billNo, purchaseId);
+            await ImportPurchaseLinesAsync(ctx, target, med, billNo, purchaseId, invoice, invoiceDate);
+            await RecalculatePurchaseHeaderTaxFromLinesAsync(target, purchaseId, ctx.CancellationToken);
             imported++;
         }
 
-        Console.WriteLine($"  Purchases imported: {imported:N0} ({skipped:N0} skipped).");
+        ctx.Log($"  Purchases imported: {imported:N0} ({skipped:N0} skipped).");
     }
 
-    private static async Task ImportPurchaseLinesAsync(MedWinImportContext ctx, SqlConnection target, OleDbConnection med, int billNo, int purchaseId)
+    public static async Task ImportPurchaseReturnsAsync(MedWinImportContext ctx, SqlConnection target)
+    {
+        ctx.Log("\n[purchase-returns] Importing purchase returns from purchase_return/dpurchas_return...");
+        if (ctx.SupplierMap.Count == 0)
+            await MedWinMasterImporter.ImportSuppliersAsync(ctx, target);
+        if (ctx.MedicineMap.Count == 0)
+        {
+            await MedWinMasterImporter.LoadExistingMedicineMapAsync(ctx, target);
+            if (ctx.MedicineMap.Count == 0)
+                throw new InvalidOperationException("Import medicines before purchase returns.");
+        }
+
+        using var med = ctx.OpenMedWin();
+        med.Open();
+
+        if (!ctx.Force)
+        {
+            var existing = await MedWinImporter.ScalarIntAsync(target,
+                "SELECT COUNT(*) FROM PurchaseReturns WHERE ReturnNumber LIKE 'MW-PR-%'");
+            using var countCmd = new OleDbCommand("SELECT COUNT(*) FROM purchase_return", med);
+            var sourceCount = ImportHelpers.Int(countCmd.ExecuteScalar());
+            if (existing >= sourceCount && sourceCount > 0)
+            {
+                ctx.Log($"  MedWin purchase returns already imported ({existing:N0}). Use --force to import again.");
+                return;
+            }
+        }
+
+        using var headerCmd = new OleDbCommand("""
+            SELECT purblno, purbldt, billtime, purparty, pactamt, pgrossamt, purtaxam, pdbnote
+            FROM purchase_return
+            ORDER BY purblno
+            """, med);
+        using var headers = headerCmd.ExecuteReader();
+
+        int imported = 0, skipped = 0;
+        while (headers.Read())
+        {
+            var billNo = ImportHelpers.Int(headers["purblno"]);
+            var returnNumber = $"MW-PR-{billNo}";
+
+            var exists = await MedWinImporter.ScalarIntAsync(target,
+                "SELECT COUNT(*) FROM PurchaseReturns WHERE ReturnNumber = @No",
+                new SqlParameter("@No", returnNumber));
+            if (exists > 0) { skipped++; continue; }
+
+            var party = ImportHelpers.Int(headers["purparty"]);
+            if (!ctx.SupplierMap.TryGetValue(party, out var supplierId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var returnDate = ImportHelpers.CombineDateAndTime(
+                ImportHelpers.Date(headers["purbldt"]), Convert.ToString(headers["billtime"]));
+            var grandTotal = ImportHelpers.Dec(headers["pactamt"]);
+            var dbNote = ImportHelpers.Trunc(Convert.ToString(headers["pdbnote"]), 60);
+
+            await using var ins = new SqlCommand("""
+                INSERT INTO PurchaseReturns
+                    (ReturnNumber, PurchaseId, SupplierId, ReturnDate,
+                     SubTotal, DiscountAmount, TaxableAmount, CgstAmount, SgstAmount, RoundOff,
+                     GrandTotal, CreditAmount, CreditAppliedAmount, SettlementMode, Status, IsFullReturn,
+                     Remarks, SupplierReturnReceiptNumber, BranchId, CreatedAtUtc, IsDeleted)
+                OUTPUT INSERTED.Id
+                VALUES
+                    (@ReturnNumber, NULL, @SupplierId, @ReturnDate,
+                     @GrandTotal, 0, @GrandTotal, 0, 0, 0,
+                     @GrandTotal, @GrandTotal, 0, 0, 1, 0,
+                     @Remarks, @DbNote, @BranchId, @Now, 0)
+                """, target);
+            ins.Parameters.AddWithValue("@ReturnNumber", returnNumber);
+            ins.Parameters.AddWithValue("@SupplierId", supplierId);
+            ins.Parameters.AddWithValue("@ReturnDate", returnDate);
+            ins.Parameters.AddWithValue("@GrandTotal", grandTotal);
+            ins.Parameters.AddWithValue("@Remarks", $"MedWin purchase return {billNo}");
+            ins.Parameters.AddWithValue("@DbNote", (object?)dbNote ?? DBNull.Value);
+            ins.Parameters.AddWithValue("@BranchId", ctx.BranchId);
+            ins.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            var returnId = (int)await ins.ExecuteScalarAsync();
+
+            await ImportPurchaseReturnLinesAsync(ctx, target, med, billNo, returnId, returnNumber, returnDate);
+            imported++;
+        }
+
+        ctx.Log($"  Purchase returns imported: {imported:N0} ({skipped:N0} skipped).");
+    }
+
+    private static async Task ImportPurchaseReturnLinesAsync(
+        MedWinImportContext ctx, SqlConnection target, OleDbConnection med,
+        int billNo, int returnId, string returnNumber, DateTime returnDate)
+    {
+        using var cmd = new OleDbCommand("""
+            SELECT dpmedcod, dpqty, dpbatch, dpfree, dpinvrat, dptax, dpamt, dpexmon, dpexyear, dpsize
+            FROM dpurchas_return
+            WHERE dpurblno = ?
+            """, med);
+        cmd.Parameters.Add(new OleDbParameter { OleDbType = System.Data.OleDb.OleDbType.Integer, Value = billNo });
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var medWinId = ImportHelpers.Int(r["dpmedcod"]);
+            if (!ctx.MedicineMap.TryGetValue(medWinId, out var medicineId)) continue;
+
+            var batchNo = ImportHelpers.Trunc(Convert.ToString(r["dpbatch"]), 60) ?? "BATCH";
+            int? batchId = await ResolveBatchIdAsync(ctx, target, medWinId, medicineId, batchNo);
+            var qty = ImportHelpers.Dec(r["dpqty"]); // units (same as purchase / stock)
+            var free = ImportHelpers.Dec(r["dpfree"]);
+            var purchasePrice = ImportHelpers.Dec(r["dpinvrat"]);
+            var gstPercent = ImportHelpers.Dec(r["dptax"]);
+            var lineTotal = ImportHelpers.Dec(r["dpamt"]);
+            var taxAmount = 0m;
+            if (gstPercent > 0 && lineTotal > 0)
+                taxAmount = Math.Round(lineTotal * gstPercent / (100m + gstPercent), 2);
+            var taxable = Math.Max(0, lineTotal - taxAmount);
+            var expiry = ImportHelpers.ParseExpiryMonthYear(
+                ImportHelpers.Int(r["dpexyear"]), ImportHelpers.Int(r["dpexmon"]));
+
+            await using var ins = new SqlCommand("""
+                INSERT INTO PurchaseReturnItems
+                    (PurchaseReturnId, PurchaseItemId, MedicineId, MedicineBatchId, BatchNumber, ExpiryDate,
+                     ReturnedQuantity, ReturnedFreeQuantity, PurchasePrice, DiscountPercent, DiscountAmount,
+                     GstPercent, TaxableAmount, TaxAmount, LineTotal, CreatedAtUtc, IsDeleted)
+                VALUES
+                    (@ReturnId, NULL, @MedicineId, @BatchId, @Batch, @Expiry,
+                     @Qty, @Free, @PurchasePrice, 0, 0,
+                     @Gst, @Taxable, @Tax, @LineTotal, @Now, 0)
+                """, target);
+            ins.Parameters.AddWithValue("@ReturnId", returnId);
+            ins.Parameters.AddWithValue("@MedicineId", medicineId);
+            ins.Parameters.AddWithValue("@BatchId", (object?)batchId ?? DBNull.Value);
+            ins.Parameters.AddWithValue("@Batch", batchNo);
+            ins.Parameters.AddWithValue("@Expiry", (object?)expiry ?? DBNull.Value);
+            ins.Parameters.AddWithValue("@Qty", qty);
+            ins.Parameters.AddWithValue("@Free", free);
+            ins.Parameters.AddWithValue("@PurchasePrice", purchasePrice);
+            ins.Parameters.AddWithValue("@Gst", gstPercent);
+            ins.Parameters.AddWithValue("@Taxable", taxable);
+            ins.Parameters.AddWithValue("@Tax", taxAmount);
+            ins.Parameters.AddWithValue("@LineTotal", lineTotal);
+            ins.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            await ins.ExecuteNonQueryAsync();
+        }
+    }
+
+    private static async Task ImportPurchaseLinesAsync(
+        MedWinImportContext ctx, SqlConnection target, OleDbConnection med,
+        int billNo, int purchaseId, string invoiceNumber, DateTime invoiceDate)
     {
         using var cmd = new OleDbCommand("""
             SELECT dpmedcod, dpqty, dpbatch, dpfree, dpinvrat, dpfmrp, mrprate, dpamt, dptax,
@@ -277,6 +433,8 @@ internal static class MedWinTransactionImporter
             if (!ctx.MedicineMap.TryGetValue(medWinId, out var medicineId)) continue;
 
             var batchNo = ImportHelpers.Trunc(Convert.ToString(r["dpbatch"]), 60) ?? "BATCH";
+            int? batchId = await ResolveBatchIdAsync(ctx, target, medWinId, medicineId, batchNo);
+            // Purchase qty is already in units (matches MedWin item ledger / stockmas).
             var qty = ImportHelpers.Dec(r["dpqty"]);
             var free = ImportHelpers.Dec(r["dpfree"]);
             var purchasePrice = ImportHelpers.Dec(r["dpinvrat"]);
@@ -298,16 +456,17 @@ internal static class MedWinTransactionImporter
 
             await using var ins = new SqlCommand("""
                 INSERT INTO PurchaseItems
-                    (PurchaseId, MedicineId, BatchNumber, ManufacturingDate, ExpiryDate, Quantity, FreeQuantity,
+                    (PurchaseId, MedicineId, MedicineBatchId, BatchNumber, ManufacturingDate, ExpiryDate, Quantity, FreeQuantity,
                      PurchasePrice, Mrp, SellingPrice, DiscountPercent, DiscountAmount, SchemeDiscount, GstPercent,
                      TaxableAmount, TaxAmount, LineTotal, CreatedAtUtc, IsDeleted)
                 VALUES
-                    (@PurchaseId, @MedicineId, @Batch, @Mfg, @Expiry, @Qty, @Free,
+                    (@PurchaseId, @MedicineId, @BatchId, @Batch, @Mfg, @Expiry, @Qty, @Free,
                      @PurchasePrice, @Mrp, @Selling, 0, @Discount, 0, @Gst,
                      @Taxable, @Tax, @LineTotal, @Now, 0)
                 """, target);
             ins.Parameters.AddWithValue("@PurchaseId", purchaseId);
             ins.Parameters.AddWithValue("@MedicineId", medicineId);
+            ins.Parameters.AddWithValue("@BatchId", (object?)batchId ?? DBNull.Value);
             ins.Parameters.AddWithValue("@Batch", batchNo);
             ins.Parameters.AddWithValue("@Mfg", (object?)ImportHelpers.Date(r["manfdate"]) ?? DBNull.Value);
             ins.Parameters.AddWithValue("@Expiry", (object?)expiry ?? DBNull.Value);
@@ -326,9 +485,68 @@ internal static class MedWinTransactionImporter
         }
     }
 
+    /// <summary>
+    /// Prefer line-level GST breakdown for purchase headers (fixes MedWin purtaxam confusion).
+    /// </summary>
+    private static async Task RecalculatePurchaseHeaderTaxFromLinesAsync(
+        SqlConnection target, int purchaseId, CancellationToken ct)
+    {
+        await using var cmd = new SqlCommand("""
+            ;WITH sums AS (
+                SELECT
+                    ISNULL(SUM(TaxableAmount), 0) AS Taxable,
+                    ISNULL(SUM(TaxAmount), 0) AS Tax,
+                    ISNULL(SUM(LineTotal), 0) AS LinesTotal
+                FROM PurchaseItems
+                WHERE PurchaseId = @Id AND IsDeleted = 0
+            )
+            UPDATE p SET
+                TaxableAmount = CASE WHEN s.Taxable > 0 THEN s.Taxable
+                                     WHEN p.GrandTotal > s.Tax THEN p.GrandTotal - s.Tax
+                                     ELSE p.TaxableAmount END,
+                CgstAmount = ROUND(s.Tax / 2.0, 2),
+                SgstAmount = s.Tax - ROUND(s.Tax / 2.0, 2),
+                IgstAmount = 0,
+                SubTotal = CASE WHEN s.LinesTotal > 0 THEN s.LinesTotal ELSE p.SubTotal END
+            FROM Purchases p
+            CROSS JOIN sums s
+            WHERE p.Id = @Id AND s.Tax >= 0 AND (s.Taxable > 0 OR s.Tax > 0 OR s.LinesTotal > 0)
+            """, target);
+        cmd.Parameters.AddWithValue("@Id", purchaseId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>Repair Tax/Taxable on already-imported MedWin purchases from their line items.</summary>
+    public static async Task BackfillPurchaseTaxAsync(MedWinImportContext ctx, SqlConnection target)
+    {
+        ctx.Log("\n[backfill-purchase-tax] Recalculating MedWin purchase tax from line items...");
+        ctx.ThrowIfCancellationRequested();
+
+        await using var list = new SqlCommand("""
+            SELECT Id FROM Purchases
+            WHERE IsDeleted = 0 AND InvoiceNumber LIKE 'MW-P-%'
+            """, target);
+        var ids = new List<int>();
+        await using (var reader = await list.ExecuteReaderAsync(ctx.CancellationToken))
+        {
+            while (await reader.ReadAsync(ctx.CancellationToken))
+                ids.Add(reader.GetInt32(0));
+        }
+
+        var updated = 0;
+        foreach (var id in ids)
+        {
+            ctx.ThrowIfCancellationRequested();
+            await RecalculatePurchaseHeaderTaxFromLinesAsync(target, id, ctx.CancellationToken);
+            updated++;
+        }
+
+        ctx.Log($"  Recalculated tax on {updated:N0} MedWin purchase(s).");
+    }
+
     public static async Task ImportPaymentsAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[payments] Importing sale payments...");
+        ctx.Log("\n[payments] Importing sale payments...");
         if (ctx.SaleMap.Count == 0)
             await LoadSaleMapAsync(ctx, target);
 
@@ -368,8 +586,8 @@ internal static class MedWinTransactionImporter
             }
         }
 
-        Console.WriteLine($"  Sale payment rows added: {added:N0}.");
-        Console.WriteLine("  Purchase receipts are stored on purchase headers (pcheqamt / pcredit).");
+        ctx.Log($"  Sale payment rows added: {added:N0}.");
+        ctx.Log("  Purchase receipts are stored on purchase headers (pcheqamt / pcredit).");
     }
 
     /// <summary>
@@ -377,7 +595,7 @@ internal static class MedWinTransactionImporter
     /// </summary>
     public static async Task BackfillPurchasePaymentsAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[backfill-purchase-payments] Repairing purchase paid amounts from MedWin...");
+        ctx.Log("\n[backfill-purchase-payments] Repairing purchase paid amounts from MedWin...");
         using var med = ctx.OpenMedWin();
         med.Open();
 
@@ -441,8 +659,8 @@ internal static class MedWinTransactionImporter
             await syncSuppliers.ExecuteNonQueryAsync();
         }
 
-        Console.WriteLine($"  Purchase payment rows updated: {updated:N0} ({examined - updated:N0} already correct).");
-        Console.WriteLine("  Supplier outstanding balances recalculated from open purchase dues.");
+        ctx.Log($"  Purchase payment rows updated: {updated:N0} ({examined - updated:N0} already correct).");
+        ctx.Log("  Supplier outstanding balances recalculated from open purchase dues.");
     }
 
     private static async Task<int> InsertSalePaymentIfMissingAsync(
@@ -465,6 +683,64 @@ internal static class MedWinTransactionImporter
         return await ins.ExecuteNonQueryAsync() > 0 ? 1 : 0;
     }
 
+    private static async Task InsertStockMovementAsync(
+        MedWinImportContext ctx,
+        SqlConnection target,
+        int medicineId,
+        int? batchId,
+        int movementType,
+        decimal quantity,
+        decimal unitCost,
+        string referenceType,
+        int referenceId,
+        string referenceNumber,
+        string remarks,
+        DateTime movementDateUtc)
+    {
+        if (quantity <= 0) return;
+
+        await using var mv = new SqlCommand("""
+            INSERT INTO StockMovements
+                (BranchId, MedicineId, MedicineBatchId, MovementType, Quantity, BalanceAfter,
+                 UnitCost, ReferenceType, ReferenceId, ReferenceNumber, Remarks, MovementDateUtc,
+                 CreatedAtUtc, IsDeleted)
+            VALUES
+                (@BranchId, @MedicineId, @BatchId, @MovementType, @Qty, 0,
+                 @UnitCost, @RefType, @RefId, @RefNo, @Remarks, @MoveDate,
+                 @Now, 0)
+            """, target);
+        mv.Parameters.AddWithValue("@BranchId", ctx.BranchId);
+        mv.Parameters.AddWithValue("@MedicineId", medicineId);
+        mv.Parameters.AddWithValue("@BatchId", (object?)batchId ?? DBNull.Value);
+        mv.Parameters.AddWithValue("@MovementType", movementType);
+        mv.Parameters.AddWithValue("@Qty", quantity);
+        mv.Parameters.AddWithValue("@UnitCost", unitCost);
+        mv.Parameters.AddWithValue("@RefType", referenceType);
+        mv.Parameters.AddWithValue("@RefId", referenceId);
+        mv.Parameters.AddWithValue("@RefNo", referenceNumber);
+        mv.Parameters.AddWithValue("@Remarks", remarks);
+        mv.Parameters.AddWithValue("@MoveDate", movementDateUtc);
+        mv.Parameters.AddWithValue("@Now", ctx.NowUtc);
+        await mv.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<int?> ResolveBatchIdAsync(
+        MedWinImportContext ctx, SqlConnection target, int medWinId, int medicineId, string batchNo)
+    {
+        var fromMap = ResolveBatchId(ctx, medWinId, batchNo);
+        if (fromMap is > 0) return fromMap;
+
+        await using var cmd = new SqlCommand("""
+            SELECT TOP 1 Id FROM MedicineBatches
+            WHERE MedicineId = @MedicineId AND BatchNumber = @Batch AND IsDeleted = 0
+            ORDER BY Id DESC
+            """, target);
+        cmd.Parameters.AddWithValue("@MedicineId", medicineId);
+        cmd.Parameters.AddWithValue("@Batch", batchNo);
+        var result = await cmd.ExecuteScalarAsync();
+        return result is int id ? id : result is null or DBNull ? null : Convert.ToInt32(result);
+    }
+
     private static int? ResolveBatchId(MedWinImportContext ctx, int medWinId, string batchNo)
     {
         var prefix = $"{medWinId}:{batchNo}:";
@@ -474,13 +750,18 @@ internal static class MedWinTransactionImporter
         return null;
     }
 
+    private static DateTime ToUtc(DateTime value)
+        => value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime()
+            : value.ToUniversalTime();
+
     /// <summary>
     /// Repairs expiry dates on imported sale lines and batches from MedWin month/year fields.
     /// MedWin stores two-digit years (e.g. 29 = 2029) which the first import pass skipped.
     /// </summary>
     public static async Task BackfillExpiryAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[backfill-expiry] Backfilling expiry dates from MedWin stock and sale lines...");
+        ctx.Log("\n[backfill-expiry] Backfilling expiry dates from MedWin stock and sale lines...");
         if (ctx.MedicineMap.Count == 0)
             await MedWinMasterImporter.LoadExistingMedicineMapAsync(ctx, target);
 
@@ -537,9 +818,9 @@ internal static class MedWinTransactionImporter
             }
         }
 
-        Console.WriteLine($"  Sale lines updated: {saleRows:N0}");
-        Console.WriteLine($"  Batch rows updated: {batchRows:N0}");
-        Console.WriteLine($"  Skipped (unmapped): {skipped:N0}");
+        ctx.Log($"  Sale lines updated: {saleRows:N0}");
+        ctx.Log($"  Batch rows updated: {batchRows:N0}");
+        ctx.Log($"  Skipped (unmapped): {skipped:N0}");
     }
 
     private static async Task<int> UpdateSaleItemExpiryAsync(

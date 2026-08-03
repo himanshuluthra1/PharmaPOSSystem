@@ -60,14 +60,15 @@ public class ReportsService : IReportsService
         var q = PurchasesQuery(branchId)
             .Where(p => p.InvoiceDate >= start && p.InvoiceDate < end);
 
-        var rows = await q
+        var raw = await q
             .OrderByDescending(p => p.InvoiceDate)
-            .Select(p => new PurchaseReportRowDto(
+            .Select(p => new
+            {
                 p.Id,
                 p.InvoiceNumber,
                 p.InvoiceDate,
-                p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
-                p.Items.Count,
+                SupplierName = p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
+                ItemCount = p.Items.Count,
                 p.SubTotal,
                 p.DiscountAmount,
                 p.CgstAmount,
@@ -75,11 +76,64 @@ public class ReportsService : IReportsService
                 p.IgstAmount,
                 p.GrandTotal,
                 p.PaidAmount,
-                p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m))
+                p.ReturnCreditApplied,
+                p.PartialPaymentReason,
+                p.PartialPaymentNotes,
+                LinkedReturnNumber = p.LinkedPurchaseReturn != null
+                    ? p.LinkedPurchaseReturn.ReturnNumber
+                    : null
+            })
             .ToListAsync(ct);
+
+        var rows = raw.Select(p =>
+        {
+            var cashPaid = p.PaidAmount > p.ReturnCreditApplied
+                ? p.PaidAmount - p.ReturnCreditApplied
+                : 0m;
+            var netDue = p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m;
+            return new PurchaseReportRowDto(
+                p.Id,
+                p.InvoiceNumber,
+                p.InvoiceDate,
+                p.SupplierName,
+                p.ItemCount,
+                p.SubTotal,
+                p.DiscountAmount,
+                p.CgstAmount,
+                p.SgstAmount,
+                p.IgstAmount,
+                p.GrandTotal,
+                p.PaidAmount,
+                cashPaid,
+                p.ReturnCreditApplied,
+                netDue,
+                FormatPurchaseDueReason(p.PartialPaymentReason, p.PartialPaymentNotes, p.LinkedReturnNumber, netDue));
+        }).ToList();
 
         return (BuildSummary(rows.Count, rows.Sum(r => r.GrandTotal),
             rows.Sum(r => r.TaxAmount), rows.Sum(r => r.DiscountAmount)), rows);
+    }
+
+    private static string FormatPurchaseDueReason(
+        PurchasePartialPaymentReason? reason,
+        string? notes,
+        string? linkedReturnNumber,
+        decimal netDue)
+    {
+        if (reason is null)
+            return netDue > 0 ? "—" : string.Empty;
+
+        return reason switch
+        {
+            PurchasePartialPaymentReason.CreditPayLater => "Credit / pay later",
+            PurchasePartialPaymentReason.AgainstPurchaseReturn =>
+                string.IsNullOrWhiteSpace(linkedReturnNumber)
+                    ? "Against purchase return"
+                    : $"Against return {linkedReturnNumber}",
+            PurchasePartialPaymentReason.Other =>
+                string.IsNullOrWhiteSpace(notes) ? "Other" : notes.Trim(),
+            _ => reason.ToString() ?? string.Empty
+        };
     }
 
     public async Task<(GstSummaryDto Summary, List<GstDetailRowDto> Rows)> GetGstReportAsync(

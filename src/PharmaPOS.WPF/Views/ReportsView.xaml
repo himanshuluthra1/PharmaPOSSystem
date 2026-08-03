@@ -244,13 +244,16 @@
                                   MouseDoubleClick="PurchaseGrid_MouseDoubleClick"
                                   PreviewKeyDown="PurchaseGrid_PreviewKeyDown">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
-                                <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="60" />
-                                <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="120" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="140" />
+                                <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="100" />
+                                <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="50" />
+                                <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Cash Paid" Binding="{Binding CashPaid, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Return Cr." Binding="{Binding ReturnCreditApplied, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Net Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Due Reason" Binding="{Binding DueReason}" Width="*" MinWidth="120" />
                             </DataGrid.Columns>
                         </DataGrid>
 

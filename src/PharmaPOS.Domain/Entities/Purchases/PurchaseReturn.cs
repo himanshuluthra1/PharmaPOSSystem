@@ -34,6 +34,11 @@ public class PurchaseReturn : BranchEntity
     /// <summary>Amount credited against supplier payable (usually = GrandTotal).</summary>
     public decimal CreditAmount { get; set; }
 
+    /// <summary>Sum of credit already applied to purchase bills as partial/full settlement.</summary>
+    public decimal CreditAppliedAmount { get; set; }
+
+    public decimal RemainingCredit => Math.Max(0m, CreditAmount - CreditAppliedAmount);
+
     public PurchaseReturnSettlementMode SettlementMode { get; set; } = PurchaseReturnSettlementMode.SupplierCredit;
     public PurchaseReturnStatus Status { get; set; } = PurchaseReturnStatus.Completed;
     public bool IsFullReturn { get; set; }

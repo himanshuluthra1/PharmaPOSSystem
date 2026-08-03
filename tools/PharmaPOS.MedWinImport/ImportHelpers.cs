@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace PharmaPOS.MedWinImport;
 
-internal static class ImportHelpers
+public static class ImportHelpers
 {
     private static readonly Regex GstinRegex = new(@"([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z])", RegexOptions.Compiled);
 
@@ -73,6 +73,35 @@ internal static class ImportHelpers
     }
 
     public static string MedWinMedicineNote(int medWinId) => $"MedWinId:{medWinId}";
+
+    /// <summary>
+    /// Resolves taxable vs tax from MedWin purchase header fields.
+    /// <c>purtaxam</c> is usually the taxable amount (~bill total); occasionally it is the tax amount.
+    /// </summary>
+    public static (decimal Taxable, decimal Tax) ResolveMedWinPurchaseTax(
+        decimal grandTotal, decimal grossAmount, decimal purtaxam)
+    {
+        if (grandTotal <= 0 && grossAmount <= 0)
+            return (0m, 0m);
+
+        var bill = grandTotal > 0 ? grandTotal : grossAmount;
+
+        if (purtaxam <= 0)
+        {
+            var taxable = grossAmount > 0 ? Math.Min(grossAmount, bill) : bill;
+            return (taxable, Math.Max(0m, bill - taxable));
+        }
+
+        // Large value relative to bill → taxable; small → tax amount.
+        if (purtaxam >= bill * 0.5m)
+        {
+            var taxable = Math.Min(purtaxam, bill);
+            return (taxable, Math.Max(0m, Math.Round(bill - taxable, 2)));
+        }
+
+        var tax = Math.Min(purtaxam, bill);
+        return (Math.Max(0m, Math.Round(bill - tax, 2)), tax);
+    }
 
     /// <summary>
     /// MedWin purchase header: <c>pcredit</c> is the amount still due on credit;

@@ -8,6 +8,8 @@ using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
+using PharmaPOS.WPF.Views;
+using WpfApp = System.Windows.Application;
 
 namespace PharmaPOS.WPF.ViewModels.Purchases;
 
@@ -730,6 +732,29 @@ public class PurchaseViewModel : ObservableObject
             GstPercent = l.GstPercent
         }).ToList();
 
+        PurchasePartialPaymentReason? partialReason = null;
+        string? partialNotes = null;
+        int? linkedReturnId = null;
+
+        if (BalanceDue > 0)
+        {
+            var openReturns = await _purchaseService.ListOpenPurchaseReturnCreditsAsync(
+                SelectedSupplier.Id, _currentUser.CurrentUser?.BranchId);
+            var reasonVm = new PartialPaymentReasonDialogViewModel(BalanceDue, openReturns);
+            var dlg = new PartialPaymentReasonDialogWindow(reasonVm)
+            {
+                Owner = WpfApp.Current?.MainWindow
+            };
+            if (dlg.ShowDialog() != true)
+                return;
+
+            var reasonResult = reasonVm.BuildResult();
+            if (reasonResult is null) return;
+            partialReason = reasonResult.Reason;
+            partialNotes = reasonResult.Notes;
+            linkedReturnId = reasonResult.LinkedPurchaseReturnId;
+        }
+
         IsBusy = true;
         try
         {
@@ -747,6 +772,9 @@ public class PurchaseViewModel : ObservableObject
                         InvoiceDate = InvoiceDate,
                         PaymentMethod = PaymentMethod,
                         PaidAmount = PaidAmount,
+                        PartialPaymentReason = partialReason,
+                        PartialPaymentNotes = partialNotes,
+                        LinkedPurchaseReturnId = linkedReturnId,
                         Lines = lineRequests
                     }, _currentUser.CurrentUser?.BranchId);
                 }
@@ -759,6 +787,9 @@ public class PurchaseViewModel : ObservableObject
                         InvoiceDate = InvoiceDate,
                         PaymentMethod = PaymentMethod,
                         PaidAmount = PaidAmount,
+                        PartialPaymentReason = partialReason,
+                        PartialPaymentNotes = partialNotes,
+                        LinkedPurchaseReturnId = linkedReturnId,
                         Lines = lineRequests
                     }, _currentUser.CurrentUser?.BranchId);
                 }
@@ -777,9 +808,13 @@ public class PurchaseViewModel : ObservableObject
                     ? $"Updated purchase {r.InvoiceNumber}. {r.ItemCount} item(s)."
                     : $"Saved purchase {r.InvoiceNumber}. {r.ItemCount} item(s), stock received.";
 
+                var creditLine = r.ReturnCreditApplied > 0
+                    ? $"\nReturn credit applied: ₹{r.ReturnCreditApplied:N2}"
+                    : string.Empty;
                 _dialog.ShowInfo(
                     $"Purchase {r.InvoiceNumber} saved.\n\n" +
-                    $"Items: {r.ItemCount}\nGrand total: ₹{r.GrandTotal:N2}\nBalance due: ₹{r.BalanceDue:N2}",
+                    $"Items: {r.ItemCount}\nGrand total: ₹{r.GrandTotal:N2}\n" +
+                    $"Paid (incl. credit): ₹{r.PaidAmount:N2}{creditLine}\nBalance due: ₹{r.BalanceDue:N2}",
                     "Purchase saved");
 
                 await RefreshPurchaseHistoryCoreAsync(

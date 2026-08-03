@@ -6,6 +6,7 @@ using PharmaPOS.Application;
 using PharmaPOS.Infrastructure;
 using PharmaPOS.Persistence;
 using PharmaPOS.Persistence.Seed;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels;
 using PharmaPOS.WPF.ViewModels.Sales;
@@ -58,7 +59,14 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IBillPdfUploadService, BillPdfUploadService>();
         services.AddSingleton<IUrlShortenerService, TinyUrlShortenerService>();
         services.AddSingleton<IBillShareService, BillShareService>();
+        services.AddSingleton<MySqlSyncSettingsService>();
+        services.AddSingleton<IMySqlSyncSettingsService>(sp => sp.GetRequiredService<MySqlSyncSettingsService>());
+        services.AddSingleton<IReportingSyncGate>(sp => sp.GetRequiredService<MySqlSyncSettingsService>());
+        services.AddSingleton<IStoreIdentityService, StoreIdentityService>();
+        services.AddSingleton<IMySqlReportingPublisher, MySqlReportingPublisher>();
+        services.AddHostedService<ReportingSyncWorker>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddTransient<StoreCodeSetupWindow>();
         services.AddSingleton<IInvoicePrintService, InvoicePrintService>();
         services.AddSingleton<IMedicinePickerService, MedicinePickerService>();
         services.AddSingleton<IBillSearchService, BillSearchService>();
@@ -71,6 +79,10 @@ public partial class App : System.Windows.Application
         services.AddHttpClient<IGeminiPurchaseBillExtractor, GeminiPurchaseBillExtractor>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(90);
+        });
+        services.AddHttpClient<IGeminiMedicineMappingMatcher, GeminiMedicineMappingMatcher>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(45);
         });
         services.AddHttpClient<IPharmacyMedicineImportService, PharmacyMedicineImportService>(client =>
         {
@@ -142,6 +154,13 @@ public partial class App : System.Windows.Application
             await InitializeDatabaseAsync();
 
             splash.Close();
+
+            if (!await EnsureStoreIdentityAsync())
+            {
+                Shutdown();
+                return;
+            }
+
             ShowLogin();
         }
         catch (Exception ex)
@@ -152,6 +171,28 @@ public partial class App : System.Windows.Application
                 "Startup failed", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
+    }
+
+    /// <summary>
+    /// Blocks until this PC has a unique store code (first install / reinstall).
+    /// If VPS already approved this machine, restores local identity automatically.
+    /// </summary>
+    private async Task<bool> EnsureStoreIdentityAsync()
+    {
+        var identity = Services.GetRequiredService<IStoreIdentityService>();
+        identity.Load();
+        identity.InvalidateIfMachineMismatch();
+
+        // Offline-friendly: encrypted local file + machineId match is enough.
+        if (identity.IsConfigured)
+            return true;
+
+        // Optional online restore if vendor already approved this PC (needs internet once).
+        if (await identity.TryRestoreFromServerAsync())
+            return true;
+
+        var window = Services.GetRequiredService<StoreCodeSetupWindow>();
+        return window.ShowDialog() == true && identity.IsConfigured;
     }
 
     private async Task InitializeDatabaseAsync()

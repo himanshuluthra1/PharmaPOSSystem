@@ -312,7 +312,9 @@ public class AccountingService : IAccountingService
             request.EntryDate,
             request.Narration,
             branchId,
-            ct);
+            ct,
+            request.AllocationMode,
+            request.BillAllocations);
 
     public Task<Result<VoucherReceiptDto>> CreateReceiptAsync(
         CreateReceiptRequest request,
@@ -396,7 +398,9 @@ public class AccountingService : IAccountingService
         DateTime entryDate,
         string? narration,
         int? branchId,
-        CancellationToken ct)
+        CancellationToken ct,
+        PaymentAllocationMode allocationMode = PaymentAllocationMode.Fifo,
+        IReadOnlyList<BillPaymentAllocationDto>? billAllocations = null)
     {
         if (amount <= 0)
             return Result.Failure<VoucherReceiptDto>("Enter a valid amount.");
@@ -420,7 +424,11 @@ public class AccountingService : IAccountingService
                     partyName = supplier.Name;
                     supplier.OutstandingBalance -= amount;
                     _uow.Repository<Supplier>().Update(supplier);
-                    await AllocateSupplierPaymentAsync(partyId, amount, branchId, token);
+
+                    if (allocationMode == PaymentAllocationMode.BillWise)
+                        await AllocateSupplierPaymentToBillsAsync(partyId, amount, billAllocations, branchId, token);
+                    else
+                        await AllocateSupplierPaymentAsync(partyId, amount, branchId, token);
                 }
                 else
                 {
@@ -492,9 +500,10 @@ public class AccountingService : IAccountingService
         int supplierId, decimal amount, int? branchId, CancellationToken ct)
     {
         var remaining = amount;
+        var openStatuses = new[] { PurchaseStatus.Received, PurchaseStatus.PartiallyReturned };
         var q = _uow.Repository<Purchase>().Query()
             .Where(p => p.SupplierId == supplierId
-                        && p.Status == PurchaseStatus.Received
+                        && openStatuses.Contains(p.Status)
                         && p.GrandTotal > p.PaidAmount);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
@@ -517,6 +526,55 @@ public class AccountingService : IAccountingService
                 : PaymentStatus.PartiallyPaid;
             _uow.Repository<Purchase>().Update(bill);
             remaining -= applied;
+        }
+    }
+
+    private async Task AllocateSupplierPaymentToBillsAsync(
+        int supplierId,
+        decimal amount,
+        IReadOnlyList<BillPaymentAllocationDto>? allocations,
+        int? branchId,
+        CancellationToken ct)
+    {
+        if (allocations is null || allocations.Count == 0)
+            throw new AccountingException("Select at least one purchase bill for bill-wise payment.");
+
+        var positive = allocations.Where(a => a.Amount > 0).ToList();
+        if (positive.Count == 0)
+            throw new AccountingException("Enter amounts to apply against the selected bills.");
+
+        var sum = positive.Sum(a => a.Amount);
+        if (Math.Abs(sum - amount) > 0.01m)
+            throw new AccountingException(
+                $"Bill allocations (₹{sum:N2}) must equal the payment amount (₹{amount:N2}).");
+
+        var ids = positive.Select(a => a.PurchaseId).Distinct().ToList();
+        if (ids.Count != positive.Count)
+            throw new AccountingException("Duplicate purchase bills in the allocation list.");
+
+        var openStatuses = new[] { PurchaseStatus.Received, PurchaseStatus.PartiallyReturned };
+        var q = _uow.Repository<Purchase>().Query()
+            .Where(p => ids.Contains(p.Id) && p.SupplierId == supplierId && openStatuses.Contains(p.Status));
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        var bills = await q.ToListAsync(ct);
+        if (bills.Count != ids.Count)
+            throw new AccountingException("One or more selected purchase bills are invalid or closed.");
+
+        var byId = bills.ToDictionary(b => b.Id);
+        foreach (var alloc in positive)
+        {
+            var bill = byId[alloc.PurchaseId];
+            var due = bill.GrandTotal - bill.PaidAmount;
+            if (alloc.Amount > due + 0.01m)
+                throw new AccountingException(
+                    $"Amount for {bill.InvoiceNumber} exceeds balance due (₹{due:N2}).");
+
+            bill.PaidAmount += alloc.Amount;
+            bill.PaymentStatus = bill.PaidAmount >= bill.GrandTotal
+                ? PaymentStatus.Paid
+                : PaymentStatus.PartiallyPaid;
+            _uow.Repository<Purchase>().Update(bill);
         }
     }
 

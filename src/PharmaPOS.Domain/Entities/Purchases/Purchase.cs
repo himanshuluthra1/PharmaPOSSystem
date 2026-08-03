@@ -35,5 +35,16 @@ public class Purchase : BranchEntity
     public string? InvoiceDocumentPath { get; set; }
     public string? Remarks { get; set; }
 
+    /// <summary>Required when cash/bank paid is less than grand total.</summary>
+    public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
+    public string? PartialPaymentNotes { get; set; }
+
+    /// <summary>Purchase return whose supplier credit was applied toward this bill.</summary>
+    public int? LinkedPurchaseReturnId { get; set; }
+    public PurchaseReturn? LinkedPurchaseReturn { get; set; }
+
+    /// <summary>Amount of return credit applied onto <see cref="PaidAmount"/>.</summary>
+    public decimal ReturnCreditApplied { get; set; }
+
     public ICollection<PurchaseItem> Items { get; set; } = new List<PurchaseItem>();
 }

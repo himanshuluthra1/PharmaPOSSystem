@@ -1914,6 +1914,9 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("LinkedPurchaseReturnId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("ModifiedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1924,6 +1927,13 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PartialPaymentNotes")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int?>("PartialPaymentReason")
+                        .HasColumnType("int");
+
                     b.Property<int>("PaymentStatus")
                         .HasColumnType("int");
 
@@ -1932,6 +1942,10 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.Property<string>("Remarks")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("ReturnCreditApplied")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("RoundOff")
                         .HasPrecision(18, 2)
@@ -1966,6 +1980,10 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.HasIndex("InvoiceNumber")
                         .IsUnique();
+
+                    b.HasIndex("LinkedPurchaseReturnId")
+                        .IsUnique()
+                        .HasFilter("[LinkedPurchaseReturnId] IS NOT NULL");
 
                     b.HasIndex("PurchaseOrderId");
 
@@ -2227,6 +2245,10 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("CreditAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CreditAppliedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -3415,6 +3437,80 @@ namespace PharmaPOS.Persistence.Migrations
                     b.ToTable("Notifications");
                 });
 
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.System.SyncOutboxEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("LocalId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("NextAttemptAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("SentAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StoreCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "StoreCode", "LocalId");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc", "CreatedAtUtc");
+
+                    b.ToTable("SyncOutboxEntries", (string)null);
+                });
+
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Accounting.Account", b =>
                 {
                     b.HasOne("PharmaPOS.Domain.Entities.Accounting.Account", "ParentAccount")
@@ -3718,6 +3814,11 @@ namespace PharmaPOS.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("BranchId");
 
+                    b.HasOne("PharmaPOS.Domain.Entities.Purchases.PurchaseReturn", "LinkedPurchaseReturn")
+                        .WithMany()
+                        .HasForeignKey("LinkedPurchaseReturnId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PharmaPOS.Domain.Entities.Purchases.PurchaseOrder", "PurchaseOrder")
                         .WithMany()
                         .HasForeignKey("PurchaseOrderId")
@@ -3730,6 +3831,8 @@ namespace PharmaPOS.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Branch");
+
+                    b.Navigation("LinkedPurchaseReturn");
 
                     b.Navigation("PurchaseOrder");
 

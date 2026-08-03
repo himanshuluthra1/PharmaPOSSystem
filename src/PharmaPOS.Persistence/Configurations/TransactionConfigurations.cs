@@ -41,8 +41,10 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
     public void Configure(EntityTypeBuilder<Purchase> b)
     {
         b.Property(x => x.InvoiceNumber).HasMaxLength(40).IsRequired();
+        b.Property(x => x.PartialPaymentNotes).HasMaxLength(400);
         b.HasIndex(x => x.InvoiceNumber).IsUnique();
         b.HasIndex(x => x.InvoiceDate);
+        b.HasIndex(x => x.LinkedPurchaseReturnId);
 
         b.HasMany(x => x.Items).WithOne(i => i.Purchase!)
             .HasForeignKey(i => i.PurchaseId).OnDelete(DeleteBehavior.Cascade);
@@ -51,6 +53,9 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
             .HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.PurchaseOrder).WithMany()
             .HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.LinkedPurchaseReturn).WithMany()
+            .HasForeignKey(x => x.LinkedPurchaseReturnId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

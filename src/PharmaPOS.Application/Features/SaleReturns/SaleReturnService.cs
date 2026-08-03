@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Sales;
@@ -15,11 +16,13 @@ public class SaleReturnService : ISaleReturnService
 {
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly IReportingSyncService _reportingSync;
 
-    public SaleReturnService(IUnitOfWork uow, IDateTimeProvider clock)
+    public SaleReturnService(IUnitOfWork uow, IDateTimeProvider clock, IReportingSyncService reportingSync)
     {
         _uow = uow;
         _clock = clock;
+        _reportingSync = reportingSync;
     }
 
     public async Task<SaleReturnPolicyDto> GetPolicyAsync(CancellationToken ct = default)
@@ -190,6 +193,7 @@ public class SaleReturnService : ISaleReturnService
         {
             var receipt = await _uow.ExecuteInTransactionAsync(
                 token => PersistReturnAsync(request, branchId, userName, token), ct);
+            await _reportingSync.EnqueueSaleReturnAsync(receipt.SaleReturnId, ct);
             return Result.Success(receipt);
         }
         catch (SaleReturnException ex)

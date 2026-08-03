@@ -86,6 +86,14 @@ public enum PurchaseStatus
     PartiallyReturned = 6
 }
 
+/// <summary>Why a purchase bill was saved without full cash/bank payment.</summary>
+public enum PurchasePartialPaymentReason
+{
+    CreditPayLater = 0,
+    AgainstPurchaseReturn = 1,
+    Other = 2
+}
+
 public enum StockMovementType
 {
     PurchaseIn = 0,

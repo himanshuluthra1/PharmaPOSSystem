@@ -4,7 +4,7 @@ using Microsoft.Data.SqlClient;
 
 namespace PharmaPOS.MedWinImport;
 
-internal static class MedWinImporter
+public static class MedWinImporter
 {
     public static async Task RunAsync(MedWinImportContext ctx, IReadOnlyList<string> phases)
     {
@@ -15,29 +15,49 @@ internal static class MedWinImporter
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "company", "gst", "medicines", "suppliers", "customers", "stock",
-                "purchases", "sales", "payments", "users"
+                "purchases", "purchase-returns", "sales", "payments", "users"
             }
             : phases.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        if (set.Contains("company")) await ImportCompanyAsync(ctx, target);
-        if (set.Contains("gst")) await ImportGstCategoriesAsync(ctx, target);
+        // Preserve explicit wipe even when "all" expands the default phase list.
+        if (phases.Contains("clear-transactions", StringComparer.OrdinalIgnoreCase))
+            set.Add("clear-transactions");
+
+        async Task RunPhaseAsync(string name, Func<Task> action)
+        {
+            ctx.ThrowIfCancellationRequested();
+            await action();
+        }
+
+        // Always run wipe first when requested so MedWin sales/purchases/stock land on a clean slate.
+        if (set.Contains("clear-transactions"))
+            await RunPhaseAsync("clear-transactions", () => MedWinTransactionalDataCleaner.RunAsync(ctx, target));
+
+        if (set.Contains("company")) await RunPhaseAsync("company", () => ImportCompanyAsync(ctx, target));
+        if (set.Contains("gst")) await RunPhaseAsync("gst", () => ImportGstCategoriesAsync(ctx, target));
         if (set.Contains("medicines"))
         {
-            if (!string.IsNullOrWhiteSpace(ctx.ReportCsvPath))
-                await MedicineMatchReporter.ExportAsync(ctx, target, ctx.ReportCsvPath);
-            else
-                await MedWinMasterImporter.ImportMedicinesAsync(ctx, target);
+            await RunPhaseAsync("medicines", async () =>
+            {
+                if (!string.IsNullOrWhiteSpace(ctx.ReportCsvPath))
+                    await MedicineMatchReporter.ExportAsync(ctx, target, ctx.ReportCsvPath);
+                else
+                    await MedWinMasterImporter.ImportMedicinesAsync(ctx, target);
+            });
         }
-        if (set.Contains("suppliers")) await MedWinMasterImporter.ImportSuppliersAsync(ctx, target);
-        if (set.Contains("customers")) await MedWinMasterImporter.ImportCustomersAsync(ctx, target);
-        if (set.Contains("stock")) await MedWinMasterImporter.ImportStockAsync(ctx, target);
-        if (set.Contains("purchases")) await MedWinTransactionImporter.ImportPurchasesAsync(ctx, target);
-        if (set.Contains("sales")) await MedWinTransactionImporter.ImportSalesAsync(ctx, target);
-        if (set.Contains("payments")) await MedWinTransactionImporter.ImportPaymentsAsync(ctx, target);
-        if (set.Contains("users")) await ImportUsersAsync(ctx, target);
-        if (set.Contains("backfill-expiry")) await MedWinTransactionImporter.BackfillExpiryAsync(ctx, target);
-        if (set.Contains("backfill-purchase-payments")) await MedWinTransactionImporter.BackfillPurchasePaymentsAsync(ctx, target);
-        if (set.Contains("dedupe-onemg")) await OneMgDuplicateCleaner.RunAsync(ctx, target, dryRun: !ctx.Force);
+        if (set.Contains("suppliers")) await RunPhaseAsync("suppliers", () => MedWinMasterImporter.ImportSuppliersAsync(ctx, target));
+        if (set.Contains("customers")) await RunPhaseAsync("customers", () => MedWinMasterImporter.ImportCustomersAsync(ctx, target));
+        if (set.Contains("stock")) await RunPhaseAsync("stock", () => MedWinMasterImporter.ImportStockAsync(ctx, target));
+        if (set.Contains("purchases")) await RunPhaseAsync("purchases", () => MedWinTransactionImporter.ImportPurchasesAsync(ctx, target));
+        if (set.Contains("purchase-returns")) await RunPhaseAsync("purchase-returns", () => MedWinTransactionImporter.ImportPurchaseReturnsAsync(ctx, target));
+        if (set.Contains("sales")) await RunPhaseAsync("sales", () => MedWinTransactionImporter.ImportSalesAsync(ctx, target));
+        if (set.Contains("payments")) await RunPhaseAsync("payments", () => MedWinTransactionImporter.ImportPaymentsAsync(ctx, target));
+        if (set.Contains("users")) await RunPhaseAsync("users", () => ImportUsersAsync(ctx, target));
+        if (set.Contains("backfill-expiry")) await RunPhaseAsync("backfill-expiry", () => MedWinTransactionImporter.BackfillExpiryAsync(ctx, target));
+        if (set.Contains("backfill-purchase-payments")) await RunPhaseAsync("backfill-purchase-payments", () => MedWinTransactionImporter.BackfillPurchasePaymentsAsync(ctx, target));
+        if (set.Contains("backfill-purchase-tax")) await RunPhaseAsync("backfill-purchase-tax", () => MedWinTransactionImporter.BackfillPurchaseTaxAsync(ctx, target));
+        if (set.Contains("backfill-salts")) await RunPhaseAsync("backfill-salts", () => MedWinMasterImporter.BackfillSaltsAsync(ctx, target));
+        if (set.Contains("dedupe-onemg")) await RunPhaseAsync("dedupe-onemg", () => OneMgDuplicateCleaner.RunAsync(ctx, target, dryRun: !ctx.Force));
     }
 
     private static async Task LoadTargetContextAsync(MedWinImportContext ctx, SqlConnection target)
@@ -55,14 +75,14 @@ internal static class MedWinImporter
 
     private static async Task ImportCompanyAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[company] Importing company profile...");
+        ctx.Log("\n[company] Importing company profile...");
         using var med = ctx.OpenMedWin();
         med.Open();
         using var cmd = new OleDbCommand("SELECT TOP 1 * FROM compprof", med);
         using var r = cmd.ExecuteReader();
         if (!r.Read())
         {
-            Console.WriteLine("  No compprof row found.");
+            ctx.Log("  No compprof row found.");
             return;
         }
 
@@ -112,12 +132,12 @@ internal static class MedWinImporter
         update.Parameters.AddWithValue("@DrugLicense", (object?)drugLicense ?? DBNull.Value);
         update.Parameters.AddWithValue("@Now", ctx.NowUtc);
         await update.ExecuteNonQueryAsync();
-        Console.WriteLine($"  Updated company: {companyName}");
+        ctx.Log($"  Updated company: {companyName}");
     }
 
     private static async Task ImportGstCategoriesAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[gst] Importing medicine categories with GST slabs...");
+        ctx.Log("\n[gst] Importing medicine categories with GST slabs...");
         using var med = ctx.OpenMedWin();
         med.Open();
 
@@ -156,12 +176,12 @@ internal static class MedWinImporter
             added++;
         }
 
-        Console.WriteLine($"  Categories ready ({added} new). GST rates will be applied on medicines from category.");
+        ctx.Log($"  Categories ready ({added} new). GST rates will be applied on medicines from category.");
     }
 
     private static async Task ImportUsersAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        Console.WriteLine("\n[users] Importing MedWin operator accounts...");
+        ctx.Log("\n[users] Importing MedWin operator accounts...");
         using var med = ctx.OpenMedWin();
         med.Open();
 
@@ -205,7 +225,7 @@ internal static class MedWinImporter
             added++;
         }
 
-        Console.WriteLine($"  Added {added} operator users (password: MedWin@123).");
+        ctx.Log($"  Added {added} operator users (password: MedWin@123).");
     }
 
     internal static async Task<int> ScalarIntAsync(SqlConnection conn, string sql, params SqlParameter[] parameters)

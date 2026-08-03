@@ -48,6 +48,12 @@ public class CreatePurchaseRequest
     public decimal PaidAmount { get; set; }
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
     public string? Remarks { get; set; }
+
+    /// <summary>Required when cash/bank paid is less than grand total.</summary>
+    public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
+    public string? PartialPaymentNotes { get; set; }
+    public int? LinkedPurchaseReturnId { get; set; }
+
     public List<PurchaseLineRequest> Lines { get; set; } = new();
 }
 
@@ -55,6 +61,18 @@ public class CreatePurchaseRequest
 public class UpdatePurchaseRequest : CreatePurchaseRequest
 {
     public int PurchaseId { get; set; }
+}
+
+/// <summary>Open supplier-credit purchase return available to settle a bill.</summary>
+public record OpenPurchaseReturnCreditDto(
+    int PurchaseReturnId,
+    string ReturnNumber,
+    DateTime ReturnDate,
+    decimal CreditAmount,
+    decimal RemainingCredit)
+{
+    public string DisplayLabel =>
+        $"{ReturnNumber} — {ReturnDate:dd/MM/yyyy} — ₹{RemainingCredit:N2} left";
 }
 
 /// <summary>Snapshot of a saved purchase, returned for confirmation/printing.</summary>
@@ -77,6 +95,8 @@ public class PurchaseReceiptDto
     public decimal GrandTotal { get; set; }
     public decimal PaidAmount { get; set; }
     public decimal BalanceDue { get; set; }
+    public decimal ReturnCreditApplied { get; set; }
+    public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
 }
 
 /// <summary>A row in the purchase invoice history dropdown.</summary>
@@ -117,7 +137,13 @@ public class PurchaseLoadDto
     public string SupplierName { get; set; } = string.Empty;
     public string? SupplierPhone { get; set; }
     public decimal GrandTotal { get; set; }
+    /// <summary>Cash/bank paid only (excludes return credit) — for edit screen.</summary>
     public decimal PaidAmount { get; set; }
+    /// <summary>Return credit already applied on the stored bill.</summary>
+    public decimal ReturnCreditApplied { get; set; }
+    public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
+    public string? PartialPaymentNotes { get; set; }
+    public string? LinkedReturnNumber { get; set; }
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
     public List<PurchaseLoadLineDto> Lines { get; set; } = new();
 }

@@ -146,7 +146,7 @@ public class ReportsViewModel : ObservableObject
     public string FilterTextHint => SelectedReport.Kind switch
     {
         ReportKind.Sales or ReportKind.Profit => "Filter by invoice # or customer...",
-        ReportKind.Purchases => "Filter by invoice # or supplier...",
+        ReportKind.Purchases => "Filter by invoice #, supplier, or due reason...",
         ReportKind.GstSummary => "Filter by invoice # or party...",
         ReportKind.SalesByMedicine or ReportKind.LowStock => "Filter by medicine or generic...",
         ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine, batch, or supplier...",
@@ -538,7 +538,7 @@ public class ReportsViewModel : ObservableObject
 
             case "Purchases":
                 Fill(PurchaseRows, _allPurchases.Where(r =>
-                    Matches(term, r.InvoiceNumber, r.SupplierName) &&
+                    Matches(term, r.InvoiceNumber, r.SupplierName, r.DueReason) &&
                     option switch
                     {
                         "unpaid" => r.PaidAmount <= 0 && r.BalanceDue > 0,

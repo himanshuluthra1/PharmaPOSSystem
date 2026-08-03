@@ -30,16 +30,184 @@
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
             <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
+
+        <!-- Mapping lists: stack original fields in fewer columns (auto row height — DataGrid RowHeight=28 was clipping). -->
+        <Style x:Key="MappingFieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Opacity" Value="0.55" />
+            <Setter Property="Width" Value="56" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style x:Key="MappingFieldValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <DataTemplate x:Key="MappingMedicineListItemTemplate">
+            <Border Padding="10,8" Margin="0,0,0,6"
+                    CornerRadius="4"
+                    SnapsToDevicePixels="True">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}" />
+                        <Setter Property="BorderThickness" Value="1" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource GridSelectionBrush}" />
+                                <Setter Property="BorderBrush" Value="#4A90B8" />
+                                <Setter Property="BorderThickness" Value="2" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" MinWidth="140" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="*" MinWidth="110" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="100" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Name / Salt / Strength" FontSize="10" FontWeight="SemiBold"
+                                   Opacity="0.5" Margin="0,0,0,4" />
+                        <DockPanel Margin="0,0,0,3">
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="Name" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}" Text="{Binding Name}" FontWeight="SemiBold" />
+                        </DockPanel>
+                        <DockPanel Margin="0,0,0,3">
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="Salt" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}" Text="{Binding GenericName}" />
+                        </DockPanel>
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="Strength" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}" Text="{Binding Strength}" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Pack / Size / ID" FontSize="10" FontWeight="SemiBold"
+                                   Opacity="0.5" Margin="0,0,0,4" />
+                        <DockPanel Margin="0,0,0,3">
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="Pack" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}" Text="{Binding PackInfo}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,0,0,3">
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="Size" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}" Text="{Binding PackSize}" />
+                        </DockPanel>
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="ID" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}" Text="{Binding ExternalId}" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="MRP / Match" FontSize="10" FontWeight="SemiBold"
+                                   Opacity="0.5" Margin="0,0,0,4" />
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="MRP" Width="40" />
+                            <TextBlock Style="{StaticResource MappingFieldValue}"
+                                       Text="{Binding Mrp, StringFormat=N2}" FontWeight="SemiBold" />
+                        </DockPanel>
+                        <DockPanel>
+                            <TextBlock Style="{StaticResource MappingFieldLabel}" Text="Match" Width="40" />
+                            <CheckBox IsChecked="{Binding IsMatched}" IsEnabled="False"
+                                      VerticalAlignment="Center" />
+                        </DockPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <Style x:Key="MappingListBox" TargetType="ListBox">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+        </Style>
+        <!-- Transparent container so card Border can paint the sky-blue selection (MD grey overlay was covering it). -->
+        <Style x:Key="MappingListBoxItem" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
-    <Grid Margin="8">
+    <Grid Margin="8" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
         <materialDesign:Card UniformCornerRadius="12" Padding="16"
-                             materialDesign:ElevationAssist.Elevation="Dp2">
-            <DockPanel>
+                             materialDesign:ElevationAssist.Elevation="Dp2"
+                             VerticalAlignment="Stretch"
+                             HorizontalAlignment="Stretch">
+            <DockPanel LastChildFill="True">
                 <TextBlock DockPanel.Dock="Top" Text="Settings" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
 
-                <TabControl SelectedIndex="{Binding SelectedTab}">
+                <!-- Side nav: always lists MedWin Import when permitted (top tabs were clipping it on first layout). -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Margin="0,0,12,0"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="0,0,1,0"
+                            Padding="0,0,8,0">
+                        <ListBox ItemsSource="{Binding Sections}"
+                                 SelectedItem="{Binding SelectedSection}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type settingsVm:SettingsSection}">
+                                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" Margin="4,8" FontSize="13" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                    <!-- Headerless TabControl — selection driven by side list SelectedTab index -->
+                    <TabControl Grid.Column="1"
+                                SelectedIndex="{Binding SelectedTab, Mode=OneWay}"
+                                VerticalAlignment="Stretch"
+                                HorizontalAlignment="Stretch"
+                                VerticalContentAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                BorderThickness="0"
+                                Padding="0"
+                                Background="Transparent">
+                        <TabControl.Template>
+                            <ControlTemplate TargetType="TabControl">
+                                <ContentPresenter ContentSource="SelectedContent"
+                                                  VerticalAlignment="Stretch"
+                                                  HorizontalAlignment="Stretch" />
+                            </ControlTemplate>
+                        </TabControl.Template>
+                        <TabControl.ItemContainerStyle>
+                            <Style TargetType="TabItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </TabControl.ItemContainerStyle>
                     <!-- COMPANY -->
-                    <TabItem Header="Company" Visibility="{Binding CanManageCompany, Converter={StaticResource BoolToVisibility}}">
+                    <TabItem Header="Company">
                         <ScrollViewer DataContext="{Binding Company}" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto">
                             <StackPanel MaxWidth="720" HorizontalAlignment="Left">
                                 <TextBlock Text="Company &amp; Store Details" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
@@ -170,7 +338,7 @@
                     </TabItem>
 
                     <!-- BRANCHES -->
-                    <TabItem Header="Branches" Visibility="{Binding CanManageBranches, Converter={StaticResource BoolToVisibility}}">
+                    <TabItem Header="Branches">
                         <Grid DataContext="{Binding Branches}" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="1.2*" />
@@ -295,7 +463,7 @@
                     </TabItem>
 
                     <!-- PREFERENCES -->
-                    <TabItem Header="Preferences" Visibility="{Binding CanManagePreferences, Converter={StaticResource BoolToVisibility}}">
+                    <TabItem Header="Preferences">
                         <ScrollViewer DataContext="{Binding Preferences}" Margin="0,8,0,0"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
@@ -395,6 +563,54 @@
                                       IsChecked="{Binding EnableTinyUrl}"
                                       Margin="0,0,0,12" />
 
+                            <TextBlock Text="Online reporting sync (VPS MySQL)" FontWeight="SemiBold" FontSize="14" Margin="0,8,0,4" />
+                            <TextBlock Text="Queues sales, purchases, returns, stock and masters locally, then uploads to your MySQL reporting database in the background. POS never waits on the VPS."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox Content="Enable MySQL reporting sync"
+                                      IsChecked="{Binding EnableMySqlSync}"
+                                      Margin="0,0,0,8"
+                                      FontWeight="SemiBold" />
+                            <TextBlock Text="MySQL host" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding MySqlHost, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Port" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding MySqlPort, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Database" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding MySqlDatabase, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Username" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding MySqlUsername, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Password" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     Text="{Binding MySqlPassword, UpdateSourceTrigger=PropertyChanged}" />
+                            <CheckBox Content="Require SSL"
+                                      IsChecked="{Binding MySqlUseSsl}"
+                                      Margin="0,0,0,8" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Command="{Binding TestMySqlConnectionCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Content="Test connection" />
+                                <TextBlock Text="{Binding MySqlSyncStatusText}"
+                                           VerticalAlignment="Center"
+                                           Margin="12,0,0,0"
+                                           Opacity="0.75"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <TextBlock Text="Store code (your choice)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     IsReadOnly="True"
+                                     FontWeight="SemiBold"
+                                     Text="{Binding StoreIdentityCode, Mode=OneWay}" />
+                            <TextBlock Text="Store ID (auto, used for online reporting)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     IsReadOnly="True"
+                                     FontFamily="Consolas"
+                                     Text="{Binding StoreIdentityId, Mode=OneWay}" />
+                            <TextBlock Text="Store code is your display name. Store ID is system-generated and maps sales/purchases on the server. Both are locked to this PC after vendor approval."
+                                       Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,12" />
+
                             <TextBlock Text="Layout (this PC)" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,4" />
                             <TextBlock Text="Drag the splitter between grid and summary on Sales/Purchase, or resize grid column headers. Widths are saved automatically. You can also set summary panel widths here."
                                        Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
@@ -422,7 +638,7 @@
                     </TabItem>
 
                     <!-- MEDICINE MAPPING -->
-                    <TabItem Header="Medicine Mapping" Visibility="{Binding CanManageMedicineMapping, Converter={StaticResource BoolToVisibility}}">
+                    <TabItem Header="Medicine Mapping">
                         <Grid DataContext="{Binding MedicineMapping}" Margin="0,8,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -453,7 +669,7 @@
                                     <CheckBox Content="Include already matched medicines"
                                               IsChecked="{Binding IncludeMatched}" VerticalAlignment="Center" />
                                 </StackPanel>
-                                <TextBlock Text="Select a MedWin medicine, pick the matching OneMG row, then click Map to queue — or use Auto Map to queue confident matches in bulk. Review with View Queue, then Apply Mappings to save."
+                                <TextBlock Text="Select a MedWin medicine on the left — Gemini picks the best OneMG match (name, formula, strength, packing) when enabled in Preferences. Click Map to queue, or use Auto Map for bulk rules. Review with View Queue, then Apply Mappings to save."
                                            Opacity="0.6" TextWrapping="Wrap" VerticalAlignment="Center" />
                             </DockPanel>
 
@@ -482,21 +698,12 @@
                                         <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                                  Text="{Binding MedWinSearchText, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
-                                    <DataGrid Grid.Row="2" x:Name="MedWinMappingGrid" ItemsSource="{Binding MedWinItems}"
-                                              SelectedItem="{Binding SelectedMedWin, Mode=TwoWay}"
-                                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                              SelectionUnit="FullRow" HeadersVisibility="Column"
-                                              ScrollViewer.CanContentScroll="False"
-                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                              VerticalAlignment="Stretch">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="140" />
-                                            <DataGridTextColumn Header="Salt" Binding="{Binding GenericName}" Width="120" />
-                                            <DataGridTextColumn Header="MedWin ID" Binding="{Binding ExternalId}" Width="80" />
-                                            <DataGridCheckBoxColumn Header="Matched" Binding="{Binding IsMatched}" Width="70" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
+                                    <ListBox Grid.Row="2" x:Name="MedWinMappingGrid"
+                                             ItemsSource="{Binding MedWinItems}"
+                                             SelectedItem="{Binding SelectedMedWin, Mode=TwoWay}"
+                                             Style="{StaticResource MappingListBox}"
+                                             ItemContainerStyle="{StaticResource MappingListBoxItem}"
+                                             ItemTemplate="{StaticResource MappingMedicineListItemTemplate}" />
                                 </Grid>
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0">
@@ -523,21 +730,12 @@
                                         <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                                  Text="{Binding OneMgSearchText, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
-                                    <DataGrid Grid.Row="2" ItemsSource="{Binding OneMgItems}" SelectedItem="{Binding SelectedOneMg}"
-                                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                              HeadersVisibility="Column"
-                                              ScrollViewer.CanContentScroll="False"
-                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                              VerticalAlignment="Stretch">
-                                        <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="140" />
-                                            <DataGridTextColumn Header="Salt" Binding="{Binding GenericName}" Width="120" />
-                                            <DataGridTextColumn Header="Pack" Binding="{Binding PackInfo}" Width="120" />
-                                            <DataGridTextColumn Header="OneMG ID" Binding="{Binding ExternalId}" Width="80" />
-                                            <DataGridCheckBoxColumn Header="Matched" Binding="{Binding IsMatched}" Width="70" />
-                                        </DataGrid.Columns>
-                                    </DataGrid>
+                                    <ListBox Grid.Row="2"
+                                             ItemsSource="{Binding OneMgItems}"
+                                             SelectedItem="{Binding SelectedOneMg}"
+                                             Style="{StaticResource MappingListBox}"
+                                             ItemContainerStyle="{StaticResource MappingListBoxItem}"
+                                             ItemTemplate="{StaticResource MappingMedicineListItemTemplate}" />
                                 </Grid>
                             </Grid>
 
@@ -546,8 +744,133 @@
                         </Grid>
                     </TabItem>
 
+                    <!-- MEDWIN IMPORT -->
+                    <TabItem Header="MedWin Import"
+                             HorizontalContentAlignment="Stretch"
+                             VerticalContentAlignment="Stretch">
+                        <!-- Log is docked bottom at a FIXED 300px so the global TextBox Height=30 style cannot collapse it.
+                             Form scrolls in the remaining space above. -->
+                        <DockPanel DataContext="{Binding MedWinImport}" Margin="0,8,0,0"
+                                   LastChildFill="True" VerticalAlignment="Stretch">
+
+                            <DockPanel DockPanel.Dock="Bottom" Height="300" Margin="0,10,0,0" LastChildFill="True">
+                                <TextBlock DockPanel.Dock="Top" Text="Progress log" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <Border BorderBrush="#BDBDBD"
+                                        BorderThickness="1"
+                                        Background="#FAFAFA"
+                                        ClipToBounds="True">
+                                    <ScrollViewer x:Name="MedWinImportLogScroll"
+                                                  VerticalScrollBarVisibility="Visible"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  CanContentScroll="False"
+                                                  Padding="10">
+                                        <!-- TextBlock (not TextBox): app-wide TextBox style forces Height/MaxHeight=30 -->
+                                        <TextBlock Text="{Binding LogText, Mode=OneWay, NotifyOnTargetUpdated=True}"
+                                                   TextWrapping="Wrap"
+                                                   FontFamily="Consolas"
+                                                   FontSize="12"
+                                                   TargetUpdated="MedWinImportLog_TargetUpdated" />
+                                    </ScrollViewer>
+                                </Border>
+                            </DockPanel>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalAlignment="Stretch">
+                                <StackPanel Margin="0,0,8,0">
+                                    <TextBlock Text="Migrate MedWin Access data into this store's PharmaPOS database. Requires Microsoft ACE OLEDB 12.0. Backup LocalDB before wiping or Force re-import."
+                                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+                                    <Border Background="#FFF8E1" BorderBrush="#FFCC80" BorderThickness="1" Padding="10" CornerRadius="6" Margin="0,0,0,10">
+                                        <StackPanel>
+                                            <CheckBox Content="Clear existing transactional data before import (recommended for fresh MedWin start)"
+                                                      IsChecked="{Binding ClearExistingTransactionalData}"
+                                                      FontWeight="SemiBold"
+                                                      IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}" />
+                                            <TextBlock Margin="24,4,0,0" Opacity="0.75" TextWrapping="Wrap" FontSize="12"
+                                                       Text="Deletes all current sales, purchases, returns, payments, stock batches, and stock movements. Keeps medicine catalogue and other masters. Then imports MedWin masters + selected transactional phases. Requires two confirmations." />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Text="MedWin data.mdb path" Style="{StaticResource FieldCaption}" />
+                                    <DockPanel Margin="0,0,0,10">
+                                        <Button DockPanel.Dock="Right" Command="{Binding BrowseMdbCommand}"
+                                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                Content="Browse…" Margin="8,0,0,0" Padding="12,0" />
+                                        <TextBox Style="{StaticResource FieldBox}" Margin="0"
+                                                 Text="{Binding MdbPath, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}" />
+                                    </DockPanel>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                            <TextBlock Text="Jet OLEDB password" Style="{StaticResource FieldCaption}" />
+                                            <PasswordBox Style="{StaticResource FieldPassword}"
+                                                         materialDesign:PasswordBoxAssist.Password="{Binding MdbPassword, UpdateSourceTrigger=PropertyChanged}"
+                                                         IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}" />
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="1" Content="Force rematch medicines"
+                                                  IsChecked="{Binding Force}" VerticalAlignment="Center" Margin="0,8,0,0"
+                                                  IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}"
+                                                  ToolTip="Rematch medicines to OneMG when the medicines phase runs. Clear-before-import already enables re-import of sales/purchases." />
+                                    </Grid>
+
+                                    <DockPanel Margin="0,4,0,8">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                            <Button Command="{Binding SelectFullImportCommand}" Content="Select all phases"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
+                                                    ToolTip="Check every phase included in a full MedWin import" />
+                                            <Button Command="{Binding SelectNoneCommand}" Content="Clear phases"
+                                                    Style="{StaticResource MaterialDesignOutlinedButton}" />
+                                        </StackPanel>
+                                        <TextBlock Text="Phases" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    </DockPanel>
+
+                                    <ItemsControl ItemsSource="{Binding Phases}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected}"
+                                                          Margin="0,0,16,8"
+                                                          IsEnabled="{Binding DataContext.IsRunning, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource InverseBool}}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <Button Command="{Binding RunFullImportCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,8,0"
+                                                ToolTip="Select all full-import phases and start the import">
+                                            <StackPanel Orientation="Horizontal">
+                                                <materialDesign:PackIcon Kind="DatabaseImport" VerticalAlignment="Center" />
+                                                <TextBlock Text="Full import" Margin="6,0,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Command="{Binding RunImportCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
+                                                Content="Run selected"
+                                                ToolTip="Import only the phases currently checked" />
+                                        <Button Command="{Binding CancelImportCommand}" Style="{StaticResource MaterialDesignOutlinedButton}"
+                                                Content="Cancel" Margin="0,0,8,0" />
+                                        <Button Command="{Binding ClearLogCommand}" Style="{StaticResource MaterialDesignFlatButton}"
+                                                Content="Clear log" />
+                                        <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                   Foreground="#2E7D32"
+                                                   Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </TabItem>
+
                     <!-- ROLES & PERMISSIONS -->
-                    <TabItem Header="Roles &amp; Permissions" Visibility="{Binding CanManageRoles, Converter={StaticResource BoolToVisibility}}">
+                    <TabItem Header="Roles &amp; Permissions">
                         <Grid DataContext="{Binding RolePermissions}" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="1*" />
@@ -612,7 +935,7 @@
                     </TabItem>
 
                     <!-- USERS -->
-                    <TabItem Header="Users" Visibility="{Binding CanManageUsers, Converter={StaticResource BoolToVisibility}}">
+                    <TabItem Header="Users">
                         <Grid DataContext="{Binding Users}" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="1.2*" />
@@ -761,7 +1084,8 @@
                                        Opacity="0.6" TextWrapping="Wrap" />
                         </StackPanel>
                     </TabItem>
-                </TabControl>
+                    </TabControl>
+                </Grid>
             </DockPanel>
         </materialDesign:Card>
     </Grid>
