@@ -133,7 +133,7 @@
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               HeadersVisibility="Column"
-                              GridLinesVisibility="Horizontal"
+                              GridLinesVisibility="All"
                               SelectionMode="Single"
                               EnableRowVirtualization="True"
                               ScrollViewer.HorizontalScrollBarVisibility="Auto"

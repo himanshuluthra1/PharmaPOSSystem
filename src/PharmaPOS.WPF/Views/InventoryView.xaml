@@ -12,7 +12,9 @@
             <Setter Property="AutoGenerateColumns" Value="False" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="GridLinesVisibility" Value="All" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#BDBDBD" />
+            <Setter Property="VerticalGridLinesBrush" Value="#BDBDBD" />
             <Setter Property="RowHeight" Value="26" />
             <Setter Property="ColumnHeaderHeight" Value="34" />
             <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="5,1" />

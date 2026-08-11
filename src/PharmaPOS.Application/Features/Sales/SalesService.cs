@@ -836,7 +836,9 @@ public class SalesService : ISalesService
             PrescriptionPath = request.PrescriptionPath,
             Remarks = request.Remarks,
             Status = SaleStatus.Completed,
-            RewardPointsRedeemed = request.RewardPointsRedeemed
+            RewardPointsRedeemed = request.RewardPointsRedeemed,
+            CounterId = request.CounterId,
+            CounterSessionId = request.CounterSessionId
         };
 
         await ApplySaleLinesAsync(sale, request.Lines, branchId, ct);

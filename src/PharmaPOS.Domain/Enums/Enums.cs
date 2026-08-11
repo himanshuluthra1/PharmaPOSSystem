@@ -57,6 +57,12 @@ public enum PaymentMethod
     Cheque = 6
 }
 
+public enum CounterSessionStatus
+{
+    Open = 0,
+    Closed = 1
+}
+
 public enum PaymentStatus
 {
     Unpaid = 0,

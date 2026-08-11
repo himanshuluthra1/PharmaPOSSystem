@@ -118,7 +118,7 @@
                                           AutoGenerateColumns="False"
                                           CanUserAddRows="False"
                                           HeadersVisibility="Column"
-                                          GridLinesVisibility="Horizontal"
+                                          GridLinesVisibility="All"
                                           EnableRowVirtualization="True"
                                           materialDesign:DataGridAssist.CellPadding="5,2">
                                     <DataGrid.Columns>
@@ -265,7 +265,7 @@
                                           AutoGenerateColumns="False"
                                           CanUserAddRows="False"
                                           HeadersVisibility="Column"
-                                          GridLinesVisibility="Horizontal"
+                                          GridLinesVisibility="All"
                                           materialDesign:DataGridAssist.CellPadding="5,2">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="140" IsReadOnly="True" />

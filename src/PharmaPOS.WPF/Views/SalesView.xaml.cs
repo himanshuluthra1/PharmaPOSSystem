@@ -540,6 +540,9 @@ public partial class SalesView : UserControl
         if (ViewModel is null) return;
         var key = GetKey(e);
 
+        if (TryHandleMultiCustomerHotkeys(ViewModel, key, e))
+            return;
+
         // USB wedge: only when not typing in normal text fields (except the scan box).
         var focused = Keyboard.FocusedElement;
         var inScanBox = ReferenceEquals(focused, BarcodeScanBox);
@@ -595,10 +598,59 @@ public partial class SalesView : UserControl
         }
     }
 
+    private bool TryHandleMultiCustomerHotkeys(SalesViewModel vm, Key key, KeyEventArgs e)
+    {
+        var mods = Keyboard.Modifiers;
+        if ((mods & ModifierKeys.Control) != ModifierKeys.Control)
+            return false;
+        if ((mods & (ModifierKeys.Alt | ModifierKeys.Shift)) != ModifierKeys.None)
+            return false;
+
+        // Ctrl+T — another customer bill
+        if (key == Key.T)
+        {
+            CommitGridEdit();
+            if (vm.NewCustomerBillCommand.CanExecute(null))
+                vm.NewCustomerBillCommand.Execute(null);
+            e.Handled = true;
+            return true;
+        }
+
+        // Ctrl+W — close current customer bill
+        if (key == Key.W)
+        {
+            CommitGridEdit();
+            if (vm.CloseCustomerBillCommand.CanExecute(null))
+                vm.CloseCustomerBillCommand.Execute(null);
+            e.Handled = true;
+            return true;
+        }
+
+        // Ctrl+1..4 — switch open bill
+        var billNumber = key switch
+        {
+            Key.D1 or Key.NumPad1 => 1,
+            Key.D2 or Key.NumPad2 => 2,
+            Key.D3 or Key.NumPad3 => 3,
+            Key.D4 or Key.NumPad4 => 4,
+            _ => 0
+        };
+        if (billNumber == 0)
+            return false;
+
+        CommitGridEdit();
+        if (vm.TrySwitchToBillNumber(billNumber))
+            e.Handled = true;
+        return true;
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         var vm = ViewModel;
         var key = GetKey(e);
+
+        if (vm is not null && TryHandleMultiCustomerHotkeys(vm, key, e))
+            return;
 
         if (vm is not null)
         {

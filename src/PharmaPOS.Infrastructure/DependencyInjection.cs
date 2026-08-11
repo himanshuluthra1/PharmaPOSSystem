@@ -12,6 +12,7 @@ public static class DependencyInjection
     {
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddSingleton<ICurrentUserService, CurrentUserService>();
+        services.AddSingleton<ICounterContextService, CounterContextService>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         return services;
     }

@@ -13,4 +13,7 @@ public interface INavigationService
 
     void NavigateTo<TViewModel>() where TViewModel : ObservableObject;
     void NavigateTo(Type viewModelType);
+
+    /// <summary>Drops cached module view models (e.g. open sales bills) on logout.</summary>
+    void ClearSessionCache();
 }

@@ -22,6 +22,37 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
             .HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Doctor).WithMany()
             .HasForeignKey(x => x.DoctorId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.Counter).WithMany()
+            .HasForeignKey(x => x.CounterId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.CounterSession).WithMany()
+            .HasForeignKey(x => x.CounterSessionId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => x.CounterId);
+        b.HasIndex(x => x.CounterSessionId);
+    }
+}
+
+public class BillingCounterConfiguration : IEntityTypeConfiguration<BillingCounter>
+{
+    public void Configure(EntityTypeBuilder<BillingCounter> b)
+    {
+        b.Property(x => x.Code).HasMaxLength(20).IsRequired();
+        b.Property(x => x.Name).HasMaxLength(100).IsRequired();
+        b.HasIndex(x => new { x.BranchId, x.Code }).IsUnique();
+        b.HasMany(x => x.Sessions).WithOne(s => s.Counter!)
+            .HasForeignKey(s => s.CounterId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class CounterSessionConfiguration : IEntityTypeConfiguration<CounterSession>
+{
+    public void Configure(EntityTypeBuilder<CounterSession> b)
+    {
+        b.Property(x => x.MachineName).HasMaxLength(100);
+        b.Property(x => x.Remarks).HasMaxLength(500);
+        b.HasOne(x => x.User).WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => new { x.CounterId, x.Status });
+        b.HasIndex(x => new { x.UserId, x.Status });
     }
 }
 

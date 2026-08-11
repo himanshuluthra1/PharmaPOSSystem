@@ -42,6 +42,14 @@ public class Sale : BranchEntity
     public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Unpaid;
     public string? Remarks { get; set; }
 
+    /// <summary>Billing counter that collected this sale (multi-counter shops).</summary>
+    public int? CounterId { get; set; }
+    public BillingCounter? Counter { get; set; }
+
+    /// <summary>Operator session on the counter when the sale was made.</summary>
+    public int? CounterSessionId { get; set; }
+    public CounterSession? CounterSession { get; set; }
+
     public ICollection<SaleItem> Items { get; set; } = new List<SaleItem>();
     public ICollection<SalePayment> Payments { get; set; } = new List<SalePayment>();
 }

@@ -40,7 +40,11 @@ public class MainViewModel : ObservableObject
         _themeService = themeService;
         _storeIdentity = storeIdentity;
 
-        _navigation.CurrentChanged += () => OnPropertyChanged(nameof(CurrentViewModel));
+        _navigation.CurrentChanged += () =>
+        {
+            OnPropertyChanged(nameof(CurrentViewModel));
+            SyncSelectedItemToCurrentView();
+        };
 
         NavigateCommand = new RelayCommand(p => Navigate(p as NavigationItem));
         ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
@@ -107,6 +111,18 @@ public class MainViewModel : ObservableObject
         if (item is not null) SelectedItem = item;
     }
 
+    private void SyncSelectedItemToCurrentView()
+    {
+        var currentType = _navigation.CurrentViewModel?.GetType();
+        if (currentType is null) return;
+        var match = MenuItems.FirstOrDefault(m => m.TargetViewModel == currentType);
+        if (match is null || ReferenceEquals(_selectedItem, match)) return;
+        _selectedItem = match;
+        OnPropertyChanged(nameof(SelectedItem));
+        OnPropertyChanged(nameof(ActiveShortcuts));
+        OnPropertyChanged(nameof(HasActiveShortcuts));
+    }
+
     private void ToggleTheme() => IsDarkMode = !IsDarkMode;
 
     /// <summary>Navigate to the Sales module (F2 shortcut).</summary>
@@ -138,7 +154,10 @@ public class MainViewModel : ObservableObject
         "sales" =>
         [
             new("F2", "Sales"),
-            new("Esc", "New bill"),
+            new("Ctrl+T", "New customer"),
+            new("Ctrl+1-4", "Switch bill"),
+            new("Ctrl+W", "Close bill"),
+            new("Esc", "Clear bill"),
             new("F3", "Customer / Save"),
             new("F4", "Medicine details"),
             new("Ctrl+L", "Medicine ledger"),
@@ -204,6 +223,7 @@ public class MainViewModel : ObservableObject
             new NavigationItem("Dashboard", "ViewDashboard", typeof(DashboardViewModel), "dashboard"),
             new NavigationItem("Sales (F2)", "PointOfSale", typeof(SalesViewModel), "sales"),
             new NavigationItem("Purchase", "TruckDelivery", typeof(PurchaseViewModel), "purchase"),
+            new NavigationItem("Purchase Order", "ClipboardText", typeof(PurchaseOrderViewModel), "purchase"),
             new NavigationItem("Purchase Return", "AssignmentReturn", typeof(PurchaseReturnViewModel), "purchase"),
             new NavigationItem("Inventory", "PackageVariantClosed", typeof(InventoryViewModel), "inventory"),
             new NavigationItem("Masters", "DatabaseCog", typeof(MastersViewModel), "masters"),

@@ -81,6 +81,10 @@ public class CreateSaleRequest
     public List<SaleLineRequest> Lines { get; set; } = new();
     public List<SalePaymentRequest> Payments { get; set; } = new();
     public int RewardPointsRedeemed { get; set; }
+
+    /// <summary>Billing counter collecting this sale (multi-counter).</summary>
+    public int? CounterId { get; set; }
+    public int? CounterSessionId { get; set; }
 }
 
 /// <summary>A row in the fast-billing bill history dropdown.</summary>

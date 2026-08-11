@@ -449,6 +449,19 @@ public class PurchaseService : IPurchaseService
         var supplier = await _uow.Repository<Supplier>().GetByIdAsync(request.SupplierId, ct)
             ?? throw new PurchaseException("The selected supplier no longer exists.");
 
+        if (request.PurchaseOrderId is int poId && poId > 0)
+        {
+            var po = await _uow.Repository<PurchaseOrder>().Query().AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == poId && !p.IsDeleted, ct)
+                ?? throw new PurchaseException("Linked purchase order was not found.");
+            if (branchId.HasValue && po.BranchId != branchId)
+                throw new PurchaseException("Purchase order belongs to another branch.");
+            if (po.SupplierId != request.SupplierId)
+                throw new PurchaseException("Purchase supplier must match the purchase order supplier.");
+            if (po.Status is PurchaseStatus.Draft or PurchaseStatus.Cancelled or PurchaseStatus.Received)
+                throw new PurchaseException("This purchase order cannot accept receipts in its current status.");
+        }
+
         var purchase = new Purchase
         {
             InvoiceDate = request.InvoiceDate == default ? _clock.Now : request.InvoiceDate,
@@ -457,6 +470,7 @@ public class PurchaseService : IPurchaseService
             SupplierInvoiceNumber = request.SupplierInvoiceNumber,
             Remarks = request.Remarks,
             Status = PurchaseStatus.Received,
+            PurchaseOrderId = request.PurchaseOrderId is int linkedPo and > 0 ? linkedPo : null
         };
 
         var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
@@ -470,7 +484,48 @@ public class PurchaseService : IPurchaseService
         _uow.Repository<Supplier>().Update(supplier);
 
         await _uow.SaveChangesAsync(ct);
+
+        if (purchase.PurchaseOrderId is int orderId)
+        {
+            var receivedByMedicine = request.Lines
+                .GroupBy(l => l.MedicineId)
+                .ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity + l.FreeQuantity));
+            await ApplyPurchaseOrderReceiptAsync(orderId, receivedByMedicine, ct);
+        }
+
         return purchase;
+    }
+
+    private async Task ApplyPurchaseOrderReceiptAsync(
+        int purchaseOrderId,
+        IReadOnlyDictionary<int, decimal> receivedByMedicineId,
+        CancellationToken ct)
+    {
+        if (receivedByMedicineId.Count == 0) return;
+
+        var po = await _uow.Repository<PurchaseOrder>().Query()
+            .Include(p => p.Items)
+            .FirstOrDefaultAsync(p => p.Id == purchaseOrderId && !p.IsDeleted, ct);
+        if (po is null)
+            throw new PurchaseException("Linked purchase order was not found when applying receipt.");
+
+        foreach (var item in po.Items)
+        {
+            if (!receivedByMedicineId.TryGetValue(item.MedicineId, out var qty) || qty <= 0)
+                continue;
+            item.ReceivedQuantity = Math.Min(item.Quantity, item.ReceivedQuantity + qty);
+            _uow.Repository<PurchaseOrderItem>().Update(item);
+        }
+
+        var anyReceived = po.Items.Any(i => i.ReceivedQuantity > 0);
+        var allDone = po.Items.All(i => i.ReceivedQuantity >= i.Quantity);
+        po.Status = allDone
+            ? PurchaseStatus.Received
+            : anyReceived
+                ? PurchaseStatus.PartiallyReceived
+                : po.Status;
+        _uow.Repository<PurchaseOrder>().Update(po);
+        await _uow.SaveChangesAsync(ct);
     }
 
     private sealed record PurchaseTotals(decimal SubTotal, decimal Discount, decimal Taxable, decimal Tax);

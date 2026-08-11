@@ -6,6 +6,7 @@ using PharmaPOS.Application;
 using PharmaPOS.Infrastructure;
 using PharmaPOS.Persistence;
 using PharmaPOS.Persistence.Seed;
+using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels;
@@ -66,6 +67,7 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IMySqlReportingPublisher, MySqlReportingPublisher>();
         services.AddHostedService<ReportingSyncWorker>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<ICounterPickerUiService, CounterPickerUiService>();
         services.AddTransient<StoreCodeSetupWindow>();
         services.AddSingleton<IInvoicePrintService, InvoicePrintService>();
         services.AddSingleton<IMedicinePickerService, MedicinePickerService>();
@@ -89,15 +91,18 @@ public partial class App : System.Windows.Application
             client.Timeout = TimeSpan.FromSeconds(60);
         });
         services.AddSingleton<IMedicineLedgerDialogService, MedicineLedgerDialogService>();
+        services.AddSingleton<IPurchaseOrderReceiveBridge, PurchaseOrderReceiveBridge>();
         services.AddTransient<IPurchaseBillScanService, PurchaseBillScanService>();
 
         // View models (transient so each navigation gets fresh data/context).
         services.AddTransient<LoginViewModel>();
+        services.AddTransient<CounterSelectViewModel>();
         services.AddTransient<MainViewModel>();
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<SalesViewModel>();
         services.AddTransient<SaleReturnViewModel>();
         services.AddTransient<PurchaseViewModel>();
+        services.AddTransient<PurchaseOrderViewModel>();
         services.AddTransient<PurchaseReturnViewModel>();
         services.AddTransient<InventoryViewModel>();
         services.AddTransient<MastersViewModel>();
@@ -106,6 +111,7 @@ public partial class App : System.Windows.Application
         services.AddTransient<SettingsViewModel>();
 
         services.AddTransient<LoginWindow>();
+        services.AddTransient<CounterSelectWindow>();
         services.AddTransient<MainWindow>();
     }
 
@@ -236,13 +242,28 @@ public partial class App : System.Windows.Application
         loginWindow.Closed += (_, _) =>
         {
             if (loginWindow.Tag as string == "success")
-                ShowShell();
+            {
+                if (TrySelectBillingCounter())
+                    ShowShell();
+                else
+                {
+                    Services.GetRequiredService<ICurrentUserService>().Clear();
+                    Services.GetRequiredService<ICounterContextService>().Clear();
+                    ShowLogin();
+                }
+            }
             else
                 Shutdown();
         };
 
         loginWindow.Show();
     }
+
+    /// <summary>
+    /// After login, bind this operator to a billing counter (resume open session or pick one).
+    /// </summary>
+    private bool TrySelectBillingCounter()
+        => Services.GetRequiredService<ICounterPickerUiService>().ShowPicker(switchMode: false);
 
     private void ShowShell()
     {
@@ -252,6 +273,9 @@ public partial class App : System.Windows.Application
 
         mainVm.LogoutRequested += () =>
         {
+            Services.GetRequiredService<INavigationService>().ClearSessionCache();
+            Services.GetRequiredService<ICounterContextService>().Clear();
+            Services.GetRequiredService<ICurrentUserService>().Clear();
             // Flag the close as a logout so it re-opens login instead of exiting.
             mainWindow.Tag = "logout";
             mainWindow.Close();

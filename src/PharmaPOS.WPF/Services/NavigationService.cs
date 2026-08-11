@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
-using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
+using PharmaPOS.WPF.ViewModels.Sales;
 using PharmaPOS.WPF.ViewModels.Settings;
 
 namespace PharmaPOS.WPF.Services;
@@ -11,6 +11,7 @@ public class NavigationService : INavigationService
     private readonly IServiceProvider _provider;
     private readonly ICurrentUserService _currentUser;
     private ObservableObject? _current;
+    private readonly Dictionary<Type, ObservableObject> _sessionCache = new();
 
     public NavigationService(IServiceProvider provider, ICurrentUserService currentUser)
     {
@@ -47,6 +48,23 @@ public class NavigationService : INavigationService
                 return;
         }
 
+        if (ShouldCache(viewModelType))
+        {
+            if (!_sessionCache.TryGetValue(viewModelType, out var cached))
+            {
+                cached = (ObservableObject)_provider.GetRequiredService(viewModelType);
+                _sessionCache[viewModelType] = cached;
+            }
+
+            CurrentViewModel = cached;
+            return;
+        }
+
         CurrentViewModel = (ObservableObject)_provider.GetRequiredService(viewModelType);
     }
+
+    public void ClearSessionCache() => _sessionCache.Clear();
+
+    private static bool ShouldCache(Type viewModelType)
+        => viewModelType == typeof(SalesViewModel);
 }

@@ -28,11 +28,11 @@
             <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
             <conv:CurrencyConverter x:Key="Currency" />
 
-            <!-- Match Sales bill-dropdown selection (default ListBox highlight ≈ sky blue). -->
+            <!-- Match Sales bill-dropdown selection (default ListBox highlight = sky blue). -->
             <SolidColorBrush x:Key="GridSelectionBrush" Color="#87CEEB" />
             <SolidColorBrush x:Key="GridSelectionForegroundBrush" Color="#1A1A1A" />
 
-            <!-- Keyboard-focus highlight (distinct from selection blue) — used app-wide. -->
+            <!-- Keyboard-focus highlight (distinct from selection blue) - used app-wide. -->
             <SolidColorBrush x:Key="FocusHighlightBrush" Color="#FFF3E0" />
             <SolidColorBrush x:Key="FocusBorderBrush" Color="#EF6C00" />
             <SolidColorBrush x:Key="FocusGridCellBrush" Color="#FFE0B2" />
@@ -51,7 +51,7 @@
                 </Setter>
             </Style>
 
-            <!-- Compact outlined inputs — floating labels disabled so height matches text. -->
+            <!-- Compact outlined inputs - floating labels disabled so height matches text. -->
             <Style x:Key="MaterialDesignOutlinedTextBox" TargetType="TextBox"
                    BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
                 <Setter Property="Padding" Value="8,2" />
@@ -149,12 +149,13 @@
 
             <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="#BDBDBD" />
                 <Style.Triggers>
                     <!-- Row/cell selection stays subtle; only the focused cell gets the strong amber. -->
                     <Trigger Property="IsSelected" Value="True">
                         <Setter Property="Background" Value="{StaticResource GridSelectionBrush}" />
                         <Setter Property="Foreground" Value="{StaticResource GridSelectionForegroundBrush}" />
+                        <Setter Property="BorderBrush" Value="#9E9E9E" />
                     </Trigger>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                         <Setter Property="Background" Value="{StaticResource FocusGridCellBrush}" />
@@ -173,7 +174,11 @@
             <Style TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
                 <Setter Property="RowHeight" Value="28" />
                 <Setter Property="ColumnHeaderHeight" Value="34" />
-                <Setter Property="GridLinesVisibility" Value="Horizontal" />
+                <Setter Property="GridLinesVisibility" Value="All" />
+                <Setter Property="HorizontalGridLinesBrush" Value="#BDBDBD" />
+                <Setter Property="VerticalGridLinesBrush" Value="#BDBDBD" />
+                <Setter Property="BorderBrush" Value="#9E9E9E" />
+                <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="6,2" />
                 <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="8,6" />
             </Style>
@@ -186,6 +191,8 @@
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="12" />
+                <Setter Property="BorderBrush" Value="#BDBDBD" />
+                <Setter Property="BorderThickness" Value="0,0,1,1" />
             </Style>
 
             <!-- DataGridTextColumn defaults to TwoWay; read-only columns must be OneWay. -->
@@ -205,6 +212,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type purchaseVm:PurchaseViewModel}">
                 <views:PurchaseView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type purchaseVm:PurchaseOrderViewModel}">
+                <views:PurchaseOrderView />
             </DataTemplate>
             <DataTemplate DataType="{x:Type purchaseVm:PurchaseReturnViewModel}">
                 <views:PurchaseReturnView />

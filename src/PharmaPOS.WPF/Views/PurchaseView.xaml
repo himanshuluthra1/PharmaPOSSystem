@@ -236,7 +236,7 @@
                           ItemsSource="{Binding Lines}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="True"
-                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column" GridLinesVisibility="All"
                           RowHeight="28"
                           ColumnHeaderHeight="28"
                           materialDesign:DataGridAssist.CellPadding="5,1"
@@ -352,6 +352,11 @@
                     <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32"
                                TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11"
                                Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                    <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="#1565C0" TextWrapping="Wrap"
+                               Visibility="{Binding HasLinkedPurchaseOrder, Converter={StaticResource BoolToVisibility}}">
+                        <Run Text="Linked PO:" />
+                        <Run Text="{Binding LinkedPurchaseOrderNumber, Mode=OneWay}" FontWeight="SemiBold" />
+                    </TextBlock>
                 </StackPanel>
 
                 <StackPanel VerticalAlignment="Top">

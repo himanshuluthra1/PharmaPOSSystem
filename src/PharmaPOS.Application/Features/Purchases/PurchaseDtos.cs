@@ -54,6 +54,9 @@ public class CreatePurchaseRequest
     public string? PartialPaymentNotes { get; set; }
     public int? LinkedPurchaseReturnId { get; set; }
 
+    /// <summary>When set, GRN receipt bumps ReceivedQuantity on the linked PO.</summary>
+    public int? PurchaseOrderId { get; set; }
+
     public List<PurchaseLineRequest> Lines { get; set; } = new();
 }
 

@@ -4,8 +4,8 @@ using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Accounting;
 using PharmaPOS.Domain.Entities.Identity;
 using PharmaPOS.Domain.Entities.Inventory;
-using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Entities.Masters;
+using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
@@ -46,6 +46,7 @@ public class DbSeeder
         await SeedCompanyProfileAsync(ct);
         await SeedAccountsAsync(ct);
         await SeedReturnReasonsAsync(ct);
+        await SeedDefaultCountersAsync(branch, ct);
 
         // Customer installs ship a master-data backup; skip tiny demo catalogue there.
         var seedSample = _configuration.GetValue("App:SeedSampleData", true);
@@ -354,6 +355,30 @@ public class DbSeeder
             State = "Maharashtra",
             BranchId = branch.Id,
             PaymentTermsDays = 30,
+            Status = EntityStatus.Active
+        });
+        await _context.SaveChangesAsync(ct);
+    }
+
+    private async Task SeedDefaultCountersAsync(Branch branch, CancellationToken ct)
+    {
+        if (await _context.BillingCounters.AnyAsync(c => c.BranchId == branch.Id && !c.IsDeleted, ct))
+            return;
+
+        _context.BillingCounters.Add(new BillingCounter
+        {
+            BranchId = branch.Id,
+            Code = "C1",
+            Name = "Counter 1",
+            IsDefault = true,
+            Status = EntityStatus.Active
+        });
+        _context.BillingCounters.Add(new BillingCounter
+        {
+            BranchId = branch.Id,
+            Code = "C2",
+            Name = "Counter 2",
+            IsDefault = false,
             Status = EntityStatus.Active
         });
         await _context.SaveChangesAsync(ct);

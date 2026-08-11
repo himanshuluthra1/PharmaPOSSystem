@@ -59,7 +59,7 @@
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               HeadersVisibility="Column"
-                              GridLinesVisibility="Horizontal"
+                              GridLinesVisibility="All"
                               SelectionMode="Single"
                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
                               materialDesign:DataGridAssist.CellPadding="5,2">

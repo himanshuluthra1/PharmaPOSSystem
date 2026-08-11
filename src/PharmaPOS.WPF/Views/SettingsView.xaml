@@ -462,6 +462,81 @@
                         </Grid>
                     </TabItem>
 
+                    <TabItem Header="Counters">
+                        <Grid DataContext="{Binding Counters}" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="1.8*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                            Style="{StaticResource MaterialDesignIconButton}" ToolTip="Refresh" Margin="4,0,0,0">
+                                        <materialDesign:PackIcon Kind="Refresh" />
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
+                                            <TextBlock Text="New" Margin="4,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                </DockPanel>
+                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
+                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                                          MaxHeight="360" HeadersVisibility="Column">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="Auto" />
+                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="100" />
+                                        <DataGridCheckBoxColumn Header="Default" Binding="{Binding IsDefault}" Width="Auto" />
+                                        <DataGridTextColumn Header="Open by" Binding="{Binding OpenOperatorName}" Width="120" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <TextBlock Text="Today's cash by counter" FontWeight="SemiBold" Margin="0,12,0,6" />
+                                <Button Command="{Binding RefreshCashCommand}" Style="{StaticResource MaterialDesignFlatButton}"
+                                        Content="Refresh cash" HorizontalAlignment="Left" Margin="0,0,0,6" />
+                                <TextBlock Text="{Binding CashSummaryText}" TextWrapping="Wrap" Opacity="0.9" />
+                            </StackPanel>
+                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="2*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Code *" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}"
+                                                     Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}"
+                                                     Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <CheckBox Content="Default counter" Margin="0,8,0,8"
+                                              IsChecked="{Binding Editor.IsDefault}" />
+                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                              ItemsSource="{Binding EntityStatuses}"
+                                              SelectedItem="{Binding Editor.Status}" Margin="0,0,0,12" />
+                                    <Button Command="{Binding SaveCommand}"
+                                            Style="{StaticResource MaterialDesignRaisedButton}"
+                                            HorizontalAlignment="Left" Padding="16,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
+                                            <TextBlock Text="Save Counter" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
+                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </TabItem>
+
                     <!-- PREFERENCES -->
                     <TabItem Header="Preferences">
                         <ScrollViewer DataContext="{Binding Preferences}" Margin="0,8,0,0"

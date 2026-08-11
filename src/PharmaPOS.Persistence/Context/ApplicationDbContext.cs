@@ -66,6 +66,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<SalePayment> SalePayments => Set<SalePayment>();
+    public DbSet<BillingCounter> BillingCounters => Set<BillingCounter>();
+    public DbSet<CounterSession> CounterSessions => Set<CounterSession>();
     public DbSet<SaleReturn> SaleReturns => Set<SaleReturn>();
     public DbSet<SaleReturnItem> SaleReturnItems => Set<SaleReturnItem>();
     public DbSet<ReturnRefund> ReturnRefunds => Set<ReturnRefund>();

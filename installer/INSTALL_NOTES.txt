@@ -25,11 +25,13 @@ It does NOT include shop-specific data:
   • Stock batches / inventory quantities
   • Sales, purchases, returns, or accounting journals
 
-Default login
--------------
-  Username: admin
-  Password: Admin@123
-  (You will be prompted to change the password.)
+First launch
+------------
+1. Enter the store code provided by the vendor (one-time per PC).
+2. Login:
+     Username: admin
+     Password: Admin@123
+   You will be prompted to change the password.
 
 Data location
 -------------

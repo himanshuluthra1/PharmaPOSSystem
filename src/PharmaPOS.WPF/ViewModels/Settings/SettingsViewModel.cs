@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Authentication;
+using PharmaPOS.Application.Features.Counters;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Shared.Constants;
@@ -32,6 +33,7 @@ public class SettingsViewModel : ObservableObject
 
     public SettingsViewModel(
         ISettingsService settings,
+        IBillingCounterService counters,
         IServiceScopeFactory scopeFactory,
         IAuthService auth,
         ICurrentUserService currentUser,
@@ -69,6 +71,7 @@ public class SettingsViewModel : ObservableObject
 
         Company = new CompanyTabViewModel(settings, dialog);
         Branches = new BranchesTabViewModel(settings, dialog);
+        Counters = new CountersTabViewModel(counters, currentUser, dialog);
         Preferences = new PreferencesTabViewModel(
             settings, layout, aiSettings, billShareSettings, mySqlSyncSettings, mySqlPublisher, storeIdentity, dialog);
         MedicineMapping = new MedicineMappingTabViewModel(scopeFactory, dialog, aiSettings, geminiMedicineMatcher);
@@ -81,13 +84,14 @@ public class SettingsViewModel : ObservableObject
         // Side nav lists only allowed sections — avoids TabControl header overflow / missing tabs.
         if (CanManageCompany) Sections.Add(new SettingsSection("Company", 0));
         if (CanManageBranches) Sections.Add(new SettingsSection("Branches", 1));
-        if (CanManagePreferences) Sections.Add(new SettingsSection("Preferences", 2));
-        if (CanManageMedicineMapping) Sections.Add(new SettingsSection("Medicine Mapping", 3));
-        if (CanManageMedWinImport) Sections.Add(new SettingsSection("MedWin Import", 4));
-        if (CanManageRoles) Sections.Add(new SettingsSection("Roles & Permissions", 5));
-        if (CanManageUsers) Sections.Add(new SettingsSection("Users", 6));
-        Sections.Add(new SettingsSection("My Password", 7));
-        Sections.Add(new SettingsSection("Appearance", 8));
+        if (CanManageBranches) Sections.Add(new SettingsSection("Counters", 2));
+        if (CanManagePreferences) Sections.Add(new SettingsSection("Preferences", 3));
+        if (CanManageMedicineMapping) Sections.Add(new SettingsSection("Medicine Mapping", 4));
+        if (CanManageMedWinImport) Sections.Add(new SettingsSection("MedWin Import", 5));
+        if (CanManageRoles) Sections.Add(new SettingsSection("Roles & Permissions", 6));
+        if (CanManageUsers) Sections.Add(new SettingsSection("Users", 7));
+        Sections.Add(new SettingsSection("My Password", 8));
+        Sections.Add(new SettingsSection("Appearance", 9));
 
         _selectedSection = Sections[0];
         _selectedTab = _selectedSection.TabIndex;
@@ -123,6 +127,7 @@ public class SettingsViewModel : ObservableObject
 
     public CompanyTabViewModel Company { get; }
     public BranchesTabViewModel Branches { get; }
+    public CountersTabViewModel Counters { get; }
     public PreferencesTabViewModel Preferences { get; }
     public MedicineMappingTabViewModel MedicineMapping { get; }
     public MedWinImportTabViewModel MedWinImport { get; }
@@ -147,10 +152,11 @@ public class SettingsViewModel : ObservableObject
         {
             case 0 when CanManageCompany: await Company.EnsureLoadedAsync(); break;
             case 1 when CanManageBranches: await Branches.EnsureLoadedAsync(); break;
-            case 2 when CanManagePreferences: await Preferences.EnsureLoadedAsync(); break;
-            case 3 when CanManageMedicineMapping: await MedicineMapping.EnsureLoadedAsync(); break;
-            case 5 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
-            case 6 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
+            case 2 when CanManageBranches: await Counters.EnsureLoadedAsync(); break;
+            case 3 when CanManagePreferences: await Preferences.EnsureLoadedAsync(); break;
+            case 4 when CanManageMedicineMapping: await MedicineMapping.EnsureLoadedAsync(); break;
+            case 6 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
+            case 7 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
         }
     }
 }

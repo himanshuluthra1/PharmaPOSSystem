@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Application.Features.Counters;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Enums;
@@ -23,6 +24,9 @@ public class SalesViewModel : ObservableObject
     private readonly IBillSearchService _billSearch;
     private readonly ISaleReturnDialogService _saleReturnDialog;
     private readonly ICurrentUserService _currentUser;
+    private readonly ICounterContextService _counterContext;
+    private readonly IBillingCounterService _counters;
+    private readonly ICounterPickerUiService _counterPicker;
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
     private readonly IBarcodeCameraService _barcodeCamera;
@@ -42,6 +46,7 @@ public class SalesViewModel : ObservableObject
     private readonly SemaphoreSlim _salesGate = new(1, 1);
     private DateOnly? _nextOlderBillDate;
     private bool _isLoadingOlderBills;
+    private string? _counterCashSummary;
 
     public bool SuppressBillLoad
     {
@@ -52,6 +57,10 @@ public class SalesViewModel : ObservableObject
     private PaymentMethod _paymentMethod = PaymentMethod.Cash;
     private bool _isBusy;
     private string? _statusMessage;
+    private int _activeBillIndex;
+    private bool _suppressSlotSummary;
+
+    public const int MaxOpenCustomerBills = 4;
 
     public SalesViewModel(
         ISalesService salesService,
@@ -60,6 +69,9 @@ public class SalesViewModel : ObservableObject
         IBillSearchService billSearch,
         ISaleReturnDialogService saleReturnDialog,
         ICurrentUserService currentUser,
+        ICounterContextService counterContext,
+        IBillingCounterService counters,
+        ICounterPickerUiService counterPicker,
         IDialogService dialog,
         IInvoicePrintService printService,
         IBarcodeCameraService barcodeCamera,
@@ -71,6 +83,9 @@ public class SalesViewModel : ObservableObject
         _billSearch = billSearch;
         _saleReturnDialog = saleReturnDialog;
         _currentUser = currentUser;
+        _counterContext = counterContext;
+        _counters = counters;
+        _counterPicker = counterPicker;
         _dialog = dialog;
         _printService = printService;
         _barcodeCamera = barcodeCamera;
@@ -98,6 +113,15 @@ public class SalesViewModel : ObservableObject
             _ => CanReturn && IsEditing && !IsBusy);
         LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
         ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanModifyBill && !IsBusy);
+        SwitchOpenBillCommand = new RelayCommand(p => SwitchOpenBill(p), _ => CanCreate && !IsBusy);
+        NewCustomerBillCommand = new RelayCommand(_ => OpenNewCustomerBill(), _ => CanCreate && !IsBusy && OpenBills.Count < MaxOpenCustomerBills);
+        CloseCustomerBillCommand = new RelayCommand(_ => CloseActiveCustomerBill(), _ => CanCreate && !IsBusy);
+        RefreshCounterCashCommand = new AsyncRelayCommand(RefreshCounterCashAsync, () => !IsBusy);
+        ShowCounterCashSummaryCommand = new AsyncRelayCommand(ShowCounterCashSummaryAsync, () => !IsBusy);
+        ChangeCounterCommand = new AsyncRelayCommand(ChangeCounterAsync, () => !IsBusy);
+
+        OpenBills.Add(CreateSlot(1));
+        OpenBills[0].IsActive = true;
 
         EnsureTrailingEmptyRow();
         _ = InitializeAsync();
@@ -107,6 +131,7 @@ public class SalesViewModel : ObservableObject
     {
         await RefreshEditPolicyAsync();
         await InitializeBillsAsync();
+        await RefreshCounterCashAsync();
     }
 
     private async Task RefreshEditPolicyAsync()
@@ -130,6 +155,7 @@ public class SalesViewModel : ObservableObject
 
     public ObservableCollection<CartLineViewModel> Cart { get; } = new();
     public ObservableCollection<SaleListItemDto> BillHistory { get; } = new();
+    public ObservableCollection<OpenSaleBillSlot> OpenBills { get; } = new();
 
     public Array PaymentMethods => Enum.GetValues(typeof(PaymentMethod));
 
@@ -141,6 +167,23 @@ public class SalesViewModel : ObservableObject
     public ICommand OpenSaleReturnCommand { get; }
     public ICommand LoadOlderBillsCommand { get; }
     public ICommand ScanBarcodeCameraCommand { get; }
+    public ICommand SwitchOpenBillCommand { get; }
+    public ICommand NewCustomerBillCommand { get; }
+    public ICommand CloseCustomerBillCommand { get; }
+    public ICommand RefreshCounterCashCommand { get; }
+    public ICommand ShowCounterCashSummaryCommand { get; }
+    public ICommand ChangeCounterCommand { get; }
+
+    public string CounterDisplay =>
+        _counterContext.ActiveCounterDisplay ?? "No counter selected";
+
+    public bool HasCounterSession => _counterContext.HasActiveCounter;
+
+    public string? CounterCashSummary
+    {
+        get => _counterCashSummary;
+        private set => SetProperty(ref _counterCashSummary, value);
+    }
 
     public bool CanCreate { get; }
     public bool CanSearchBills { get; }
@@ -413,7 +456,11 @@ public class SalesViewModel : ObservableObject
     public string CustomerName
     {
         get => _customerName;
-        set => SetProperty(ref _customerName, value);
+        set
+        {
+            if (SetProperty(ref _customerName, value))
+                RefreshActiveSlotSummary();
+        }
     }
 
     public string? CustomerMobile
@@ -484,6 +531,7 @@ public class SalesViewModel : ObservableObject
         OnPropertyChanged(nameof(ItemCount));
         OnPropertyChanged(nameof(HasItems));
         OnPropertyChanged(nameof(BalanceDue));
+        RefreshActiveSlotSummary();
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -820,6 +868,12 @@ public class SalesViewModel : ObservableObject
             return;
         }
 
+        if (!_editingSaleId.HasValue && !_counterContext.HasActiveCounter)
+        {
+            _dialog.ShowError("Select a billing counter before saving. Sign out and sign in to choose a counter.");
+            return;
+        }
+
         var lineRequests = lines.Select(l => new SaleLineRequest
         {
             MedicineId = l.MedicineId,
@@ -870,7 +924,9 @@ public class SalesViewModel : ObservableObject
                         BillingCustomerAddress = string.IsNullOrWhiteSpace(CustomerAddress) ? null : CustomerAddress.Trim(),
                         BillingDoctorName = string.IsNullOrWhiteSpace(DoctorName) ? null : DoctorName.Trim(),
                         Payments = payments,
-                        Lines = lineRequests
+                        Lines = lineRequests,
+                        CounterId = _counterContext.ActiveCounterId,
+                        CounterSessionId = _counterContext.ActiveSessionId
                     }, _currentUser.CurrentUser?.BranchId);
                 }
 
@@ -891,6 +947,7 @@ public class SalesViewModel : ObservableObject
 
                 await RefreshBillHistoryCoreAsync(selectNewBill: true);
                 ResetBillForm(clearStatus: false);
+                await RefreshCounterCashAsync();
             }
             finally
             {
@@ -950,6 +1007,8 @@ public class SalesViewModel : ObservableObject
         SelectedBill = BillHistory.FirstOrDefault(b => b.SaleId == 0);
         _suppressBillSelection = false;
         ResetBillForm(clearStatus: true);
+        StatusMessage = $"Cleared customer bill {OpenBills[_activeBillIndex].DisplayNumber}. Other open bills are unchanged.";
+        RefreshActiveSlotSummary();
     }
 
     private void ResetBillForm(bool clearStatus)
@@ -961,12 +1020,263 @@ public class SalesViewModel : ObservableObject
         _lastDropdownSaleId = null;
         NotifyBillEditStateChanged();
         EnsureTrailingEmptyRow();
+        _suppressSlotSummary = true;
         CustomerName = string.Empty;
         CustomerMobile = null;
         CustomerAddress = null;
         DoctorName = null;
+        _suppressSlotSummary = false;
         PaymentMethod = PaymentMethod.Cash;
         RecalculateTotals();
         if (clearStatus) StatusMessage = null;
     }
+
+    #region Multi-customer open bills
+
+    private static OpenSaleBillSlot CreateSlot(int displayNumber) => new(displayNumber);
+
+    public bool TrySwitchToBillNumber(int displayNumber)
+    {
+        var index = OpenBills.ToList().FindIndex(b => b.DisplayNumber == displayNumber);
+        if (index < 0) return false;
+        SwitchToBillIndex(index);
+        return true;
+    }
+
+    private void SwitchOpenBill(object? parameter)
+    {
+        switch (parameter)
+        {
+            case OpenSaleBillSlot slot:
+                var idx = OpenBills.IndexOf(slot);
+                if (idx >= 0) SwitchToBillIndex(idx);
+                break;
+            case int number:
+                TrySwitchToBillNumber(number);
+                break;
+            case string text when int.TryParse(text, out var parsed):
+                TrySwitchToBillNumber(parsed);
+                break;
+        }
+    }
+
+    private void OpenNewCustomerBill()
+    {
+        if (OpenBills.Count >= MaxOpenCustomerBills)
+        {
+            _dialog.ShowInfo(
+                $"You can keep up to {MaxOpenCustomerBills} customer bills open. Close one (Ctrl+W) before starting another.",
+                "Multi-customer");
+            return;
+        }
+
+        ParkActiveBill();
+        var slot = CreateSlot(OpenBills.Count + 1);
+        OpenBills.Add(slot);
+        RenumberSlots();
+        _activeBillIndex = OpenBills.Count - 1;
+        ApplyActiveFlags();
+        ResetBillForm(clearStatus: true);
+        StatusMessage = $"Opened customer bill {slot.DisplayNumber}. Press Ctrl+1–{OpenBills.Count} to switch.";
+        RefreshActiveSlotSummary();
+        RequestItemFocus?.Invoke(Cart.FirstOrDefault(l => l.IsEmpty));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void CloseActiveCustomerBill()
+    {
+        var active = OpenBills[_activeBillIndex];
+        var hasContent = Cart.Any(l => !l.IsEmpty) || _editingSaleId.HasValue
+                         || !string.IsNullOrWhiteSpace(CustomerName);
+        if (hasContent && !_dialog.Confirm(
+                $"Close customer bill {active.DisplayNumber}" +
+                (string.IsNullOrWhiteSpace(CustomerName) ? "" : $" ({CustomerName.Trim()})") +
+                "? Unsaved items on this bill will be discarded.",
+                "Close customer bill"))
+            return;
+
+        if (OpenBills.Count == 1)
+        {
+            NewBill();
+            StatusMessage = "Customer bill cleared.";
+            return;
+        }
+
+        OpenBills.RemoveAt(_activeBillIndex);
+        if (_activeBillIndex >= OpenBills.Count)
+            _activeBillIndex = OpenBills.Count - 1;
+        RenumberSlots();
+        RestoreBill(OpenBills[_activeBillIndex]);
+        ApplyActiveFlags();
+        StatusMessage = $"Closed bill. Now on customer bill {OpenBills[_activeBillIndex].DisplayNumber}.";
+        RefreshActiveSlotSummary();
+        RequestItemFocus?.Invoke(Cart.FirstOrDefault(l => !l.IsEmpty) ?? Cart.FirstOrDefault());
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void SwitchToBillIndex(int index)
+    {
+        if (index < 0 || index >= OpenBills.Count || index == _activeBillIndex)
+            return;
+
+        ParkActiveBill();
+        _activeBillIndex = index;
+        RestoreBill(OpenBills[_activeBillIndex]);
+        ApplyActiveFlags();
+        StatusMessage = $"Switched to customer bill {OpenBills[_activeBillIndex].DisplayNumber}" +
+                        (string.IsNullOrWhiteSpace(CustomerName) ? "." : $": {CustomerName.Trim()}.");
+        RequestItemFocus?.Invoke(Cart.FirstOrDefault(l => !l.IsEmpty) ?? Cart.FirstOrDefault());
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void ParkActiveBill()
+    {
+        var slot = OpenBills[_activeBillIndex];
+        slot.Parked = CaptureCurrentBill();
+        slot.UpdateSummary(CustomerName, ItemCount, GrandTotal);
+    }
+
+    private ParkedSaleBill CaptureCurrentBill() => new()
+    {
+        Lines = Cart.Where(l => !l.IsEmpty).Select(l => l.ToParked()).ToList(),
+        CustomerName = CustomerName,
+        CustomerMobile = CustomerMobile,
+        CustomerAddress = CustomerAddress,
+        DoctorName = DoctorName,
+        PaymentMethod = PaymentMethod,
+        EditingSaleId = _editingSaleId,
+        StatusMessage = StatusMessage
+    };
+
+    private void RestoreBill(OpenSaleBillSlot slot)
+    {
+        var parked = slot.Parked ?? new ParkedSaleBill();
+        foreach (var line in Cart)
+            line.Changed -= RecalculateTotals;
+        Cart.Clear();
+
+        _editingSaleId = parked.EditingSaleId;
+        NotifyBillEditStateChanged();
+
+        _suppressSlotSummary = true;
+        CustomerName = parked.CustomerName;
+        CustomerMobile = parked.CustomerMobile;
+        CustomerAddress = parked.CustomerAddress;
+        DoctorName = parked.DoctorName;
+        _suppressSlotSummary = false;
+        PaymentMethod = parked.PaymentMethod;
+        StatusMessage = parked.StatusMessage;
+
+        foreach (var parkedLine in parked.Lines)
+        {
+            var vm = CartLineViewModel.CreateEmpty();
+            vm.LoadFromParked(parkedLine);
+            vm.Changed += RecalculateTotals;
+            Cart.Add(vm);
+        }
+
+        EnsureTrailingEmptyRow();
+        RecalculateTotals();
+
+        _suppressBillSelection = true;
+        SelectedBill = parked.EditingSaleId is int saleId
+            ? BillHistory.FirstOrDefault(b => b.SaleId == saleId) ?? BillHistory.FirstOrDefault(b => b.SaleId == 0)
+            : BillHistory.FirstOrDefault(b => b.SaleId == 0);
+        _suppressBillSelection = false;
+        _lastDropdownSaleId = SelectedBill?.SaleId;
+        slot.Parked = null;
+    }
+
+    private void ApplyActiveFlags()
+    {
+        for (var i = 0; i < OpenBills.Count; i++)
+            OpenBills[i].IsActive = i == _activeBillIndex;
+    }
+
+    private void RenumberSlots()
+    {
+        for (var i = 0; i < OpenBills.Count; i++)
+            OpenBills[i].SetDisplayNumber(i + 1);
+    }
+
+    private void RefreshActiveSlotSummary()
+    {
+        if (_suppressSlotSummary || OpenBills.Count == 0) return;
+        if (_activeBillIndex < 0 || _activeBillIndex >= OpenBills.Count) return;
+        OpenBills[_activeBillIndex].UpdateSummary(CustomerName, ItemCount, GrandTotal);
+    }
+
+    private async Task RefreshCounterCashAsync()
+    {
+        OnPropertyChanged(nameof(CounterDisplay));
+        OnPropertyChanged(nameof(HasCounterSession));
+
+        if (_counterContext.ActiveCounterId is not int counterId)
+        {
+            CounterCashSummary = "Select a billing counter to track cash.";
+            return;
+        }
+
+        try
+        {
+            var row = await _counters.GetActiveCounterCashAsync(
+                counterId, _counterContext.ActiveSessionId, DateTime.Today);
+            if (row is null)
+            {
+                CounterCashSummary = null;
+                return;
+            }
+
+            CounterCashSummary =
+                $"Today · Bills {row.BillCount} · Cash ₹{row.CashCollected:N0} · Drawer ₹{row.ExpectedCashInDrawer:N0}" +
+                (row.OpeningFloat > 0 ? $" (float ₹{row.OpeningFloat:N0})" : string.Empty);
+        }
+        catch
+        {
+            CounterCashSummary = null;
+        }
+    }
+
+    private async Task ShowCounterCashSummaryAsync()
+    {
+        try
+        {
+            var rows = await _counters.GetCashSummaryAsync(_currentUser.CurrentUser?.BranchId, DateTime.Today);
+            if (rows.Count == 0)
+            {
+                _dialog.ShowInfo("No billing counters found.", "Counter cash");
+                return;
+            }
+
+            var lines = rows.Select(r =>
+                $"{r.CounterCode} ({r.CounterName}): bills {r.BillCount}, cash ₹{r.CashCollected:N0}" +
+                (r.OperatorName is null ? "" : $", op {r.OperatorName}") +
+                $", drawer ₹{r.ExpectedCashInDrawer:N0}");
+            _dialog.ShowInfo(string.Join("\n", lines), "Today's cash by counter");
+            await RefreshCounterCashAsync();
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+    }
+
+    private async Task ChangeCounterAsync()
+    {
+        var current = _counterContext.ActiveCounterDisplay ?? "none";
+        if (!_dialog.Confirm(
+                $"You are on {current}.\n\nSwitch to a different billing counter?\n\n" +
+                "New sales will go to the counter you pick next. Bills already saved stay on the old counter.",
+                "Change counter"))
+            return;
+
+        if (!_counterPicker.ShowPicker(switchMode: true))
+            return;
+
+        // Cached Sales VM keeps old header until we refresh.
+        await RefreshCounterCashAsync();
+        StatusMessage = $"Now billing on {_counterContext.ActiveCounterDisplay}.";
+    }
+
+    #endregion
 }

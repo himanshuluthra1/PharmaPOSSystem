@@ -23,6 +23,21 @@
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                     <TextBlock Text="Fast Billing" FontSize="20" FontWeight="Bold"
                                VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="CashRegister" Width="18" Height="18"
+                                                   VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding CounterDisplay}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding CounterCashSummary}" Margin="12,0,0,0" Opacity="0.75"
+                                   VerticalAlignment="Center" FontSize="12" />
+                        <Button Command="{Binding ChangeCounterCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Content="Change" Margin="4,0,0,0" Padding="8,2"
+                                ToolTip="Switch to a different billing counter" />
+                        <Button Command="{Binding ShowCounterCashSummaryCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Content="All counters" Margin="4,0,0,0" Padding="8,2"
+                                ToolTip="Today's cash by counter" />
+                    </StackPanel>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                         <TextBox x:Name="BarcodeScanBox"
                                  Width="160"
@@ -167,13 +182,63 @@
                     </Grid>
                     </StackPanel>
                 </DockPanel>
-                <TextBlock Text="Press Enter on Item to search medicine. F3 customer. F4 medicine details. F5 substitute."
+                <TextBlock Text="Press Enter on Item to search medicine. F3 customer. Ctrl+T new customer. Ctrl+1–4 switch. Ctrl+W close."
                            FontSize="12" Opacity="0.6" Margin="0,0,0,8" DockPanel.Dock="Top" />
+
+                <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6,4"
+                        Background="{DynamicResource MaterialDesignCardBackground}"
+                        CornerRadius="6"
+                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Command="{Binding NewCustomerBillCommand}"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Padding="8,2" Margin="0,0,4,0"
+                                    ToolTip="Start another customer bill (Ctrl+T)"
+                                    Content="New customer" />
+                            <Button Command="{Binding CloseCustomerBillCommand}"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Padding="8,2"
+                                    ToolTip="Close this customer bill (Ctrl+W)"
+                                    Content="Close" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding OpenBills}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type salesVm:OpenSaleBillSlot}">
+                                    <Button Margin="0,0,6,0" Padding="10,4"
+                                            MinWidth="88"
+                                            Command="{Binding DataContext.SwitchOpenBillCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="{Binding ShortcutHint}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+                                                <Setter Property="FontWeight" Value="Normal" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                        <Setter Property="FontWeight" Value="Bold" />
+                                                        <Setter Property="BorderThickness" Value="2" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="{Binding ChipLabel}" TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DockPanel>
+                </Border>
 
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="True"
-                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column" GridLinesVisibility="All"
                           RowHeight="28"
                           ColumnHeaderHeight="30"
                           materialDesign:DataGridAssist.CellPadding="6,2"

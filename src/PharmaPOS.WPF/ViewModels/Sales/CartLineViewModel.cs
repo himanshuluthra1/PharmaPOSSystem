@@ -218,6 +218,49 @@ public class CartLineViewModel : ObservableObject
         Recalculate();
     }
 
+    internal ParkedCartLine ToParked() => new()
+    {
+        MedicineId = MedicineId,
+        BatchId = BatchId,
+        MedicineName = MedicineName,
+        BatchNumber = BatchNumber,
+        ExpiryDate = ExpiryDate,
+        Mrp = Mrp,
+        GstPercent = GstPercent,
+        AvailableStock = AvailableStock,
+        Quantity = Quantity,
+        UnitPrice = UnitPrice,
+        DiscountPercent = DiscountPercent,
+        OriginalQuantity = OriginalQuantity,
+        IsReturnLine = IsReturnLine,
+        ReturnNumber = ReturnNumber
+    };
+
+    internal void LoadFromParked(ParkedCartLine line)
+    {
+        MedicineId = line.MedicineId;
+        BatchId = line.BatchId;
+        MedicineName = line.MedicineName;
+        BatchNumber = line.BatchNumber;
+        ExpiryDate = line.ExpiryDate;
+        GstPercent = line.GstPercent;
+        AvailableStock = line.AvailableStock;
+        _isReturnLine = line.IsReturnLine;
+        _returnNumber = line.ReturnNumber;
+        OnPropertyChanged(nameof(IsReturnLine));
+        OnPropertyChanged(nameof(IsEditable));
+        OnPropertyChanged(nameof(ReturnNumber));
+        _mrp = line.Mrp;
+        _unitPrice = line.UnitPrice;
+        _discountPercent = line.DiscountPercent;
+        OnPropertyChanged(nameof(Mrp));
+        OnPropertyChanged(nameof(UnitPrice));
+        OnPropertyChanged(nameof(DiscountPercent));
+        Quantity = line.Quantity;
+        OriginalQuantity = line.OriginalQuantity;
+        Recalculate();
+    }
+
     private void UpdateDiscountFromPrices()
     {
         var pct = SaleLinePricing.DiscountPercent(Mrp, UnitPrice);

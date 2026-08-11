@@ -90,7 +90,7 @@
                       IsReadOnly="True"
                       CanUserAddRows="False"
                       HeadersVisibility="Column"
-                      GridLinesVisibility="Horizontal"
+                      GridLinesVisibility="All"
                       materialDesign:DataGridAssist.CellPadding="6,4">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="160" />

@@ -3,7 +3,7 @@
 ; Build with: scripts\build-installer.ps1
 
 #define MyAppName "PharmaPOS"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "PharmaPOS"
 #define MyAppExeName "PharmaPOS.exe"
 #ifndef PublishDir

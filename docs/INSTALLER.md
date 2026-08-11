@@ -30,7 +30,7 @@ Outputs:
 
 - `artifacts\dist\PharmaPosDb_Master.bak` — masters-only backup
 - `artifacts\publish\win-x64\` — self-contained app (+ `Data\` backup)
-- `artifacts\installer\PharmaPOS-Setup-1.0.0.exe` — installer (if Inno Setup is installed)
+- `artifacts\installer\PharmaPOS-Setup-1.1.0.exe` — installer (if Inno Setup is installed)
 
 ## DistPrepare only
 

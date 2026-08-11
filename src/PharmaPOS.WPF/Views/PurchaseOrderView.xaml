@@ -1,0 +1,189 @@
+<UserControl x:Class="PharmaPOS.WPF.Views.PurchaseOrderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:purchaseVm="clr-namespace:PharmaPOS.WPF.ViewModels.Purchases"
+             d:DataContext="{d:DesignInstance Type=purchaseVm:PurchaseOrderViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760">
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Margin="0,0,8,0" Command="{Binding RefreshCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Content="Refresh" Padding="14,8" />
+                    <Button Margin="0,0,8,0" Command="{Binding GenerateReorderCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Content="Generate from low stock" Padding="14,8" />
+                    <Button Command="{Binding NewCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}" Content="New draft" Padding="14,8" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Purchase Orders" FontSize="20" FontWeight="Bold" />
+                    <TextBlock Text="Draft, confirm, and receive goods against open purchase orders." Opacity="0.7" Margin="0,2,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </materialDesign:Card>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="380" MinWidth="300" />
+                <ColumnDefinition Width="*" MinWidth="520" />
+            </Grid.ColumnDefinitions>
+
+            <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Orders" FontWeight="SemiBold" Margin="4,0,0,8" />
+                    <DataGrid ItemsSource="{Binding Orders}"
+                              SelectedItem="{Binding SelectedListItem, Mode=TwoWay}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              HeadersVisibility="Column">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="PO #" Binding="{Binding OrderNumber}" Width="110" />
+                            <DataGridTextColumn Header="Date" Binding="{Binding OrderDate, StringFormat=dd-MMM}" Width="70" />
+                            <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="100" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" />
+                            <DataGridTextColumn Header="Total" Binding="{Binding TotalAmount, StringFormat=N0}" Width="70" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </materialDesign:Card>
+
+            <materialDesign:Card Grid.Column="1" Margin="6,0,0,0" UniformCornerRadius="10" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <Button Margin="0,0,8,0" Command="{Binding ReceiveCommand}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}" Content="Receive" Padding="14,8" />
+                            <Button Margin="0,0,8,0" Command="{Binding ConfirmCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Content="Confirm" Padding="14,8" />
+                            <Button Margin="0,0,8,0" Command="{Binding CancelCommand}"
+                                    Style="{StaticResource MaterialDesignFlatButton}" Content="Cancel PO" Padding="14,8" />
+                            <Button Command="{Binding SaveDraftCommand}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}" Content="Save draft" Padding="14,8" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock FontSize="18" FontWeight="Bold">
+                                <Run Text="{Binding OrderNumber, Mode=OneWay}" />
+                                <Run Text="  ·  " />
+                                <Run Text="{Binding StatusDisplay, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Opacity="0.7" Margin="0,2,0,0" Text="Edit drafts, confirm to Ordered, then Receive into Purchase GRN." />
+                        </StackPanel>
+                    </DockPanel>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Column="0" Margin="0,0,8,0" IsEnabled="{Binding IsEditable}">
+                            <TextBox x:Name="SupplierBox"
+                                     materialDesign:HintAssist.Hint="Supplier"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     PreviewKeyDown="SupplierBox_PreviewKeyDown"
+                                     LostFocus="SupplierBox_LostFocus" />
+                            <Popup IsOpen="{Binding ShowSupplierResults}" PlacementTarget="{Binding ElementName=SupplierBox}"
+                                   Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                                <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1" MaxHeight="180" MinWidth="280">
+                                    <ListBox ItemsSource="{Binding SupplierResults}"
+                                             SelectedIndex="{Binding SupplierSuggestionIndex, Mode=TwoWay}"
+                                             MouseDoubleClick="SupplierList_MouseDoubleClick"
+                                             DisplayMemberPath="Name" />
+                                </Border>
+                            </Popup>
+                        </Grid>
+
+                        <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                                    materialDesign:HintAssist.Hint="Order date"
+                                    Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                    SelectedDate="{Binding OrderDate}"
+                                    IsEnabled="{Binding IsEditable}" />
+                        <DatePicker Grid.Column="2" Margin="0,0,8,0"
+                                    materialDesign:HintAssist.Hint="Expected"
+                                    Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                    SelectedDate="{Binding ExpectedDate}"
+                                    IsEnabled="{Binding IsEditable}" />
+                        <TextBox Grid.Column="3"
+                                 materialDesign:HintAssist.Hint="Remarks"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding IsEditable}" />
+                    </Grid>
+
+                    <DockPanel Grid.Row="2">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <Button DockPanel.Dock="Right" Command="{Binding AddMedicineCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Content="Add medicine" Padding="12,6"
+                                    IsEnabled="{Binding IsEditable}" />
+                            <TextBlock Text="Lines" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <DataGrid ItemsSource="{Binding Lines}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  IsReadOnly="{Binding IsLinesReadOnly}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" IsReadOnly="True" Width="*" MinWidth="160" />
+                                <DataGridTextColumn Header="Salt" Binding="{Binding GenericName}" IsReadOnly="True" Width="120" />
+                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                <DataGridTextColumn Header="Received" Binding="{Binding ReceivedQuantity}" IsReadOnly="True" Width="80" />
+                                <DataGridTextColumn Header="Remaining" Binding="{Binding RemainingQuantity}" IsReadOnly="True" Width="80" />
+                                <DataGridTextColumn Header="Est. price" Binding="{Binding EstimatedPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="90" />
+                                <DataGridTextColumn Header="Line total" Binding="{Binding LineTotal, StringFormat=N2}" IsReadOnly="True" Width="90" />
+                                <DataGridTemplateColumn Header="" Width="70">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.RemoveLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                                    Content="Remove"
+                                                    IsEnabled="{Binding DataContext.IsEditable, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+
+                    <DockPanel Grid.Row="3" Margin="0,10,0,0">
+                        <TextBlock DockPanel.Dock="Right" FontSize="16" FontWeight="Bold"
+                                   Text="{Binding TotalAmount, StringFormat=Total: ₹{0:N2}}" />
+                        <Button Command="{Binding ClearSupplierCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Content="Clear supplier"
+                                HorizontalAlignment="Left"
+                                IsEnabled="{Binding IsEditable}" />
+                    </DockPanel>
+                </Grid>
+            </materialDesign:Card>
+        </Grid>
+
+        <TextBlock Grid.Row="2" Margin="4,8,4,0" Opacity="0.85" Text="{Binding StatusMessage}" />
+    </Grid>
+</UserControl>

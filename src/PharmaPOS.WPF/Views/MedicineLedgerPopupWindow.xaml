@@ -26,7 +26,7 @@
                   IsReadOnly="True"
                   CanUserAddRows="False"
                   HeadersVisibility="Column"
-                  GridLinesVisibility="Horizontal"
+                  GridLinesVisibility="All"
                   AlternatingRowBackground="#0A000000"
                   RowHeight="28">
             <DataGrid.Columns>

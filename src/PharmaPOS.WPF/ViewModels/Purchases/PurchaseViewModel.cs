@@ -27,6 +27,7 @@ public class PurchaseViewModel : ObservableObject
     private readonly IDialogService _dialog;
     private readonly IBarcodeCameraService _barcodeCamera;
     private readonly IPurchaseBillScanService _billScan;
+    private readonly IPurchaseOrderReceiveBridge _poReceiveBridge;
 
     private string _supplierSearchText = string.Empty;
     private SupplierLookupDto? _selectedSupplier;
@@ -46,6 +47,8 @@ public class PurchaseViewModel : ObservableObject
     private bool _suppressPurchaseSelection;
     private int? _lastDropdownPurchaseId;
     private int? _editingPurchaseId;
+    private int? _linkedPurchaseOrderId;
+    private string? _linkedPurchaseOrderNumber;
     private CancellationTokenSource? _purchaseLoadCts;
     private readonly SemaphoreSlim _purchaseGate = new(1, 1);
 
@@ -57,7 +60,8 @@ public class PurchaseViewModel : ObservableObject
         ICurrentUserService currentUser,
         IDialogService dialog,
         IBarcodeCameraService barcodeCamera,
-        IPurchaseBillScanService billScan)
+        IPurchaseBillScanService billScan,
+        IPurchaseOrderReceiveBridge poReceiveBridge)
     {
         _purchaseService = purchaseService;
         _settings = settings;
@@ -67,6 +71,7 @@ public class PurchaseViewModel : ObservableObject
         _dialog = dialog;
         _barcodeCamera = barcodeCamera;
         _billScan = billScan;
+        _poReceiveBridge = poReceiveBridge;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseCreate, AppConstants.Permissions.PurchaseManage);
@@ -92,6 +97,7 @@ public class PurchaseViewModel : ObservableObject
     {
         await RefreshEditPolicyAsync();
         await InitializePurchasesAsync();
+        await TryApplyPendingPurchaseOrderReceiveAsync();
     }
 
     private async Task RefreshEditPolicyAsync()
@@ -151,6 +157,24 @@ public class PurchaseViewModel : ObservableObject
     public bool IsBillReadOnly => IsEditing && !AllowEditPurchaseBills;
 
     public bool IsEditing => _editingPurchaseId.HasValue;
+
+    public int? LinkedPurchaseOrderId
+    {
+        get => _linkedPurchaseOrderId;
+        private set
+        {
+            if (SetProperty(ref _linkedPurchaseOrderId, value))
+                OnPropertyChanged(nameof(HasLinkedPurchaseOrder));
+        }
+    }
+
+    public string? LinkedPurchaseOrderNumber
+    {
+        get => _linkedPurchaseOrderNumber;
+        private set => SetProperty(ref _linkedPurchaseOrderNumber, value);
+    }
+
+    public bool HasLinkedPurchaseOrder => LinkedPurchaseOrderId is > 0;
 
     #region Supplier
 
@@ -590,6 +614,61 @@ public class PurchaseViewModel : ObservableObject
         RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault());
     }
 
+    private async Task TryApplyPendingPurchaseOrderReceiveAsync()
+    {
+        var draft = _poReceiveBridge.TakePending();
+        if (draft is null) return;
+
+        try
+        {
+            NewPurchase();
+            SelectedSupplier = new SupplierLookupDto(
+                draft.SupplierId, draft.SupplierName, null, null, 0);
+            LinkedPurchaseOrderId = draft.PurchaseOrderId;
+            LinkedPurchaseOrderNumber = draft.OrderNumber;
+
+            foreach (var line in Lines.ToList())
+            {
+                line.Changed -= RecalculateTotals;
+                Lines.Remove(line);
+            }
+
+            foreach (var poLine in draft.Lines)
+            {
+                var medicine = await _purchaseService.GetMedicineAsync(poLine.MedicineId)
+                    ?? new PurchaseMedicineDto(
+                        poLine.MedicineId,
+                        poLine.MedicineName,
+                        poLine.GenericName,
+                        null,
+                        poLine.GstPercent,
+                        poLine.EstimatedPrice,
+                        poLine.Mrp,
+                        poLine.SellingPrice);
+
+                var row = PurchaseLineViewModel.CreateEmpty();
+                row.Changed += RecalculateTotals;
+                row.ApplyMedicine(medicine);
+                row.Quantity = poLine.RemainingQuantity;
+                if (poLine.EstimatedPrice > 0) row.PurchasePrice = poLine.EstimatedPrice;
+                if (poLine.Mrp > 0) row.Mrp = poLine.Mrp;
+                if (poLine.SellingPrice > 0) row.SellingPrice = poLine.SellingPrice;
+                if (poLine.GstPercent > 0) row.GstPercent = poLine.GstPercent;
+                Lines.Add(row);
+            }
+
+            EnsureTrailingEmptyRow();
+            RecalculateTotals();
+            StatusMessage =
+                $"Receiving PO {draft.OrderNumber}: {Lines.Count(l => !l.IsEmpty)} line(s). Enter batch/expiry, then Save (F9).";
+            RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault());
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+    }
+
     private void EnsureTrailingEmptyRow()
     {
         if (Lines.Count == 0 || !Lines[^1].IsEmpty)
@@ -790,6 +869,7 @@ public class PurchaseViewModel : ObservableObject
                         PartialPaymentReason = partialReason,
                         PartialPaymentNotes = partialNotes,
                         LinkedPurchaseReturnId = linkedReturnId,
+                        PurchaseOrderId = LinkedPurchaseOrderId,
                         Lines = lineRequests
                     }, _currentUser.CurrentUser?.BranchId);
                 }
@@ -872,6 +952,8 @@ public class PurchaseViewModel : ObservableObject
         PaidAmount = 0;
         _headerGrandTotal = 0;
         _editingPurchaseId = null;
+        LinkedPurchaseOrderId = null;
+        LinkedPurchaseOrderNumber = null;
         _lastDropdownPurchaseId = 0;
         OnPropertyChanged(nameof(IsEditing));
         OnPropertyChanged(nameof(CanModifyBill));
