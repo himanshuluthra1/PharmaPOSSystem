@@ -59,7 +59,7 @@
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120" />
                                         <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="Auto" />
-                                        <DataGridTextColumn Header="GST" Binding="{Binding GstNumber}" Width="Auto" />
+                                        <DataGridTextColumn Header="GST number" Binding="{Binding GstNumber}" Width="Auto" />
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </StackPanel>

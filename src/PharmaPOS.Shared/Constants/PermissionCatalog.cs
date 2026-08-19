@@ -11,6 +11,8 @@ public static class PermissionCatalog
         // Sales
         new(AppConstants.Permissions.SalesView, "View Sales & Search Bills", "Sales"),
         new(AppConstants.Permissions.SalesCreate, "Create & Save Invoices", "Sales"),
+        new(AppConstants.Permissions.SalesEdit, "Edit Unlocked Sale Invoices", "Sales"),
+        new(AppConstants.Permissions.SalesUnlock, "Unlock Sale Invoices for Edit", "Sales"),
         new(AppConstants.Permissions.SalesDiscount, "Apply Line Discounts", "Sales"),
         new(AppConstants.Permissions.SalesPrint, "Print Invoices", "Sales"),
         new(AppConstants.Permissions.SalesManage, "Full Sales Access", "Sales"),
@@ -22,6 +24,8 @@ public static class PermissionCatalog
         // Purchase
         new(AppConstants.Permissions.PurchaseView, "View Purchases", "Purchase"),
         new(AppConstants.Permissions.PurchaseCreate, "Create & Receive Stock", "Purchase"),
+        new(AppConstants.Permissions.PurchaseEdit, "Edit Unlocked Purchase Invoices", "Purchase"),
+        new(AppConstants.Permissions.PurchaseUnlock, "Unlock Purchase Invoices for Edit", "Purchase"),
         new(AppConstants.Permissions.PurchaseSearch, "Search Purchase Bills", "Purchase"),
         new(AppConstants.Permissions.PurchaseManage, "Full Purchase Access", "Purchase"),
         new(AppConstants.Permissions.PurchaseReturn, "Process Purchase Returns", "Purchase"),

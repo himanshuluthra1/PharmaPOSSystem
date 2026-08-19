@@ -6,7 +6,8 @@
              d:DataContext="{d:DesignInstance Type=invVm:InventoryViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             SizeChanged="UserControl_SizeChanged">
     <UserControl.Resources>
         <Style x:Key="InvDataGrid" TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
             <Setter Property="AutoGenerateColumns" Value="False" />
@@ -74,7 +75,7 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,8">
+                            <UniformGrid x:Name="StockKpiGrid" Grid.Row="0" Columns="4" Margin="0,0,0,8">
                                 <StackPanel Margin="4,0">
                                     <TextBlock Text="Medicines" Style="{StaticResource KpiLabel}" />
                                     <TextBlock Text="{Binding Summary.TotalMedicines}" Style="{StaticResource KpiValue}" />
@@ -95,7 +96,7 @@
                                 </StackPanel>
                             </UniformGrid>
 
-                            <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                            <DockPanel Grid.Row="1" Margin="0,0,0,6" LastChildFill="True">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                     <Button Command="{Binding ScanBarcodeCameraCommand}"
                                             Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
@@ -103,14 +104,14 @@
                                         <materialDesign:PackIcon Kind="BarcodeScan" Width="14" Height="14" />
                                     </Button>
                                     <Button Command="{Binding DataContext.ViewLedgerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Style="{StaticResource InvToolbarButton}" Margin="4,0,0,0"
+                                            Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
                                             ToolTip="View ledger for selected batch">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="BookOpenPageVariant" Width="14" Height="14" VerticalAlignment="Center" />
                                             <TextBlock Text="Ledger" Margin="4,0,0,0" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Button>
-                                    <ComboBox Width="140" Margin="4,0,0,0"
+                                    <ComboBox Width="140"
                                               ItemsSource="{Binding FilterOptions}"
                                               SelectedItem="{Binding SelectedFilter}"
                                               DisplayMemberPath="Label"
@@ -119,6 +120,7 @@
                                 </StackPanel>
                                 <TextBox materialDesign:HintAssist.Hint="Search medicine, batch, barcode..."
                                          Style="{StaticResource InvOutlinedBox}"
+                                         Margin="0,0,8,0"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                             </DockPanel>
 
@@ -130,7 +132,7 @@
                                     <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="100" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" />
                                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="72" />
-                                    <DataGridTextColumn Header="Qty" Binding="{Binding QuantityAvailable}" Width="55" />
+                                    <DataGridTextColumn Header="Quantity" Binding="{Binding QuantityAvailable}" Width="55" />
                                     <DataGridTextColumn Header="Total" Binding="{Binding MedicineTotalQty}" Width="55" />
                                     <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
                                     <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
@@ -177,8 +179,8 @@
                                     <DataGridTextColumn Header="Type" Binding="{Binding MovementTypeLabel}" Width="100" />
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="120" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="80" />
-                                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="55" />
-                                    <DataGridTextColumn Header="Bal" Binding="{Binding BalanceAfter}" Width="55" />
+                                    <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="55" />
+                                    <DataGridTextColumn Header="Balance" Binding="{Binding BalanceAfter}" Width="55" />
                                     <DataGridTextColumn Header="Ref" Binding="{Binding ReferenceNumber}" Width="115" />
                                     <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="100" />
                                 </DataGrid.Columns>
@@ -393,7 +395,7 @@
                                     <DataGridTextColumn Header="From" Binding="{Binding FromBranchName}" Width="*" MinWidth="100" />
                                     <DataGridTextColumn Header="To" Binding="{Binding ToBranchName}" Width="*" MinWidth="100" />
                                     <DataGridTextColumn Header="Lines" Binding="{Binding LineCount}" Width="55" />
-                                    <DataGridTextColumn Header="Qty" Binding="{Binding TotalQuantity}" Width="60" />
+                                    <DataGridTextColumn Header="Quantity" Binding="{Binding TotalQuantity}" Width="60" />
                                     <DataGridTextColumn Header="Direction" Binding="{Binding DirectionLabel}" Width="80" />
                                     <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="80" />
                                 </DataGrid.Columns>
@@ -412,7 +414,7 @@
                                     <DataGridTextColumn Header="Barcode" Binding="{Binding MedicineBarcode}" Width="110" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
                                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" />
-                                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="60" />
+                                    <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="60" />
                                     <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
                                     <DataGridTextColumn Header="P.Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
                                 </DataGrid.Columns>

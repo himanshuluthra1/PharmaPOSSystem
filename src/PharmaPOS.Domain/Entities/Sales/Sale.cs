@@ -42,6 +42,11 @@ public class Sale : BranchEntity
     public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Unpaid;
     public string? Remarks { get; set; }
 
+    /// <summary>When true, invoice lines/header cannot be changed until unlocked.</summary>
+    public bool IsLocked { get; set; }
+    public DateTime? LockedAtUtc { get; set; }
+    public string? LockedBy { get; set; }
+
     /// <summary>Billing counter that collected this sale (multi-counter shops).</summary>
     public int? CounterId { get; set; }
     public BillingCounter? Counter { get; set; }

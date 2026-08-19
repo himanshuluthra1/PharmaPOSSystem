@@ -7,6 +7,7 @@ using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Application.Features.ReportingSync;
+using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Purchases;
@@ -22,17 +23,20 @@ public class PurchaseService : IPurchaseService
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
     private readonly IReportingSyncService _reportingSync;
+    private readonly ICurrentUserService _currentUser;
 
     public PurchaseService(
         IUnitOfWork uow,
         IDateTimeProvider clock,
         ISettingsService settings,
-        IReportingSyncService reportingSync)
+        IReportingSyncService reportingSync,
+        ICurrentUserService currentUser)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
         _reportingSync = reportingSync;
+        _currentUser = currentUser;
     }
 
     public async Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
@@ -171,6 +175,9 @@ public class PurchaseService : IPurchaseService
             PartialPaymentNotes = purchase.PartialPaymentNotes,
             LinkedReturnNumber = purchase.LinkedPurchaseReturn?.ReturnNumber,
             PaymentMethod = PaymentMethod.Cash,
+            IsLocked = purchase.IsLocked,
+            LockedBy = purchase.LockedBy,
+            LockedAtUtc = purchase.LockedAtUtc,
             Lines = purchase.Items.Select(i =>
             {
                 medNames.TryGetValue(i.MedicineId, out var medicineName);
@@ -329,6 +336,10 @@ public class PurchaseService : IPurchaseService
             return Result.Failure<PurchaseReceiptDto>(
                 "Editing purchase bills is turned off. An admin can enable it under Settings → Preferences.");
 
+        if (!CanEditPurchases())
+            return Result.Failure<PurchaseReceiptDto>(
+                "You do not have permission to edit purchase invoices.");
+
         try
         {
             var purchase = await _uow.ExecuteInTransactionAsync(
@@ -348,6 +359,39 @@ public class PurchaseService : IPurchaseService
         }
     }
 
+    public async Task<Result> UnlockPurchaseAsync(int purchaseId, int? branchId, CancellationToken ct = default)
+    {
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        if (!prefs.AllowEditPurchaseBills)
+            return Result.Failure(
+                "Editing purchase bills is turned off. An admin can enable it under Settings → Preferences.");
+
+        if (!CanUnlockPurchases())
+            return Result.Failure("You do not have permission to unlock purchase invoices.");
+
+        try
+        {
+            var purchase = await _uow.Repository<Purchase>().Query()
+                .FirstOrDefaultAsync(p => p.Id == purchaseId && p.Status == PurchaseStatus.Received, ct);
+
+            if (purchase is null)
+                return Result.Failure("Purchase invoice not found.");
+            if (branchId.HasValue && purchase.BranchId != branchId)
+                return Result.Failure("Purchase belongs to another branch.");
+            if (!purchase.IsLocked)
+                return Result.Success();
+
+            ClearInvoiceLock(purchase);
+            _uow.Repository<Purchase>().Update(purchase);
+            await _uow.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Could not unlock the purchase: {ex.Message}");
+        }
+    }
+
     private async Task<Purchase> UpdateAndPersistPurchaseAsync(UpdatePurchaseRequest request, int? branchId, CancellationToken ct)
     {
         var purchase = await _uow.Repository<Purchase>().Query()
@@ -357,6 +401,9 @@ public class PurchaseService : IPurchaseService
 
         if (branchId.HasValue && purchase.BranchId != branchId)
             throw new PurchaseException("Purchase belongs to another branch.");
+        if (purchase.IsLocked)
+            throw new PurchaseException(
+                "This purchase is locked. A user with unlock permission must unlock it before editing.");
 
         var oldSupplier = await _uow.Repository<Supplier>().GetByIdAsync(purchase.SupplierId, ct)
             ?? throw new PurchaseException("The original supplier no longer exists.");
@@ -386,6 +433,7 @@ public class PurchaseService : IPurchaseService
 
         AdjustSupplierBalance(newSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: false);
 
+        ApplyInvoiceLock(purchase);
         _uow.Repository<Purchase>().Update(purchase);
         if (newSupplier.Id != oldSupplier.Id)
             _uow.Repository<Supplier>().Update(oldSupplier);
@@ -472,6 +520,7 @@ public class PurchaseService : IPurchaseService
             Status = PurchaseStatus.Received,
             PurchaseOrderId = request.PurchaseOrderId is int linkedPo and > 0 ? linkedPo : null
         };
+        ApplyInvoiceLock(purchase);
 
         var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
         ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
@@ -815,5 +864,32 @@ public class PurchaseService : IPurchaseService
         };
 
         return Result.Success(receipt);
+    }
+
+    private bool CanEditPurchases() =>
+        _currentUser.HasAnyPermission(AppConstants.Permissions.PurchaseEdit, AppConstants.Permissions.PurchaseManage);
+
+    private bool CanUnlockPurchases() =>
+        _currentUser.HasAnyPermission(AppConstants.Permissions.PurchaseUnlock, AppConstants.Permissions.PurchaseManage);
+
+    private string CurrentActor()
+    {
+        var user = _currentUser.CurrentUser;
+        if (user is null) return "system";
+        return string.IsNullOrWhiteSpace(user.Username) ? user.FullName : user.Username;
+    }
+
+    private void ApplyInvoiceLock(Purchase purchase)
+    {
+        purchase.IsLocked = true;
+        purchase.LockedAtUtc = _clock.UtcNow;
+        purchase.LockedBy = CurrentActor();
+    }
+
+    private static void ClearInvoiceLock(Purchase purchase)
+    {
+        purchase.IsLocked = false;
+        purchase.LockedAtUtc = null;
+        purchase.LockedBy = null;
     }
 }

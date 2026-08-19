@@ -15,8 +15,8 @@
         </Grid.RowDefinitions>
 
         <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
-            <DockPanel>
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+            <DockPanel LastChildFill="True">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
                     <Button Margin="0,0,8,0" Command="{Binding RefreshCommand}"
                             Style="{StaticResource MaterialDesignOutlinedButton}" Content="Refresh" Padding="14,8" />
                     <Button Margin="0,0,8,0" Command="{Binding GenerateReorderCommand}"
@@ -26,15 +26,16 @@
                 </StackPanel>
                 <StackPanel>
                     <TextBlock Text="Purchase Orders" FontSize="20" FontWeight="Bold" />
-                    <TextBlock Text="Draft, confirm, and receive goods against open purchase orders." Opacity="0.7" Margin="0,2,0,0" />
+                    <TextBlock Text="Draft, confirm, and receive goods against open purchase orders."
+                               Opacity="0.7" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
             </DockPanel>
         </materialDesign:Card>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="380" MinWidth="300" />
-                <ColumnDefinition Width="*" MinWidth="520" />
+                <ColumnDefinition Width="280" MinWidth="200" />
+                <ColumnDefinition Width="*" MinWidth="280" />
             </Grid.ColumnDefinitions>
 
             <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="10">
@@ -106,7 +107,7 @@
                                      Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
                                      PreviewKeyDown="SupplierBox_PreviewKeyDown"
                                      LostFocus="SupplierBox_LostFocus" />
-                            <Popup IsOpen="{Binding ShowSupplierResults}" PlacementTarget="{Binding ElementName=SupplierBox}"
+                            <Popup IsOpen="{Binding ShowSupplierResults, Mode=OneWay}" PlacementTarget="{Binding ElementName=SupplierBox}"
                                    Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
                                 <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="{DynamicResource MaterialDesignDivider}"
                                         BorderThickness="1" MaxHeight="180" MinWidth="280">
@@ -151,7 +152,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" IsReadOnly="True" Width="*" MinWidth="160" />
                                 <DataGridTextColumn Header="Salt" Binding="{Binding GenericName}" IsReadOnly="True" Width="120" />
-                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="70" />
                                 <DataGridTextColumn Header="Received" Binding="{Binding ReceivedQuantity}" IsReadOnly="True" Width="80" />
                                 <DataGridTextColumn Header="Remaining" Binding="{Binding RemainingQuantity}" IsReadOnly="True" Width="80" />
                                 <DataGridTextColumn Header="Est. price" Binding="{Binding EstimatedPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="90" />

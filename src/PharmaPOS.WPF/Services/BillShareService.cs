@@ -59,7 +59,7 @@ public sealed class BillShareService : IBillShareService
         var cfg = _settings.Current;
         if (!cfg.AskAfterSave) return false;
         if (!cfg.EnableWhatsApp && !cfg.EnableSms) return false;
-        return !string.IsNullOrWhiteSpace(NormalizePhone(receipt.CustomerPhone));
+        return receipt is not null;
     }
 
     public void OfferShareAfterSave(SaleReceiptDto receipt)
@@ -67,23 +67,33 @@ public sealed class BillShareService : IBillShareService
         if (!ShouldOfferAfterSave(receipt)) return;
 
         var cfg = _settings.Current;
-        var phone = NormalizePhone(receipt.CustomerPhone)!;
-        var displayPhone = FormatDisplayPhone(phone);
-
         var window = new BillSharePromptWindow(
             receipt.InvoiceNumber,
-            displayPhone,
+            receipt.CustomerPhone,
             cfg.EnableWhatsApp,
-            cfg.EnableSms)
+            cfg.EnableSms);
+
+        var owner = System.Windows.Application.Current?.MainWindow;
+        if (owner is not null && owner.IsLoaded && owner.IsVisible && !ReferenceEquals(owner, window))
         {
-            Owner = System.Windows.Application.Current.MainWindow
-        };
+            try { window.Owner = owner; }
+            catch { /* Owner cannot be set (e.g. closing / same window) */ }
+        }
+
+        if (window.Owner is null)
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         if (window.ShowDialog() != true || window.SelectedChannel == BillShareChannel.None)
             return;
 
+        var phone = NormalizePhone(window.EnteredPhone);
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            _dialog.ShowError("Enter a valid 10-digit mobile number to send the bill.");
+            return;
+        }
+
         var channel = window.SelectedChannel;
-        // Return immediately so Save can reset the bill form; upload/share continue in background.
         _ = ShareInBackgroundAsync(receipt, channel, phone, cfg);
     }
 
@@ -253,11 +263,6 @@ public sealed class BillShareService : IBillShareService
 
         return null;
     }
-
-    private static string FormatDisplayPhone(string normalized)
-        => normalized.StartsWith("91", StringComparison.Ordinal) && normalized.Length == 12
-            ? $"+91 {normalized[2..7]} {normalized[7..]}"
-            : $"+{normalized}";
 
     private static async Task OpenWhatsAppAndPasteAsync(string phoneDigits, string message)
     {

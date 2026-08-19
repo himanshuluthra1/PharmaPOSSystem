@@ -6,7 +6,8 @@
              d:DataContext="{d:DesignInstance Type=acctVm:AccountingViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             SizeChanged="UserControl_SizeChanged">
     <UserControl.Resources>
         <Style x:Key="AcctDataGrid" TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
             <Setter Property="AutoGenerateColumns" Value="False" />
@@ -63,7 +64,7 @@
                 </DockPanel>
 
                 <!-- KPI strip -->
-                <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8">
+                <UniformGrid x:Name="AcctKpiGrid" DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8">
                     <StackPanel Margin="4,0">
                         <TextBlock Text="Receivables" Style="{StaticResource KpiLabel}" />
                         <TextBlock Text="{Binding Summary.TotalReceivables, Converter={StaticResource Currency}}"
@@ -99,10 +100,10 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                     <Button Command="{Binding DataContext.RecordPaymentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Style="{StaticResource AcctToolbarButton}" Margin="4,0,0,0"
+                                            Style="{StaticResource AcctToolbarButton}" Margin="0,0,4,0"
                                             ToolTip="Record supplier payment">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="CashMinus" Width="14" Height="14" VerticalAlignment="Center" />
@@ -110,7 +111,7 @@
                                         </StackPanel>
                                     </Button>
                                     <Button Command="{Binding DataContext.RecordReceiptCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Style="{StaticResource AcctToolbarButton}" Margin="4,0,0,0"
+                                            Style="{StaticResource AcctToolbarButton}" Margin="0,0,4,0"
                                             ToolTip="Record customer receipt">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="CashPlus" Width="14" Height="14" VerticalAlignment="Center" />
@@ -118,25 +119,26 @@
                                         </StackPanel>
                                     </Button>
                                     <Button Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}"
-                                            Width="30" Height="30" Margin="4,0,0,0" ToolTip="Refresh">
+                                            Width="30" Height="30" ToolTip="Refresh">
                                         <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
                                     </Button>
                                 </StackPanel>
-                                <ComboBox Width="160" Margin="0,0,6,0"
+                                <ComboBox DockPanel.Dock="Left" Width="140" Margin="0,0,6,0"
                                           ItemsSource="{Binding KindOptions}"
                                           SelectedItem="{Binding SelectedKind}"
                                           DisplayMemberPath="Label"
                                           Style="{StaticResource AcctOutlinedCombo}" />
                                 <TextBox materialDesign:HintAssist.Hint="Search party..."
                                          Style="{StaticResource AcctOutlinedBox}"
+                                         Margin="0,0,6,0"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                             </DockPanel>
 
                             <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1.35*" MinWidth="280" />
+                                    <ColumnDefinition Width="1.35*" MinWidth="200" />
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" MinWidth="240" />
+                                    <ColumnDefinition Width="*" MinWidth="180" />
                                 </Grid.ColumnDefinitions>
 
                                 <DataGrid Grid.Column="0" Style="{StaticResource AcctDataGrid}"
@@ -158,7 +160,7 @@
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="110" />
                                             <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="90" />
-                                            <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="75" />
+                                            <DataGridTextColumn Header="Balance due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="75" />
                                             <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="75" />
                                         </DataGrid.Columns>
                                     </DataGrid>
@@ -263,7 +265,7 @@
                                     <DataGridCheckBoxColumn Header="" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36" />
                                     <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="120" IsReadOnly="True" />
                                     <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="130" IsReadOnly="True" />
-                                    <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="90" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Balance due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="90" IsReadOnly="True" />
                                     <DataGridTextColumn Header="Apply" Binding="{Binding ApplyAmount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="90" />
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -326,8 +328,8 @@
                                     <DataGridTextColumn Header="Date" Binding="{Binding EntryDateLabel}" Width="90" />
                                     <DataGridTextColumn Header="Voucher" Binding="{Binding VoucherNumber}" Width="120" />
                                     <DataGridTextColumn Header="Narration" Binding="{Binding Narration}" Width="*" MinWidth="140" />
-                                    <DataGridTextColumn Header="Dr" Binding="{Binding Debit, StringFormat=N2}" Width="80" />
-                                    <DataGridTextColumn Header="Cr" Binding="{Binding Credit, StringFormat=N2}" Width="80" />
+                                    <DataGridTextColumn Header="Debit" Binding="{Binding Debit, StringFormat=N2}" Width="80" />
+                                    <DataGridTextColumn Header="Credit" Binding="{Binding Credit, StringFormat=N2}" Width="80" />
                                     <DataGridTextColumn Header="Balance" Binding="{Binding RunningBalance, StringFormat=N2}" Width="90" />
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -369,7 +371,7 @@
                                         <DataGridTextColumn Header="Voucher" Binding="{Binding VoucherNumber}" Width="115" />
                                         <DataGridTextColumn Header="Date" Binding="{Binding EntryDateLabel}" Width="85" />
                                         <DataGridTextColumn Header="Type" Binding="{Binding ReferenceType}" Width="80" />
-                                        <DataGridTextColumn Header="Amt" Binding="{Binding TotalAmount, StringFormat=N2}" Width="75" />
+                                        <DataGridTextColumn Header="Amount" Binding="{Binding TotalAmount, StringFormat=N2}" Width="75" />
                                         <DataGridTextColumn Header="Narration" Binding="{Binding Narration}" Width="*" MinWidth="100" />
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -383,8 +385,8 @@
                                     <DataGrid Style="{StaticResource AcctDataGrid}" ItemsSource="{Binding Lines}">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Account" Binding="{Binding AccountName}" Width="*" MinWidth="100" />
-                                            <DataGridTextColumn Header="Dr/Cr" Binding="{Binding EntryTypeLabel}" Width="44" />
-                                            <DataGridTextColumn Header="Amt" Binding="{Binding Amount, StringFormat=N2}" Width="75" />
+                                            <DataGridTextColumn Header="Debit/Credit" Binding="{Binding EntryTypeLabel}" Width="44" />
+                                            <DataGridTextColumn Header="Amount" Binding="{Binding Amount, StringFormat=N2}" Width="75" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </DockPanel>

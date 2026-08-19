@@ -134,9 +134,10 @@ public static class FocusHighlight
             snap.BorderBrush = control.BorderBrush;
             snap.BorderThickness = control.BorderThickness;
 
-            control.SetCurrentValue(Control.BackgroundProperty, fill);
             control.SetCurrentValue(Control.BorderBrushProperty, BorderBrush);
             control.SetCurrentValue(Control.BorderThicknessProperty, new Thickness(2));
+            if (control is not DatePicker)
+                control.SetCurrentValue(Control.BackgroundProperty, fill);
         }
 
         Originals.Add(target, snap);
@@ -170,6 +171,8 @@ public static class FocusHighlight
         {
             if (ReferenceEquals(child, root)) continue;
             if (child is ButtonBase && root is not ButtonBase)
+                continue;
+            if (IsCalendarChrome(child))
                 continue;
 
             if (child is Border border)
@@ -287,6 +290,9 @@ public static class FocusHighlight
         return false;
     }
 
+    private static bool IsCalendarChrome(DependencyObject d) =>
+        d is Calendar or CalendarItem or CalendarButton or CalendarDayButton;
+
     private static bool IsDescendant(DependencyObject ancestor, DependencyObject? node)
     {
         for (var d = node; d is not null; d = GetParent(d))
@@ -309,6 +315,8 @@ public static class FocusHighlight
             var current = queue.Dequeue();
             yield return current;
             count++;
+            if (IsCalendarChrome(current) || current is Popup)
+                continue;
             var n = VisualTreeHelper.GetChildrenCount(current);
             for (var i = 0; i < n; i++)
                 queue.Enqueue(VisualTreeHelper.GetChild(current, i));

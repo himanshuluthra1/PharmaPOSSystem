@@ -8,6 +8,7 @@ using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Application.Features.ReportingSync;
+using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Sales;
@@ -33,17 +34,20 @@ public class SalesService : ISalesService
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
     private readonly IReportingSyncService _reportingSync;
+    private readonly ICurrentUserService _currentUser;
 
     public SalesService(
         IUnitOfWork uow,
         IDateTimeProvider clock,
         ISettingsService settings,
-        IReportingSyncService reportingSync)
+        IReportingSyncService reportingSync,
+        ICurrentUserService currentUser)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
         _reportingSync = reportingSync;
+        _currentUser = currentUser;
     }
 
     public async Task<MedicineLookupDto?> FindMedicineByBarcodeAsync(
@@ -332,6 +336,10 @@ public class SalesService : ISalesService
             return Result.Failure<SaleReceiptDto>(
                 "Editing sale bills is turned off. An admin can enable it under Settings → Preferences.");
 
+        if (!CanEditSales())
+            return Result.Failure<SaleReceiptDto>(
+                "You do not have permission to edit sale invoices.");
+
         try
         {
             var sale = await _uow.ExecuteInTransactionAsync(
@@ -348,6 +356,39 @@ public class SalesService : ISalesService
         catch (Exception ex)
         {
             return Result.Failure<SaleReceiptDto>($"Could not update the invoice: {ex.Message}");
+        }
+    }
+
+    public async Task<Result> UnlockSaleAsync(int saleId, int? branchId, CancellationToken ct = default)
+    {
+        var prefs = await _settings.GetPreferencesAsync(ct);
+        if (!prefs.AllowEditSalesBills)
+            return Result.Failure(
+                "Editing sale bills is turned off. An admin can enable it under Settings → Preferences.");
+
+        if (!CanUnlockSales())
+            return Result.Failure("You do not have permission to unlock sale invoices.");
+
+        try
+        {
+            var sale = await _uow.Repository<Sale>().Query()
+                .FirstOrDefaultAsync(s => s.Id == saleId && BillHistoryStatuses.Contains(s.Status), ct);
+
+            if (sale is null)
+                return Result.Failure("Invoice not found.");
+            if (branchId.HasValue && sale.BranchId != branchId)
+                return Result.Failure("Invoice belongs to another branch.");
+            if (!sale.IsLocked)
+                return Result.Success();
+
+            ClearInvoiceLock(sale);
+            _uow.Repository<Sale>().Update(sale);
+            await _uow.SaveChangesAsync(ct);
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"Could not unlock the invoice: {ex.Message}");
         }
     }
 
@@ -593,6 +634,9 @@ public class SalesService : ISalesService
             BillingCustomerAddress = sale.BillingCustomerAddress,
             BillingDoctorName = sale.BillingDoctorName,
             PaymentMethod = sale.Payments.OrderByDescending(p => p.Amount).FirstOrDefault()?.Method ?? PaymentMethod.Cash,
+            IsLocked = sale.IsLocked,
+            LockedBy = sale.LockedBy,
+            LockedAtUtc = sale.LockedAtUtc,
             Lines = sale.Items.Select(item =>
             {
                 var batchQty = item.MedicineBatchId is int bid && batches.TryGetValue(bid, out var batch)
@@ -750,6 +794,9 @@ public class SalesService : ISalesService
             throw new BillingException("Invoice not found or cannot be edited.");
         if (branchId.HasValue && sale.BranchId != branchId)
             throw new BillingException("Invoice belongs to another branch.");
+        if (sale.IsLocked)
+            throw new BillingException(
+                "This invoice is locked. A user with unlock permission must unlock it before editing.");
 
         var previousCustomerId = sale.CustomerId;
         var previousDue = DueOf(sale.GrandTotal, sale.PaidAmount);
@@ -787,6 +834,7 @@ public class SalesService : ISalesService
             sale.RewardPointsEarned - request.RewardPointsRedeemed,
             ct);
 
+        ApplyInvoiceLock(sale);
         _uow.Repository<Sale>().Update(sale);
         await _uow.SaveChangesAsync(ct);
         return sale;
@@ -840,6 +888,7 @@ public class SalesService : ISalesService
             CounterId = request.CounterId,
             CounterSessionId = request.CounterSessionId
         };
+        ApplyInvoiceLock(sale);
 
         await ApplySaleLinesAsync(sale, request.Lines, branchId, ct);
         ApplySalePayments(sale, request.Payments);
@@ -1146,7 +1195,15 @@ public class SalesService : ISalesService
         if (sale.CustomerId is int cid)
         {
             var c = await _uow.Repository<Customer>().GetByIdAsync(cid, ct);
-            if (c is not null) { customerName = c.Name; customerPhone = c.Phone; }
+            if (c is not null)
+            {
+                if (string.IsNullOrWhiteSpace(customerName) || customerName == "Walk-in Customer")
+                    customerName = c.Name;
+                else
+                    customerName = sale.BillingCustomerName ?? c.Name;
+                if (string.IsNullOrWhiteSpace(customerPhone))
+                    customerPhone = c.Phone;
+            }
         }
 
         string? doctorName = sale.BillingDoctorName;
@@ -1457,5 +1514,32 @@ public class SalesService : ISalesService
         }
 
         return null;
+    }
+
+    private bool CanEditSales() =>
+        _currentUser.HasAnyPermission(AppConstants.Permissions.SalesEdit, AppConstants.Permissions.SalesManage);
+
+    private bool CanUnlockSales() =>
+        _currentUser.HasAnyPermission(AppConstants.Permissions.SalesUnlock, AppConstants.Permissions.SalesManage);
+
+    private string CurrentActor()
+    {
+        var user = _currentUser.CurrentUser;
+        if (user is null) return "system";
+        return string.IsNullOrWhiteSpace(user.Username) ? user.FullName : user.Username;
+    }
+
+    private void ApplyInvoiceLock(Sale sale)
+    {
+        sale.IsLocked = true;
+        sale.LockedAtUtc = _clock.UtcNow;
+        sale.LockedBy = CurrentActor();
+    }
+
+    private static void ClearInvoiceLock(Sale sale)
+    {
+        sale.IsLocked = false;
+        sale.LockedAtUtc = null;
+        sale.LockedBy = null;
     }
 }

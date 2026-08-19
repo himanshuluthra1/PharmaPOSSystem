@@ -106,9 +106,9 @@
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
                 <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
+                <Setter Property="materialDesign:TransitionAssist.DisableTransitions" Value="True" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                        <Setter Property="Background" Value="{StaticResource FocusHighlightBrush}" />
                         <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
                         <Setter Property="BorderThickness" Value="2" />
                     </Trigger>
@@ -180,19 +180,34 @@
                 <Setter Property="BorderBrush" Value="#9E9E9E" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="6,2" />
-                <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="8,6" />
+                <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="4,4" />
             </Style>
 
             <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
                 <Setter Property="Height" Value="34" />
                 <Setter Property="MinHeight" Value="34" />
-                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Padding" Value="4,4" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
-                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="BorderBrush" Value="#BDBDBD" />
                 <Setter Property="BorderThickness" Value="0,0,1,1" />
+                <Setter Property="ToolTip" Value="{Binding Content, RelativeSource={RelativeSource Self}}" />
+                <Setter Property="ContentTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                     MaxHeight="22">
+                                <TextBlock Text="{Binding}"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="NoWrap"
+                                           TextTrimming="None" />
+                            </Viewbox>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
 
             <!-- DataGridTextColumn defaults to TwoWay; read-only columns must be OneWay. -->

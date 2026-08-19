@@ -45,6 +45,10 @@ public class SettingsViewModel : ObservableObject
         IMySqlSyncSettingsService mySqlSyncSettings,
         IMySqlReportingPublisher mySqlPublisher,
         IStoreIdentityService storeIdentity,
+        IPosUpdateService posUpdates,
+        IBackupSettingsService backupSettings,
+        IDatabaseBackupService databaseBackup,
+        IGoogleDriveBackupService googleDrive,
         IConfiguration configuration,
         IDialogService dialog)
     {
@@ -80,6 +84,8 @@ public class SettingsViewModel : ObservableObject
         Users = new UsersTabViewModel(settings, currentUser, dialog);
         ChangePassword = new ChangePasswordTabViewModel(auth, currentUser, dialog);
         Appearance = new AppearanceTabViewModel(theme);
+        ShopUpdates = new ShopUpdatesTabViewModel(posUpdates, dialog);
+        Backup = new BackupTabViewModel(backupSettings, databaseBackup, googleDrive, dialog);
 
         // Side nav lists only allowed sections — avoids TabControl header overflow / missing tabs.
         if (CanManageCompany) Sections.Add(new SettingsSection("Company", 0));
@@ -92,6 +98,7 @@ public class SettingsViewModel : ObservableObject
         if (CanManageUsers) Sections.Add(new SettingsSection("Users", 7));
         Sections.Add(new SettingsSection("My Password", 8));
         Sections.Add(new SettingsSection("Appearance", 9));
+        if (CanManagePreferences) Sections.Add(new SettingsSection("Backup", 10));
 
         _selectedSection = Sections[0];
         _selectedTab = _selectedSection.TabIndex;
@@ -102,6 +109,23 @@ public class SettingsViewModel : ObservableObject
             _ = RolePermissions.EnsureLoadedAsync();
         else if (CanManageUsers)
             _ = Users.EnsureLoadedAsync();
+
+        _ = InitVendorSectionAsync();
+    }
+
+    private async Task InitVendorSectionAsync()
+    {
+        try
+        {
+            await ShopUpdates.EnsureLoadedAsync();
+            if (!ShopUpdates.IsVendor) return;
+            if (Sections.Any(s => s.TabIndex == 11)) return;
+            Sections.Add(new SettingsSection("Shop updates", 11));
+        }
+        catch
+        {
+            // Vendor tab is optional when the VPS is unreachable.
+        }
     }
 
     public ObservableCollection<SettingsSection> Sections { get; } = new();
@@ -135,6 +159,8 @@ public class SettingsViewModel : ObservableObject
     public UsersTabViewModel Users { get; }
     public ChangePasswordTabViewModel ChangePassword { get; }
     public AppearanceTabViewModel Appearance { get; }
+    public ShopUpdatesTabViewModel ShopUpdates { get; }
+    public BackupTabViewModel Backup { get; }
 
     public int SelectedTab
     {
@@ -157,6 +183,8 @@ public class SettingsViewModel : ObservableObject
             case 4 when CanManageMedicineMapping: await MedicineMapping.EnsureLoadedAsync(); break;
             case 6 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
             case 7 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
+            case 10 when CanManagePreferences: await Backup.EnsureLoadedAsync(); break;
+            case 11: await ShopUpdates.EnsureLoadedAsync(); break;
         }
     }
 }

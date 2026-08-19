@@ -33,7 +33,7 @@
                 <DataGridTextColumn Header="Stock" Binding="{Binding QuantityAvailable, StringFormat=0.##}" Width="Auto" />
                 <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="Auto" />
                 <DataGridTextColumn Header="Sale Price" Binding="{Binding SellingPrice, StringFormat=N2}" Width="Auto" />
-                <DataGridTextColumn Header="GST%" Binding="{Binding GstPercent, StringFormat=N2}" Width="Auto" />
+                <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, StringFormat=N2}" Width="Auto" />
             </DataGrid.Columns>
         </DataGrid>
 

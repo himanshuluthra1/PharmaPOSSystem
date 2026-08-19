@@ -136,7 +136,7 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
-                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="60" />
+                    <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="60" />
                     <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity}" Width="60" />
                     <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
                     <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="90" />

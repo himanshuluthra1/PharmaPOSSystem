@@ -71,8 +71,8 @@
 
                     <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" MinWidth="520" />
-                            <ColumnDefinition Width="320" MinWidth="280" />
+                            <ColumnDefinition Width="*" MinWidth="280" />
+                            <ColumnDefinition Width="280" MinWidth="200" />
                         </Grid.ColumnDefinitions>
 
                         <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
@@ -130,7 +130,7 @@
                                         <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="70" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Purchased" Binding="{Binding Quantity, StringFormat=N0}" Width="70" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Avail" Binding="{Binding AvailableQty, StringFormat=N0}" Width="50" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Available" Binding="{Binding AvailableQty, StringFormat=N0}" Width="50" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Return Qty"
                                                             Binding="{Binding ReturnQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                             Width="80" />
@@ -245,8 +245,8 @@
 
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" MinWidth="520" />
-                            <ColumnDefinition Width="320" MinWidth="280" />
+                            <ColumnDefinition Width="*" MinWidth="280" />
+                            <ColumnDefinition Width="280" MinWidth="200" />
                         </Grid.ColumnDefinitions>
 
                         <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
@@ -272,7 +272,7 @@
                                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="70" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Stock" Binding="{Binding AvailableQty, StringFormat=N0}" Width="60" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Qty"
+                                        <DataGridTextColumn Header="Quantity"
                                                             Binding="{Binding ReturnQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                             Width="70" />
                                         <DataGridTextColumn Header="Free"
@@ -281,7 +281,7 @@
                                         <DataGridTextColumn Header="Rate"
                                                             Binding="{Binding PurchasePrice, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                             Width="80" />
-                                        <DataGridTextColumn Header="Disc %"
+                                        <DataGridTextColumn Header="Discount %"
                                                             Binding="{Binding DiscountPercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                             Width="60" />
                                         <DataGridTextColumn Header="GST %"
@@ -445,7 +445,7 @@
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName, Mode=OneWay}" Width="*" MinWidth="160" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, Mode=OneWay}" Width="100" />
                                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy, Mode=OneWay}" Width="70" />
-                                    <DataGridTextColumn Header="Qty" Binding="{Binding ReturnedQuantity, StringFormat=N0, Mode=OneWay}" Width="60" />
+                                    <DataGridTextColumn Header="Quantity" Binding="{Binding ReturnedQuantity, StringFormat=N0, Mode=OneWay}" Width="60" />
                                     <DataGridTextColumn Header="Free" Binding="{Binding ReturnedFreeQuantity, StringFormat=N0, Mode=OneWay}" Width="50" />
                                     <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2, Mode=OneWay}" Width="80" />
                                     <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, StringFormat=N0, Mode=OneWay}" Width="60" />

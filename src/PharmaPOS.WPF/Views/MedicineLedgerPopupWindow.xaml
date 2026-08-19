@@ -33,7 +33,7 @@
                 <DataGridTextColumn Header="Date" Binding="{Binding MovementDateLabel}" Width="150" />
                 <DataGridTextColumn Header="Type" Binding="{Binding MovementTypeLabel}" Width="120" />
                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
-                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat=0.##}" Width="70" />
+                <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity, StringFormat=0.##}" Width="70" />
                 <DataGridTextColumn Header="Balance" Binding="{Binding BalanceAfter, StringFormat=0.##}" Width="80" />
                 <DataGridTextColumn Header="Unit cost" Binding="{Binding UnitCost, StringFormat=N2}" Width="80" />
                 <DataGridTextColumn Header="Reference" Binding="{Binding ReferenceNumber}" Width="120" />

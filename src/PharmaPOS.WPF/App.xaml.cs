@@ -65,7 +65,18 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IReportingSyncGate>(sp => sp.GetRequiredService<MySqlSyncSettingsService>());
         services.AddSingleton<IStoreIdentityService, StoreIdentityService>();
         services.AddSingleton<IMySqlReportingPublisher, MySqlReportingPublisher>();
+        services.AddSingleton<IPosUpdateService, PosUpdateService>();
+        services.AddSingleton<IDataChangeSignal, DataChangeSignal>();
+        services.AddSingleton<IBackupSettingsService, BackupSettingsService>();
+        services.AddSingleton<IDatabaseBackupService, DatabaseBackupService>();
+        services.AddSingleton<IGoogleDriveBackupService, GoogleDriveBackupService>();
         services.AddHostedService<ReportingSyncWorker>();
+        services.AddHostedService<AppUpdateWorker>();
+        services.AddHostedService<BackupWorker>();
+        services.AddHttpClient("PosUpdates", client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(15);
+        });
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ICounterPickerUiService, CounterPickerUiService>();
         services.AddTransient<StoreCodeSetupWindow>();

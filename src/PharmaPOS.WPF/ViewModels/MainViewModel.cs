@@ -65,10 +65,10 @@ public class MainViewModel : ObservableObject
     public string BranchName => _currentUser.CurrentUser?.BranchName ?? "Head Office";
     public string StoreCodeDisplay =>
         string.IsNullOrWhiteSpace(_storeIdentity.StoreCode)
-            ? "Store code: (not set)"
+            ? $"v{AppConstants.ApplicationVersion}  ·  Store code: (not set)"
             : string.IsNullOrWhiteSpace(_storeIdentity.StoreId)
-                ? $"Store: {_storeIdentity.StoreCode}"
-                : $"Store: {_storeIdentity.StoreCode}  ·  ID: {_storeIdentity.StoreId}";
+                ? $"v{AppConstants.ApplicationVersion}  ·  Store: {_storeIdentity.StoreCode}"
+                : $"v{AppConstants.ApplicationVersion}  ·  Store: {_storeIdentity.StoreCode}  ·  ID: {_storeIdentity.StoreId}";
 
     public NavigationItem? SelectedItem
     {

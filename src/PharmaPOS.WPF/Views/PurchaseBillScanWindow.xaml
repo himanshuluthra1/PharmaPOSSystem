@@ -83,10 +83,10 @@
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="90" />
                         <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=dd/MM/yyyy, UpdateSourceTrigger=PropertyChanged}" Width="90" />
-                        <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                        <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="55" />
                         <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="70" />
                         <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="70" />
-                        <DataGridTextColumn Header="GST%" Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                        <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged}" Width="55" />
                         <DataGridTextColumn Header="OK" Binding="{Binding MatchStatus}" Width="50" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>

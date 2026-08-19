@@ -7,44 +7,57 @@ public partial class BillSharePromptWindow : Window
 {
     public BillSharePromptWindow(
         string invoiceNumber,
-        string displayPhone,
+        string? customerPhone,
         bool enableWhatsApp,
         bool enableSms)
     {
         InitializeComponent();
         Title = "Send bill to customer";
         InvoiceText.Text = $"Invoice {invoiceNumber}";
-        PhoneText.Text = $"Mobile: {displayPhone}";
-        HintText.Text = "WhatsApp: uploads the printable PDF to your VPS (if configured) and opens chat with bill text + download link. SMS can include the same link.";
+        HintText.Text = "WhatsApp / SMS the bill. Enter the customer mobile if it is blank.";
+        PhoneBox.Text = customerPhone ?? string.Empty;
 
         WhatsAppButton.Visibility = enableWhatsApp ? Visibility.Visible : Visibility.Collapsed;
         SmsButton.Visibility = enableSms ? Visibility.Visible : Visibility.Collapsed;
         BothButton.Visibility = enableWhatsApp && enableSms ? Visibility.Visible : Visibility.Collapsed;
+
+        Loaded += (_, _) =>
+        {
+            PhoneBox.Focus();
+            PhoneBox.CaretIndex = PhoneBox.Text.Length;
+        };
     }
 
     public BillShareChannel SelectedChannel { get; private set; } = BillShareChannel.None;
 
-    private void WhatsApp_Click(object sender, RoutedEventArgs e)
-    {
-        SelectedChannel = BillShareChannel.WhatsApp;
-        DialogResult = true;
-    }
+    public string EnteredPhone => PhoneBox.Text ?? string.Empty;
 
-    private void Sms_Click(object sender, RoutedEventArgs e)
-    {
-        SelectedChannel = BillShareChannel.Sms;
-        DialogResult = true;
-    }
+    private void WhatsApp_Click(object sender, RoutedEventArgs e) => Accept(BillShareChannel.WhatsApp);
 
-    private void Both_Click(object sender, RoutedEventArgs e)
-    {
-        SelectedChannel = BillShareChannel.Both;
-        DialogResult = true;
-    }
+    private void Sms_Click(object sender, RoutedEventArgs e) => Accept(BillShareChannel.Sms);
+
+    private void Both_Click(object sender, RoutedEventArgs e) => Accept(BillShareChannel.Both);
 
     private void Skip_Click(object sender, RoutedEventArgs e)
     {
         SelectedChannel = BillShareChannel.None;
         DialogResult = false;
+    }
+
+    private void Accept(BillShareChannel channel)
+    {
+        if (string.IsNullOrWhiteSpace(BillShareService.NormalizePhone(EnteredPhone)))
+        {
+            MessageBox.Show(
+                "Enter a valid 10-digit mobile number.",
+                "Mobile required",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            PhoneBox.Focus();
+            return;
+        }
+
+        SelectedChannel = channel;
+        DialogResult = true;
     }
 }

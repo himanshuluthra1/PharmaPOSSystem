@@ -148,6 +148,9 @@ public class PurchaseLoadDto
     public string? PartialPaymentNotes { get; set; }
     public string? LinkedReturnNumber { get; set; }
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
+    public bool IsLocked { get; set; }
+    public string? LockedBy { get; set; }
+    public DateTime? LockedAtUtc { get; set; }
     public List<PurchaseLoadLineDto> Lines { get; set; } = new();
 }
 

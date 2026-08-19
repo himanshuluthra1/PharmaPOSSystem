@@ -21,7 +21,7 @@
         <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="160" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -85,8 +85,8 @@
         <!-- Main split: invoice lines | return summary -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="560" />
-                <ColumnDefinition Width="340" MinWidth="300" />
+                <ColumnDefinition Width="*" MinWidth="280" />
+                <ColumnDefinition Width="280" MinWidth="200" />
             </Grid.ColumnDefinitions>
 
             <!-- Invoice lines + inspection -->
@@ -98,20 +98,8 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                        <StackPanel>
-                            <TextBlock Text="Invoice Items" FontSize="18" FontWeight="Bold" />
-                            <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.85">
-                                <Run Text="{Binding InvoiceNumber, StringFormat=Invoice: {0}, Mode=OneWay}" />
-                                <Run Text="  ·  " />
-                                <Run Text="{Binding InvoiceDateLabel, Mode=OneWay}" />
-                                <Run Text="  ·  " />
-                                <Run Text="{Binding CustomerName, StringFormat=Customer: {0}, Mode=OneWay}" />
-                                <Run Text="  ·  " />
-                                <Run Text="{Binding InvoiceStatus, Mode=OneWay}" />
-                            </TextBlock>
-                        </StackPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
                             <Button Command="{Binding ReturnEntireInvoiceCommand}"
                                     Style="{StaticResource MaterialDesignOutlinedButton}"
                                     Margin="0,0,8,0" Padding="12,6"
@@ -123,6 +111,18 @@
                                     Padding="12,6">
                                 <TextBlock Text="Clear" />
                             </Button>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="Invoice Items" FontSize="18" FontWeight="Bold" />
+                            <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.85" TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding InvoiceNumber, StringFormat=Invoice: {0}, Mode=OneWay}" />
+                                <Run Text="  ·  " />
+                                <Run Text="{Binding InvoiceDateLabel, Mode=OneWay}" />
+                                <Run Text="  ·  " />
+                                <Run Text="{Binding CustomerName, StringFormat=Customer: {0}, Mode=OneWay}" />
+                                <Run Text="  ·  " />
+                                <Run Text="{Binding InvoiceStatus, Mode=OneWay}" />
+                            </TextBlock>
                         </StackPanel>
                     </DockPanel>
 
@@ -147,9 +147,9 @@
                             <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" IsReadOnly="True" />
                             <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="70" IsReadOnly="True" />
                             <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Sold" Binding="{Binding SoldQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Already" Binding="{Binding AlreadyReturnedQuantity, StringFormat=N0}" Width="60" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Avail" Binding="{Binding AvailableReturnQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Sold qty" Binding="{Binding SoldQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Already returned" Binding="{Binding AlreadyReturnedQuantity, StringFormat=N0}" Width="60" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Available" Binding="{Binding AvailableReturnQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
                             <DataGridTextColumn Header="Return Qty"
                                                 Binding="{Binding ReturnQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                 Width="80"

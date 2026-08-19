@@ -6,7 +6,7 @@ namespace PharmaPOS.Shared.Constants;
 public static class AppConstants
 {
     public const string ApplicationName = "PharmaPOS";
-    public const string ApplicationVersion = "1.0.0";
+    public const string ApplicationVersion = "1.2.0";
 
     public static class Roles
     {
@@ -34,6 +34,8 @@ public static class AppConstants
         // Sales
         public const string SalesView = "sales.view";
         public const string SalesCreate = "sales.create";
+        public const string SalesEdit = "sales.edit";
+        public const string SalesUnlock = "sales.unlock";
         public const string SalesDiscount = "sales.discount";
         public const string SalesPrint = "sales.print";
         public const string SalesManage = "sales.manage";
@@ -45,6 +47,8 @@ public static class AppConstants
         // Purchase
         public const string PurchaseView = "purchase.view";
         public const string PurchaseCreate = "purchase.create";
+        public const string PurchaseEdit = "purchase.edit";
+        public const string PurchaseUnlock = "purchase.unlock";
         public const string PurchaseSearch = "purchase.search";
         public const string PurchaseManage = "purchase.manage";
         public const string PurchaseReturn = "purchase.return";

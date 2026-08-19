@@ -30,7 +30,19 @@ Outputs:
 
 - `artifacts\dist\PharmaPosDb_Master.bak` — masters-only backup
 - `artifacts\publish\win-x64\` — self-contained app (+ `Data\` backup)
-- `artifacts\installer\PharmaPOS-Setup-1.1.0.exe` — installer (if Inno Setup is installed)
+- `artifacts\installer\PharmaPOS-Setup-1.2.0.exe` — installer (if Inno Setup is installed)
+
+## Pushing an update to selected shops
+
+1. Build the installer (`.\scripts\build-installer.ps1`).
+2. On the **vendor PC** (store `STORE-001`), open **Settings → Shop updates**.
+3. Publish `PharmaPOS-Setup-x.y.z.exe` (SFTP must be set in Preferences; files go to `/var/www/html/updates`).
+4. Tick shops → **Send update to selected shops**.
+5. Those shops (on 1.2.0+) get a prompt the next time PharmaPOS is open.
+
+First time a shop is still on 1.1.0, install 1.2.0 once by USB/setup. Later versions can be pushed.
+
+VPS folder + nginx: see `docs/mysql/pos_updates.sql`.
 
 ## DistPrepare only
 

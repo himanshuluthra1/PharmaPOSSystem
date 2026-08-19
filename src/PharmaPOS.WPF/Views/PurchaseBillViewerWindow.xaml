@@ -96,11 +96,11 @@
                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="160" />
                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="80" />
-                    <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat=N0}" Width="60" />
+                    <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity, StringFormat=N0}" Width="60" />
                     <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity, StringFormat=N0}" Width="50" />
                     <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
                     <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="80" />
-                    <DataGridTextColumn Header="Disc %" Binding="{Binding DiscountPercent, StringFormat=N1}" Width="60" />
+                    <DataGridTextColumn Header="Discount %" Binding="{Binding DiscountPercent, StringFormat=N1}" Width="60" />
                     <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, StringFormat=N1}" Width="60" />
                     <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="90" />
                 </DataGrid.Columns>

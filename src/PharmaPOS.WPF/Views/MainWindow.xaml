@@ -9,6 +9,7 @@
         mc:Ignorable="d"
         PreviewKeyDown="MainWindow_PreviewKeyDown"
         Title="PharmaPOS" Height="768" Width="1280"
+        MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         Icon="/Assets/app.ico"
@@ -27,20 +28,8 @@
                                   materialDesign:ElevationAssist.Elevation="Dp4"
                                   Padding="16,8">
             <StackPanel>
-                <DockPanel>
-                    <materialDesign:PackIcon Kind="Pill" Width="28" Height="28"
-                                             VerticalAlignment="Center" />
-                    <TextBlock Text="PharmaPOS" FontSize="20" FontWeight="Bold"
-                               VerticalAlignment="Center" Margin="10,0,0,0" />
-                    <TextBlock Text="{Binding StoreCodeDisplay}" VerticalAlignment="Center"
-                               Margin="16,0,0,0"
-                               FontSize="13" FontWeight="SemiBold"
-                               Opacity="0.95" />
-                    <TextBlock Text="{Binding BranchName}" VerticalAlignment="Center"
-                               Margin="12,0,0,0" Opacity="0.75"
-                               FontSize="13" />
-
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <DockPanel LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <ToggleButton Style="{StaticResource MaterialDesignActionToggleButton}"
                                       ToolTip="Toggle dark / light theme"
                                       IsChecked="{Binding IsDarkMode}"
@@ -55,12 +44,14 @@
                             <materialDesign:PackIcon Kind="BellOutline" />
                         </Button>
 
-                        <StackPanel Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
                             <materialDesign:PackIcon Kind="AccountCircle" Width="28" Height="28"
                                                      VerticalAlignment="Center" />
                             <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" FontSize="13" />
-                                <TextBlock Text="{Binding RoleName}" FontSize="11" Opacity="0.8" />
+                                <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" FontSize="13"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                                <TextBlock Text="{Binding RoleName}" FontSize="11" Opacity="0.8"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="140" />
                             </StackPanel>
                         </StackPanel>
 
@@ -69,6 +60,22 @@
                             <materialDesign:PackIcon Kind="Logout" />
                         </Button>
                     </StackPanel>
+
+                    <WrapPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                        <materialDesign:PackIcon Kind="Pill" Width="28" Height="28"
+                                                 VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="PharmaPOS" FontSize="20" FontWeight="Bold"
+                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding StoreCodeDisplay}" VerticalAlignment="Center"
+                                   Margin="0,0,12,0"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   Opacity="0.95"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="160" />
+                        <TextBlock Text="{Binding BranchName}" VerticalAlignment="Center"
+                                   Opacity="0.75"
+                                   FontSize="13"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="160" />
+                    </WrapPanel>
                 </DockPanel>
 
                 <!-- Module shortcuts (updates with selected tab) -->

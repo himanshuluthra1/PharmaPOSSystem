@@ -42,6 +42,8 @@ public class PurchaseViewModel : ObservableObject
     private bool _isBusy;
     private string? _statusMessage;
     private bool _allowEditPurchaseBills;
+    private bool _isInvoiceLocked;
+    private string? _lockedBy;
 
     private PurchaseListItemDto? _selectedPurchase;
     private bool _suppressPurchaseSelection;
@@ -78,11 +80,16 @@ public class PurchaseViewModel : ObservableObject
         CanSearch = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseSearch, AppConstants.Permissions.PurchaseView,
             AppConstants.Permissions.PurchaseManage);
+        CanEditInvoices = currentUser.HasAnyPermission(
+            AppConstants.Permissions.PurchaseEdit, AppConstants.Permissions.PurchaseManage);
+        CanUnlockInvoices = currentUser.HasAnyPermission(
+            AppConstants.Permissions.PurchaseUnlock, AppConstants.Permissions.PurchaseManage);
 
         Lines.CollectionChanged += (_, _) => RecalculateTotals();
 
         RemoveLineCommand = new RelayCommand(p => RemoveLine(p as PurchaseLineViewModel), _ => CanModifyBill);
         SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && CanSave());
+        UnlockBillCommand = new AsyncRelayCommand(_ => UnlockBillAsync(), _ => CanUnlockBill);
         NewPurchaseCommand = new RelayCommand(_ => NewPurchase(), _ => CanCreate);
         ClearSupplierCommand = new RelayCommand(_ => ClearSupplier(), _ => CanModifyBill);
         SearchPurchasesCommand = new AsyncRelayCommand(_ => OpenPurchaseSearchAsync(), _ => CanSearch && !IsBusy);
@@ -129,6 +136,7 @@ public class PurchaseViewModel : ObservableObject
 
     public ICommand RemoveLineCommand { get; }
     public ICommand SaveCommand { get; }
+    public ICommand UnlockBillCommand { get; }
     public ICommand NewPurchaseCommand { get; }
     public ICommand ClearSupplierCommand { get; }
     public ICommand SearchPurchasesCommand { get; }
@@ -137,6 +145,8 @@ public class PurchaseViewModel : ObservableObject
 
     public bool CanCreate { get; }
     public bool CanSearch { get; }
+    public bool CanEditInvoices { get; }
+    public bool CanUnlockInvoices { get; }
 
     public bool AllowEditPurchaseBills
     {
@@ -144,19 +154,64 @@ public class PurchaseViewModel : ObservableObject
         private set
         {
             if (SetProperty(ref _allowEditPurchaseBills, value))
-            {
-                OnPropertyChanged(nameof(CanModifyBill));
-                OnPropertyChanged(nameof(IsBillReadOnly));
-                CommandManager.InvalidateRequerySuggested();
-            }
+                NotifyBillEditStateChanged();
         }
     }
 
-    public bool CanModifyBill => CanCreate && (!IsEditing || AllowEditPurchaseBills) && !IsBusy;
+    public bool IsInvoiceLocked
+    {
+        get => _isInvoiceLocked;
+        private set
+        {
+            if (SetProperty(ref _isInvoiceLocked, value))
+                NotifyBillEditStateChanged();
+        }
+    }
 
-    public bool IsBillReadOnly => IsEditing && !AllowEditPurchaseBills;
+    public string? LockedBy
+    {
+        get => _lockedBy;
+        private set
+        {
+            if (SetProperty(ref _lockedBy, value))
+                OnPropertyChanged(nameof(LockBannerText));
+        }
+    }
+
+    public string LockBannerText =>
+        string.IsNullOrWhiteSpace(LockedBy)
+            ? "This purchase is locked. Unlock it to make changes."
+            : $"This purchase is locked by {LockedBy}. Unlock it to make changes.";
+
+    public bool CanModifyBill =>
+        CanCreate
+        && (!IsEditing || (AllowEditPurchaseBills && CanEditInvoices && !IsInvoiceLocked))
+        && !IsBusy;
+
+    public bool IsBillReadOnly =>
+        IsEditing && !(AllowEditPurchaseBills && CanEditInvoices && !IsInvoiceLocked);
+
+    public bool ShowSaveButton =>
+        CanCreate && (!IsEditing || (AllowEditPurchaseBills && CanEditInvoices && !IsInvoiceLocked));
+
+    public bool CanUnlockBill =>
+        IsEditing && IsInvoiceLocked && AllowEditPurchaseBills && CanUnlockInvoices && !IsBusy;
+
+    public bool ShowLockBanner => IsEditing && IsInvoiceLocked && AllowEditPurchaseBills;
 
     public bool IsEditing => _editingPurchaseId.HasValue;
+
+    private void NotifyBillEditStateChanged()
+    {
+        OnPropertyChanged(nameof(IsEditing));
+        OnPropertyChanged(nameof(CanModifyBill));
+        OnPropertyChanged(nameof(IsBillReadOnly));
+        OnPropertyChanged(nameof(ShowSaveButton));
+        OnPropertyChanged(nameof(CanUnlockBill));
+        OnPropertyChanged(nameof(ShowLockBanner));
+        OnPropertyChanged(nameof(LockBannerText));
+        CommandManager.InvalidateRequerySuggested();
+    }
 
     public int? LinkedPurchaseOrderId
     {
@@ -399,9 +454,7 @@ public class PurchaseViewModel : ObservableObject
                 _selectedPurchase = purchase;
                 OnPropertyChanged(nameof(SelectedPurchase));
                 LoadPurchase(result.Value);
-                StatusMessage = AllowEditPurchaseBills
-                    ? $"Editing purchase {result.Value.InvoiceNumber}. Save to update."
-                    : $"Viewing purchase {result.Value.InvoiceNumber} (edit is off in Settings → Preferences).";
+                StatusMessage = BuildEditStatusMessage(result.Value.InvoiceNumber);
                 if (focusGridAfterLoad && !IsBillReadOnly)
                     RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault(l => l.IsEmpty));
             }
@@ -431,10 +484,9 @@ public class PurchaseViewModel : ObservableObject
         Lines.Clear();
 
         _editingPurchaseId = purchase.PurchaseId;
-        OnPropertyChanged(nameof(IsEditing));
-        OnPropertyChanged(nameof(CanModifyBill));
-        OnPropertyChanged(nameof(IsBillReadOnly));
-        CommandManager.InvalidateRequerySuggested();
+        IsInvoiceLocked = purchase.IsLocked;
+        LockedBy = purchase.LockedBy;
+        NotifyBillEditStateChanged();
 
         _headerGrandTotal = purchase.GrandTotal;
         SelectedSupplier = new SupplierLookupDto(
@@ -459,6 +511,17 @@ public class PurchaseViewModel : ObservableObject
         EnsureTrailingEmptyRow();
         RecalculateTotals();
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    private string BuildEditStatusMessage(string invoiceNumber)
+    {
+        if (!AllowEditPurchaseBills)
+            return $"Viewing purchase {invoiceNumber} (edit is off in Settings → Preferences).";
+        if (!CanEditInvoices)
+            return $"Viewing purchase {invoiceNumber} (your role cannot edit purchase invoices).";
+        if (IsInvoiceLocked)
+            return $"Purchase {invoiceNumber} is locked. Unlock to edit.";
+        return $"Editing purchase {invoiceNumber}. Save to update (re-locks on save).";
     }
 
     #endregion
@@ -761,6 +824,7 @@ public class PurchaseViewModel : ObservableObject
             if (SetProperty(ref _isBusy, value))
             {
                 OnPropertyChanged(nameof(CanModifyBill));
+                OnPropertyChanged(nameof(CanUnlockBill));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -952,12 +1016,12 @@ public class PurchaseViewModel : ObservableObject
         PaidAmount = 0;
         _headerGrandTotal = 0;
         _editingPurchaseId = null;
+        IsInvoiceLocked = false;
+        LockedBy = null;
         LinkedPurchaseOrderId = null;
         LinkedPurchaseOrderNumber = null;
         _lastDropdownPurchaseId = 0;
-        OnPropertyChanged(nameof(IsEditing));
-        OnPropertyChanged(nameof(CanModifyBill));
-        OnPropertyChanged(nameof(IsBillReadOnly));
+        NotifyBillEditStateChanged();
 
         RecalculateTotals();
         if (clearStatus)
@@ -965,5 +1029,41 @@ public class PurchaseViewModel : ObservableObject
 
         CommandManager.InvalidateRequerySuggested();
         RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => l.IsEmpty));
+    }
+
+    private async Task UnlockBillAsync()
+    {
+        if (_editingPurchaseId is not int purchaseId || !CanUnlockBill) return;
+
+        if (!_dialog.Confirm(
+                "Unlock this purchase for editing?\n\nIt will lock again after you save changes.",
+                "Unlock purchase"))
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _purchaseService.UnlockPurchaseAsync(
+                purchaseId, _currentUser.CurrentUser?.BranchId);
+            if (result.IsFailure)
+            {
+                _dialog.ShowError(result.Error ?? "Could not unlock the purchase.");
+                return;
+            }
+
+            IsInvoiceLocked = false;
+            LockedBy = null;
+            StatusMessage = "Purchase unlocked. Edit and save to update.";
+            NotifyBillEditStateChanged();
+            RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault());
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 }

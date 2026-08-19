@@ -12,6 +12,7 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
         b.Property(x => x.InvoiceNumber).HasMaxLength(40).IsRequired();
         b.HasIndex(x => x.InvoiceNumber).IsUnique();
         b.HasIndex(x => x.InvoiceDate);
+        b.Property(x => x.LockedBy).HasMaxLength(100);
 
         b.HasMany(x => x.Items).WithOne(i => i.Sale!)
             .HasForeignKey(i => i.SaleId).OnDelete(DeleteBehavior.Cascade);
@@ -73,6 +74,7 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
     {
         b.Property(x => x.InvoiceNumber).HasMaxLength(40).IsRequired();
         b.Property(x => x.PartialPaymentNotes).HasMaxLength(400);
+        b.Property(x => x.LockedBy).HasMaxLength(100);
         b.HasIndex(x => x.InvoiceNumber).IsUnique();
         b.HasIndex(x => x.InvoiceDate);
         b.HasIndex(x => x.LinkedPurchaseReturnId);

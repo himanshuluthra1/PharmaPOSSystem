@@ -36,6 +36,9 @@ public interface IPurchaseService
     /// <summary>Update a received purchase: reverses prior stock/payable, reapplies lines.</summary>
     Task<Result<PurchaseReceiptDto>> UpdatePurchaseAsync(UpdatePurchaseRequest request, int? branchId, CancellationToken ct = default);
 
+    /// <summary>Unlocks a locked purchase invoice so a user with edit permission can modify it.</summary>
+    Task<Result> UnlockPurchaseAsync(int purchaseId, int? branchId, CancellationToken ct = default);
+
     /// <summary>Supplier-credit returns with remaining credit for the given supplier.</summary>
     Task<List<OpenPurchaseReturnCreditDto>> ListOpenPurchaseReturnCreditsAsync(
         int supplierId, int? branchId, CancellationToken ct = default);

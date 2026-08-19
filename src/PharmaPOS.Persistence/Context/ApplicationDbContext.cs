@@ -20,18 +20,17 @@ public class ApplicationDbContext : DbContext
 {
     private readonly ICurrentUserService? _currentUser;
     private readonly IDateTimeProvider? _clock;
-
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
-    {
-    }
+    private readonly IDataChangeSignal? _dataChange;
 
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
-        ICurrentUserService currentUser,
-        IDateTimeProvider clock) : base(options)
+        ICurrentUserService? currentUser = null,
+        IDateTimeProvider? clock = null,
+        IDataChangeSignal? dataChange = null) : base(options)
     {
         _currentUser = currentUser;
         _clock = clock;
+        _dataChange = dataChange;
     }
 
     // Identity & security
@@ -106,16 +105,22 @@ public class ApplicationDbContext : DbContext
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         ApplyAuditInformation();
-        return base.SaveChangesAsync(cancellationToken);
+        var count = await base.SaveChangesAsync(cancellationToken);
+        if (count > 0)
+            _dataChange?.NotifyChanged();
+        return count;
     }
 
     public override int SaveChanges()
     {
         ApplyAuditInformation();
-        return base.SaveChanges();
+        var count = base.SaveChanges();
+        if (count > 0)
+            _dataChange?.NotifyChanged();
+        return count;
     }
 
     private void ApplyAuditInformation()

@@ -26,6 +26,9 @@ public interface ISalesService
 
     Task<Result<SaleReceiptDto>> UpdateSaleAsync(UpdateSaleRequest request, int? branchId, CancellationToken ct = default);
 
+    /// <summary>Unlocks a locked sale invoice so a user with edit permission can modify it.</summary>
+    Task<Result> UnlockSaleAsync(int saleId, int? branchId, CancellationToken ct = default);
+
     /// <summary>Preview of the next invoice number for a new bill (not reserved).</summary>
     Task<string> PreviewNextInvoiceNumberAsync(int? branchId, CancellationToken ct = default);
 

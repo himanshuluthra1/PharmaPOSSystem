@@ -6,7 +6,8 @@
              d:DataContext="{d:DesignInstance Type=vm:DashboardViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             SizeChanged="UserControl_SizeChanged">
     <UserControl.Resources>
         <!-- Reusable KPI card style -->
         <Style x:Key="KpiCard" TargetType="materialDesign:Card">
@@ -19,15 +20,9 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="8">
-            <DockPanel Margin="8,4,8,16">
-                <StackPanel>
-                    <TextBlock Text="{Binding Greeting}" FontSize="24" FontWeight="Bold" />
-                    <TextBlock Text="{Binding StoreCodeDisplay}" FontSize="14" FontWeight="SemiBold"
-                               Margin="0,4,0,0" Opacity="0.9" />
-                    <TextBlock Text="Here's what's happening in your store today"
-                               Opacity="0.6" Margin="0,2,0,0" />
-                </StackPanel>
-                <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+            <DockPanel Margin="8,4,8,16" LastChildFill="True">
+                <Button DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="8,0,0,0"
                         Style="{StaticResource MaterialDesignOutlinedButton}"
                         Command="{Binding RefreshCommand}">
                     <StackPanel Orientation="Horizontal">
@@ -35,6 +30,13 @@
                         <TextBlock Text="Refresh" Margin="6,0,0,0" />
                     </StackPanel>
                 </Button>
+                <StackPanel>
+                    <TextBlock Text="{Binding Greeting}" FontSize="24" FontWeight="Bold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding StoreCodeDisplay}" FontSize="14" FontWeight="SemiBold"
+                               Margin="0,4,0,0" Opacity="0.9" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="Here's what's happening in your store today"
+                               Opacity="0.6" Margin="0,2,0,0" TextWrapping="Wrap" />
+                </StackPanel>
             </DockPanel>
 
             <!-- Error banner -->
@@ -50,14 +52,14 @@
             </materialDesign:Card>
 
             <!-- Primary KPI row -->
-            <UniformGrid Columns="4">
+            <UniformGrid x:Name="PrimaryKpiGrid" Columns="4">
                 <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
-                        <DockPanel>
+                        <DockPanel LastChildFill="True">
                             <materialDesign:PackIcon Kind="CashMultiple" Width="26" Height="26"
-                                                     Foreground="#26A69A" />
-                            <TextBlock Text="Today's Sales" DockPanel.Dock="Right"
-                                       HorizontalAlignment="Right" Opacity="0.6" />
+                                                     Foreground="#26A69A" Margin="0,0,8,0" />
+                            <TextBlock Text="Today's Sales"
+                                       HorizontalAlignment="Right" Opacity="0.6" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <TextBlock Text="{Binding Data.TodaySales, Converter={StaticResource Currency}}"
                                    FontSize="24" FontWeight="Bold" Margin="0,12,0,0" />
@@ -68,11 +70,11 @@
 
                 <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
-                        <DockPanel>
+                        <DockPanel LastChildFill="True">
                             <materialDesign:PackIcon Kind="TruckDelivery" Width="26" Height="26"
-                                                     Foreground="#5C6BC0" />
-                            <TextBlock Text="Today's Purchase" DockPanel.Dock="Right"
-                                       HorizontalAlignment="Right" Opacity="0.6" />
+                                                     Foreground="#5C6BC0" Margin="0,0,8,0" />
+                            <TextBlock Text="Today's Purchase"
+                                       HorizontalAlignment="Right" Opacity="0.6" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <TextBlock Text="{Binding Data.TodayPurchase, Converter={StaticResource Currency}}"
                                    FontSize="24" FontWeight="Bold" Margin="0,12,0,0" />
@@ -81,11 +83,11 @@
 
                 <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
-                        <DockPanel>
+                        <DockPanel LastChildFill="True">
                             <materialDesign:PackIcon Kind="AccountGroup" Width="26" Height="26"
-                                                     Foreground="#FFA726" />
-                            <TextBlock Text="Today's Customers" DockPanel.Dock="Right"
-                                       HorizontalAlignment="Right" Opacity="0.6" />
+                                                     Foreground="#FFA726" Margin="0,0,8,0" />
+                            <TextBlock Text="Today's Customers"
+                                       HorizontalAlignment="Right" Opacity="0.6" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <TextBlock Text="{Binding Data.TodayCustomers}"
                                    FontSize="24" FontWeight="Bold" Margin="0,12,0,0" />
@@ -94,11 +96,11 @@
 
                 <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
-                        <DockPanel>
+                        <DockPanel LastChildFill="True">
                             <materialDesign:PackIcon Kind="CashRefund" Width="26" Height="26"
-                                                     Foreground="#EF5350" />
-                            <TextBlock Text="Receivables" DockPanel.Dock="Right"
-                                       HorizontalAlignment="Right" Opacity="0.6" />
+                                                     Foreground="#EF5350" Margin="0,0,8,0" />
+                            <TextBlock Text="Receivables"
+                                       HorizontalAlignment="Right" Opacity="0.6" TextTrimming="CharacterEllipsis" />
                         </DockPanel>
                         <TextBlock Text="{Binding Data.PendingReceivables, Converter={StaticResource Currency}}"
                                    FontSize="24" FontWeight="Bold" Margin="0,12,0,0" />
@@ -107,7 +109,7 @@
             </UniformGrid>
 
             <!-- Alert KPI row -->
-            <UniformGrid Columns="4">
+            <UniformGrid x:Name="AlertKpiGrid" Columns="4">
                 <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
                         <TextBlock Text="Low Stock" Opacity="0.6" />
@@ -139,24 +141,20 @@
             </UniformGrid>
 
             <!-- Lists row -->
-            <Grid Margin="0,8,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
+            <UniformGrid x:Name="ListsGrid" Columns="2" Margin="0,8,0,0">
 
-                <materialDesign:Card Grid.Column="0" Style="{StaticResource KpiCard}">
+                <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
                         <TextBlock Text="Top Selling Medicines (30 days)"
-                                   FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
+                                   FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" TextWrapping="Wrap" />
                         <ItemsControl ItemsSource="{Binding TopMedicines}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <DockPanel Margin="0,6">
-                                        <TextBlock Text="{Binding Name}" />
+                                    <DockPanel Margin="0,6" LastChildFill="True">
                                         <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="SemiBold" Margin="8,0,0,0"
                                                    Text="{Binding Revenue, StringFormat='{}₹ {0:N2}'}" />
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                                     </DockPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -164,28 +162,29 @@
                     </StackPanel>
                 </materialDesign:Card>
 
-                <materialDesign:Card Grid.Column="1" Style="{StaticResource KpiCard}">
+                <materialDesign:Card Style="{StaticResource KpiCard}">
                     <StackPanel>
                         <TextBlock Text="Monthly Sales (6 months)"
                                    FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10" />
                         <ItemsControl ItemsSource="{Binding MonthlySales}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <DockPanel Margin="0,6">
-                                        <TextBlock Text="{Binding Month}" Width="90" />
-                                        <ProgressBar Value="{Binding Amount, Mode=OneWay}" Maximum="100000"
-                                                     Height="8" VerticalAlignment="Center"
-                                                     Style="{StaticResource MaterialDesignLinearProgressBar}" />
+                                    <DockPanel Margin="0,6" LastChildFill="True">
                                         <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
                                                    Margin="10,0,0,0"
                                                    Text="{Binding Amount, StringFormat='{}₹ {0:N0}'}" />
+                                        <TextBlock DockPanel.Dock="Left" Text="{Binding Month}" Width="72"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <ProgressBar Value="{Binding Amount, Mode=OneWay}" Maximum="100000"
+                                                     Height="8" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                     Style="{StaticResource MaterialDesignLinearProgressBar}" />
                                     </DockPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </materialDesign:Card>
-            </Grid>
+            </UniformGrid>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

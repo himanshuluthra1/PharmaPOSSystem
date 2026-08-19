@@ -158,6 +158,9 @@ public class SaleEditDto
     public string? BillingCustomerAddress { get; set; }
     public string? BillingDoctorName { get; set; }
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
+    public bool IsLocked { get; set; }
+    public string? LockedBy { get; set; }
+    public DateTime? LockedAtUtc { get; set; }
     public List<SaleEditLineDto> Lines { get; set; } = new();
 }
 

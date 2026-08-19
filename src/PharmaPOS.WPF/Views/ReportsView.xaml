@@ -6,7 +6,8 @@
              d:DataContext="{d:DesignInstance Type=repVm:ReportsViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             SizeChanged="UserControl_SizeChanged">
     <UserControl.Resources>
         <Style x:Key="KpiCard" TargetType="materialDesign:Card">
             <Setter Property="UniformCornerRadius" Value="10" />
@@ -21,8 +22,8 @@
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="240" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="200" MinWidth="140" />
+                    <ColumnDefinition Width="*" MinWidth="280" />
                 </Grid.ColumnDefinitions>
 
                 <DockPanel Grid.Column="0" Margin="0,0,16,0">
@@ -96,7 +97,7 @@
                               Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
@@ -111,7 +112,7 @@
                                       materialDesign:HintAssist.Hint="Expiry window"
                                       Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                       Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}" />
-                            <ComboBox Grid.Column="2" Margin="0,0,8,0" MinWidth="200"
+                            <ComboBox Grid.Column="2" Margin="0,0,8,0" MinWidth="160"
                                       ItemsSource="{Binding ExpirySupplierOptions}"
                                       SelectedValuePath="Key"
                                       SelectedValue="{Binding SelectedExpirySupplierKey}"
@@ -136,7 +137,7 @@
                         </Border>
                     </StackPanel>
 
-                    <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8"
+                    <UniformGrid x:Name="GenericKpiGrid" DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8"
                                  Visibility="{Binding ShowGenericSummaryKpis, Converter={StaticResource BoolToVisibility}}">
                         <materialDesign:Card Style="{StaticResource KpiCard}">
                             <StackPanel>
@@ -169,7 +170,7 @@
                         </materialDesign:Card>
                     </UniformGrid>
 
-                    <UniformGrid DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
+                    <UniformGrid x:Name="StockKpiGrid" DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
                                  Visibility="{Binding ShowStockSummaryKpis, Converter={StaticResource BoolToVisibility}}">
                         <materialDesign:Card Style="{StaticResource KpiCard}">
                             <StackPanel>
@@ -193,7 +194,7 @@
                         </materialDesign:Card>
                     </UniformGrid>
 
-                    <UniformGrid DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
+                    <UniformGrid x:Name="GstKpiGrid" DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
                                  Visibility="{Binding ShowGstSummary, Converter={StaticResource BoolToVisibility}}">
                         <materialDesign:Card Style="{StaticResource KpiCard}">
                             <StackPanel>
@@ -234,7 +235,7 @@
                                 <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="60" />
                                 <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="80" />
                                 <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="Balance due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -290,7 +291,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
                                 <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Qty sold" Binding="{Binding QuantitySold}" Width="80" />
+                                <DataGridTextColumn Header="Quantity sold" Binding="{Binding QuantitySold}" Width="80" />
                                 <DataGridTextColumn Header="Revenue" Binding="{Binding Revenue, StringFormat=N2}" Width="90" />
                                 <DataGridTextColumn Header="Profit" Binding="{Binding GrossProfit, StringFormat=N2}" Width="90" />
                                 <DataGridTextColumn Header="Margin %" Binding="{Binding MarginPercent}" Width="80" />
@@ -303,7 +304,7 @@
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
                                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
                                 <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
-                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
+                                <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="70" />
                                 <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="80" />
                                 <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
                                 <DataGridTextColumn Header="Amount" Binding="{Binding StockAmount, StringFormat=N2}" Width="90" />
@@ -318,7 +319,7 @@
                                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
                                 <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
                                 <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierLabel}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity}" Width="70" />
+                                <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="70" />
                                 <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
                                 <DataGridTextColumn Header="Status" Binding="{Binding ExpiryStatus}" Width="120" />
                             </DataGrid.Columns>
@@ -355,7 +356,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
                                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
-                                <DataGridTextColumn Header="Qty returned" Binding="{Binding ReturnedQuantity, StringFormat=N2}" Width="100" />
+                                <DataGridTextColumn Header="Quantity returned" Binding="{Binding ReturnedQuantity, StringFormat=N2}" Width="100" />
                                 <DataGridTextColumn Header="Refund" Binding="{Binding RefundAmount, StringFormat=N2}" Width="90" />
                                 <DataGridTextColumn Header="Return count" Binding="{Binding ReturnCount}" Width="90" />
                             </DataGrid.Columns>

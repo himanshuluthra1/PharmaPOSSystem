@@ -3,7 +3,7 @@
 ; Build with: scripts\build-installer.ps1
 
 #define MyAppName "PharmaPOS"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "PharmaPOS"
 #define MyAppExeName "PharmaPOS.exe"
 #ifndef PublishDir
@@ -30,6 +30,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 MinVersion=10.0
+CloseApplications=yes
+RestartApplications=yes
 SetupIconFile=..\src\PharmaPOS.WPF\Assets\app.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 InfoBeforeFile=INSTALL_NOTES.txt

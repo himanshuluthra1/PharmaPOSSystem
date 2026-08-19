@@ -39,6 +39,8 @@ public class SalesViewModel : ObservableObject
 
     private int? _editingSaleId;
     private bool _allowEditSalesBills;
+    private bool _isInvoiceLocked;
+    private string? _lockedBy;
     private bool _suppressBillSelection;
     private SaleListItemDto? _selectedBill;
     private int? _lastDropdownSaleId;
@@ -101,11 +103,16 @@ public class SalesViewModel : ObservableObject
             AppConstants.Permissions.SalesPrint, AppConstants.Permissions.SalesManage);
         CanReturn = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesReturn, AppConstants.Permissions.SalesReturnManage);
+        CanEditInvoices = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesEdit, AppConstants.Permissions.SalesManage);
+        CanUnlockInvoices = currentUser.HasAnyPermission(
+            AppConstants.Permissions.SalesUnlock, AppConstants.Permissions.SalesManage);
 
         Cart.CollectionChanged += (_, _) => RecalculateTotals();
 
         RemoveLineCommand = new RelayCommand(p => RemoveLine(p as CartLineViewModel), _ => CanModifyBill);
         SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanSaveBill);
+        UnlockBillCommand = new AsyncRelayCommand(_ => UnlockBillAsync(), _ => CanUnlockBill);
         PrintCommand = new AsyncRelayCommand(_ => PrintAsync(), _ => CanPrint && IsEditing && !IsBusy);
         NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
         SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
@@ -161,6 +168,7 @@ public class SalesViewModel : ObservableObject
 
     public ICommand RemoveLineCommand { get; }
     public ICommand SaveCommand { get; }
+    public ICommand UnlockBillCommand { get; }
     public ICommand PrintCommand { get; }
     public ICommand NewBillCommand { get; }
     public ICommand SearchBillsCommand { get; }
@@ -190,6 +198,8 @@ public class SalesViewModel : ObservableObject
     public bool CanApplyDiscount { get; }
     public bool CanPrint { get; }
     public bool CanReturn { get; }
+    public bool CanEditInvoices { get; }
+    public bool CanUnlockInvoices { get; }
 
     public bool AllowEditSalesBills
     {
@@ -197,23 +207,53 @@ public class SalesViewModel : ObservableObject
         private set
         {
             if (SetProperty(ref _allowEditSalesBills, value))
-            {
-                OnPropertyChanged(nameof(CanModifyBill));
-                OnPropertyChanged(nameof(ShowSaveButton));
-                OnPropertyChanged(nameof(IsBillReadOnly));
-                CommandManager.InvalidateRequerySuggested();
-            }
+                NotifyBillEditStateChanged();
         }
     }
 
-    /// <summary>True when the loaded bill can be changed (new bill, or edit allowed).</summary>
-    public bool CanModifyBill => CanCreate && (!IsEditing || AllowEditSalesBills) && !IsBusy;
+    public bool IsInvoiceLocked
+    {
+        get => _isInvoiceLocked;
+        private set
+        {
+            if (SetProperty(ref _isInvoiceLocked, value))
+                NotifyBillEditStateChanged();
+        }
+    }
+
+    public string? LockedBy
+    {
+        get => _lockedBy;
+        private set
+        {
+            if (SetProperty(ref _lockedBy, value))
+                OnPropertyChanged(nameof(LockBannerText));
+        }
+    }
+
+    public string LockBannerText =>
+        string.IsNullOrWhiteSpace(LockedBy)
+            ? "This invoice is locked. Unlock it to make changes."
+            : $"This invoice is locked by {LockedBy}. Unlock it to make changes.";
+
+    /// <summary>True when the loaded bill can be changed (new bill, or unlocked edit allowed).</summary>
+    public bool CanModifyBill =>
+        CanCreate
+        && (!IsEditing || (AllowEditSalesBills && CanEditInvoices && !IsInvoiceLocked))
+        && !IsBusy;
 
     public bool CanSaveBill => CanModifyBill && Cart.Any(l => !l.IsEmpty);
 
-    public bool ShowSaveButton => CanCreate && (!IsEditing || AllowEditSalesBills);
+    public bool ShowSaveButton =>
+        CanCreate && (!IsEditing || (AllowEditSalesBills && CanEditInvoices && !IsInvoiceLocked));
 
-    public bool IsBillReadOnly => IsEditing && !AllowEditSalesBills;
+    public bool IsBillReadOnly =>
+        IsEditing && !(AllowEditSalesBills && CanEditInvoices && !IsInvoiceLocked);
+
+    public bool CanUnlockBill =>
+        IsEditing && IsInvoiceLocked && AllowEditSalesBills && CanUnlockInvoices && !IsBusy;
+
+    public bool ShowLockBanner => IsEditing && IsInvoiceLocked && AllowEditSalesBills;
 
     public bool CanLoadOlderBills => _nextOlderBillDate is not null && !IsLoadingOlderBills && !IsBusy;
 
@@ -547,6 +587,7 @@ public class SalesViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanLoadOlderBills));
                 OnPropertyChanged(nameof(CanModifyBill));
                 OnPropertyChanged(nameof(CanSaveBill));
+                OnPropertyChanged(nameof(CanUnlockBill));
                 CommandManager.InvalidateRequerySuggested();
             }
         }
@@ -812,6 +853,8 @@ public class SalesViewModel : ObservableObject
         Cart.Clear();
 
         _editingSaleId = sale.SaleId;
+        IsInvoiceLocked = sale.IsLocked;
+        LockedBy = sale.LockedBy;
         NotifyBillEditStateChanged();
 
         CustomerName = sale.BillingCustomerName ?? string.Empty;
@@ -830,11 +873,20 @@ public class SalesViewModel : ObservableObject
 
         EnsureTrailingEmptyRow();
         RecalculateTotals();
-        StatusMessage = AllowEditSalesBills
-            ? $"Editing invoice {sale.InvoiceNumber}. Save to update."
-            : $"Viewing invoice {sale.InvoiceNumber} (edit is off in Settings → Preferences).";
+        StatusMessage = BuildEditStatusMessage(sale.InvoiceNumber);
         if (focusGridAfterLoad && !IsBillReadOnly)
             RequestItemFocus?.Invoke(Cart.FirstOrDefault());
+    }
+
+    private string BuildEditStatusMessage(string invoiceNumber)
+    {
+        if (!AllowEditSalesBills)
+            return $"Viewing invoice {invoiceNumber} (edit is off in Settings → Preferences).";
+        if (!CanEditInvoices)
+            return $"Viewing invoice {invoiceNumber} (your role cannot edit sale invoices).";
+        if (IsInvoiceLocked)
+            return $"Invoice {invoiceNumber} is locked. Unlock to edit.";
+        return $"Editing invoice {invoiceNumber}. Save to update (re-locks on save).";
     }
 
     private void NotifyBillEditStateChanged()
@@ -844,6 +896,9 @@ public class SalesViewModel : ObservableObject
         OnPropertyChanged(nameof(CanSaveBill));
         OnPropertyChanged(nameof(ShowSaveButton));
         OnPropertyChanged(nameof(IsBillReadOnly));
+        OnPropertyChanged(nameof(CanUnlockBill));
+        OnPropertyChanged(nameof(ShowLockBanner));
+        OnPropertyChanged(nameof(LockBannerText));
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -939,11 +994,11 @@ public class SalesViewModel : ObservableObject
                 var receipt = result.Value;
                 StatusMessage = $"Saved invoice {receipt.InvoiceNumber}.";
 
-                if (CanPrint && _dialog.Confirm($"Invoice {receipt.InvoiceNumber} saved.\n\nPrint / preview it now?", "Invoice saved"))
-                    _printService.ShowPreview(receipt);
-
                 if (_billShare.ShouldOfferAfterSave(receipt))
                     _billShare.OfferShareAfterSave(receipt);
+
+                if (CanPrint && _dialog.Confirm($"Invoice {receipt.InvoiceNumber} saved.\n\nPrint / preview it now?", "Invoice saved"))
+                    _printService.ShowPreview(receipt);
 
                 await RefreshBillHistoryCoreAsync(selectNewBill: true);
                 ResetBillForm(clearStatus: false);
@@ -954,6 +1009,41 @@ public class SalesViewModel : ObservableObject
                 _salesGate.Release();
             }
 
+            RequestItemFocus?.Invoke(Cart.FirstOrDefault());
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task UnlockBillAsync()
+    {
+        if (_editingSaleId is not int saleId || !CanUnlockBill) return;
+
+        if (!_dialog.Confirm(
+                "Unlock this invoice for editing?\n\nIt will lock again after you save changes.",
+                "Unlock invoice"))
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _salesService.UnlockSaleAsync(saleId, _currentUser.CurrentUser?.BranchId);
+            if (result.IsFailure)
+            {
+                _dialog.ShowError(result.Error ?? "Could not unlock the invoice.");
+                return;
+            }
+
+            IsInvoiceLocked = false;
+            LockedBy = null;
+            StatusMessage = $"Invoice unlocked. Edit and save to update.";
+            NotifyBillEditStateChanged();
             RequestItemFocus?.Invoke(Cart.FirstOrDefault());
         }
         catch (Exception ex)
@@ -1017,6 +1107,8 @@ public class SalesViewModel : ObservableObject
             line.Changed -= RecalculateTotals;
         Cart.Clear();
         _editingSaleId = null;
+        IsInvoiceLocked = false;
+        LockedBy = null;
         _lastDropdownSaleId = null;
         NotifyBillEditStateChanged();
         EnsureTrailingEmptyRow();
@@ -1145,6 +1237,8 @@ public class SalesViewModel : ObservableObject
         DoctorName = DoctorName,
         PaymentMethod = PaymentMethod,
         EditingSaleId = _editingSaleId,
+        IsInvoiceLocked = IsInvoiceLocked,
+        LockedBy = LockedBy,
         StatusMessage = StatusMessage
     };
 
@@ -1156,6 +1250,8 @@ public class SalesViewModel : ObservableObject
         Cart.Clear();
 
         _editingSaleId = parked.EditingSaleId;
+        IsInvoiceLocked = parked.IsInvoiceLocked;
+        LockedBy = parked.LockedBy;
         NotifyBillEditStateChanged();
 
         _suppressSlotSummary = true;

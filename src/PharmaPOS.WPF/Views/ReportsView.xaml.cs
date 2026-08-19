@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using PharmaPOS.Application.Features.Reports;
@@ -13,6 +14,15 @@ public partial class ReportsView : UserControl
     }
 
     private ReportsViewModel? ViewModel => DataContext as ReportsViewModel;
+
+    private void UserControl_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var width = e.NewSize.Width;
+        GenericKpiGrid.Columns = width < 560 ? 2 : 4;
+        var threeCols = width < 560 ? 2 : 3;
+        StockKpiGrid.Columns = threeCols;
+        GstKpiGrid.Columns = threeCols;
+    }
 
     private void SalesGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {

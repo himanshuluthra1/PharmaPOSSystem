@@ -200,7 +200,7 @@ public sealed class UiLayoutService : IUiLayoutService
         string.Equals(key, PurchaseKey, StringComparison.OrdinalIgnoreCase);
 
     private static double ClampSideWidth(double width) =>
-        Math.Clamp(double.IsFinite(width) ? width : 250, 200, 480);
+        Math.Clamp(double.IsFinite(width) ? width : 250, 180, 480);
 
     private static UiLayoutSettings Normalize(UiLayoutSettings s) => new()
     {

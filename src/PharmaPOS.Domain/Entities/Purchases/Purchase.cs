@@ -35,6 +35,11 @@ public class Purchase : BranchEntity
     public string? InvoiceDocumentPath { get; set; }
     public string? Remarks { get; set; }
 
+    /// <summary>When true, GRN cannot be changed until unlocked.</summary>
+    public bool IsLocked { get; set; }
+    public DateTime? LockedAtUtc { get; set; }
+    public string? LockedBy { get; set; }
+
     /// <summary>Required when cash/bank paid is less than grand total.</summary>
     public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
     public string? PartialPaymentNotes { get; set; }

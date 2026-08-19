@@ -11,37 +11,20 @@
              PreviewKeyDown="SalesView_PreviewKeyDown">
     <Grid Margin="4">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" MinWidth="400" />
+            <ColumnDefinition Width="*" MinWidth="280" />
             <ColumnDefinition Width="6" />
-            <ColumnDefinition x:Name="SideColumn" Width="250" MinWidth="200" MaxWidth="480" />
+            <ColumnDefinition x:Name="SideColumn" Width="250" MinWidth="180" MaxWidth="480" />
         </Grid.ColumnDefinitions>
 
         <!-- LEFT: cart grid -->
         <materialDesign:Card Grid.Column="0" Margin="2" UniformCornerRadius="12" Padding="12"
                              materialDesign:ElevationAssist.Elevation="Dp2">
             <DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <TextBlock Text="Fast Billing" FontSize="20" FontWeight="Bold"
-                               VerticalAlignment="Center" />
-                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="CashRegister" Width="18" Height="18"
-                                                   VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="{Binding CounterDisplay}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding CounterCashSummary}" Margin="12,0,0,0" Opacity="0.75"
-                                   VerticalAlignment="Center" FontSize="12" />
-                        <Button Command="{Binding ChangeCounterCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Content="Change" Margin="4,0,0,0" Padding="8,2"
-                                ToolTip="Switch to a different billing counter" />
-                        <Button Command="{Binding ShowCounterCashSummaryCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Content="All counters" Margin="4,0,0,0" Padding="8,2"
-                                ToolTip="Today's cash by counter" />
-                    </StackPanel>
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBox x:Name="BarcodeScanBox"
-                                 Width="160"
-                                 Margin="0,0,6,0"
+                                 Width="140"
+                                 Margin="0,0,4,0"
                                  VerticalAlignment="Center"
                                  materialDesign:HintAssist.Hint="Scan barcode"
                                  materialDesign:HintAssist.IsFloating="False"
@@ -51,7 +34,7 @@
                         <Button Command="{Binding ScanBarcodeCameraCommand}"
                                 IsEnabled="{Binding CanCreate}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="10,8" Margin="0,0,8,0"
+                                Padding="6,4" Margin="0,0,4,0"
                                 VerticalAlignment="Center"
                                 ToolTip="Scan barcode with camera">
                             <materialDesign:PackIcon Kind="BarcodeScan" Width="18" Height="18" />
@@ -59,42 +42,42 @@
                         <Button Command="{Binding SearchBillsCommand}"
                                 IsEnabled="{Binding CanSearchBills}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="12,8" Margin="0,0,8,0"
+                                Padding="8,4" Margin="0,0,4,0"
                                 VerticalAlignment="Center"
                                 ToolTip="Search bills by patient, mobile, or medicine">
                             <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="Magnify" Width="18" Height="18"
-                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <materialDesign:PackIcon Kind="Magnify" Width="16" Height="16"
+                                                           VerticalAlignment="Center" Margin="0,0,4,0" />
                                 <TextBlock Text="Search" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding OpenSaleReturnCommand}"
                                 IsEnabled="{Binding CanReturn}"
                                 Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="12,8" Margin="0,0,8,0"
+                                Padding="8,4" Margin="0,0,4,0"
                                 VerticalAlignment="Center"
                                 ToolTip="Return items from the open invoice (F8)">
                             <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="KeyboardReturn" Width="18" Height="18"
-                                                           VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <materialDesign:PackIcon Kind="KeyboardReturn" Width="16" Height="16"
+                                                           VerticalAlignment="Center" Margin="0,0,4,0" />
                                 <TextBlock Text="Return" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <Grid Width="320">
+                        <Grid Width="180" MinWidth="120" MaxWidth="220">
                         <ToggleButton x:Name="BillSelectorToggle"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
-                                      Padding="10,8"
+                                      Padding="8,4"
                                       Style="{StaticResource MaterialDesignOutlinedButton}"
                                       Checked="BillSelectorToggle_Checked"
                                       Unchecked="BillSelectorToggle_Unchecked">
                             <Grid>
                                 <TextBlock Text="{Binding SelectedBill.DisplayLabel, FallbackValue='Select bill'}"
                                            VerticalAlignment="Center" HorizontalAlignment="Left"
-                                           Margin="0,0,20,0" TextTrimming="CharacterEllipsis" />
+                                           Margin="0,0,18,0" TextTrimming="CharacterEllipsis" />
                                 <materialDesign:PackIcon Kind="ChevronDown"
                                                            HorizontalAlignment="Right"
-                                                           VerticalAlignment="Center" Width="18" Height="18" />
+                                                           VerticalAlignment="Center" Width="16" Height="16" />
                             </Grid>
                         </ToggleButton>
                         <Popup x:Name="BillPopup"
@@ -181,38 +164,46 @@
                         </Popup>
                     </Grid>
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Fast Billing" FontSize="20" FontWeight="Bold"
+                                   VerticalAlignment="Center" />
+                        <materialDesign:PackIcon Kind="CashRegister" Width="18" Height="18"
+                                                   VerticalAlignment="Center" Margin="10,0,6,0" />
+                        <TextBlock Text="{Binding CounterDisplay}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                        <TextBlock Text="{Binding CounterCashSummary}" Margin="10,0,0,0" Opacity="0.75"
+                                   VerticalAlignment="Center" FontSize="12"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="160" />
+                        <Button Command="{Binding ChangeCounterCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Content="Change" Margin="4,0,0,0" Padding="8,2"
+                                ToolTip="Switch to a different billing counter" />
+                        <Button Command="{Binding ShowCounterCashSummaryCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Content="All counters" Margin="4,0,0,0" Padding="8,2"
+                                ToolTip="Today's cash by counter" />
+                    </StackPanel>
                 </DockPanel>
                 <TextBlock Text="Press Enter on Item to search medicine. F3 customer. Ctrl+T new customer. Ctrl+1–4 switch. Ctrl+W close."
-                           FontSize="12" Opacity="0.6" Margin="0,0,0,8" DockPanel.Dock="Top" />
+                           FontSize="11" Opacity="0.6" Margin="0,0,0,6" DockPanel.Dock="Top"
+                           TextTrimming="CharacterEllipsis" />
 
                 <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6,4"
                         Background="{DynamicResource MaterialDesignCardBackground}"
                         CornerRadius="6"
                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                         BorderThickness="1">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Command="{Binding NewCustomerBillCommand}"
-                                    Style="{StaticResource MaterialDesignFlatButton}"
-                                    Padding="8,2" Margin="0,0,4,0"
-                                    ToolTip="Start another customer bill (Ctrl+T)"
-                                    Content="New customer" />
-                            <Button Command="{Binding CloseCustomerBillCommand}"
-                                    Style="{StaticResource MaterialDesignFlatButton}"
-                                    Padding="8,2"
-                                    ToolTip="Close this customer bill (Ctrl+W)"
-                                    Content="Close" />
-                        </StackPanel>
+                    <WrapPanel>
                         <ItemsControl ItemsSource="{Binding OpenBills}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" />
+                                    <WrapPanel Orientation="Horizontal" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type salesVm:OpenSaleBillSlot}">
-                                    <Button Margin="0,0,6,0" Padding="10,4"
-                                            MinWidth="88"
+                                    <Button Margin="0,0,6,2" Padding="10,4"
+                                            MinWidth="72"
                                             Command="{Binding DataContext.SwitchOpenBillCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="{Binding ShortcutHint}">
@@ -232,7 +223,17 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </DockPanel>
+                        <Button Command="{Binding NewCustomerBillCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Padding="8,2" Margin="0,0,4,2"
+                                ToolTip="Start another customer bill (Ctrl+T)"
+                                Content="New customer" />
+                        <Button Command="{Binding CloseCustomerBillCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Padding="8,2" Margin="0,0,0,2"
+                                ToolTip="Close this customer bill (Ctrl+W)"
+                                Content="Close" />
+                    </WrapPanel>
                 </Border>
 
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
@@ -249,7 +250,7 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           IsReadOnly="{Binding IsBillReadOnly}">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Item" Width="2*" MinWidth="200">
+                        <DataGridTemplateColumn Header="Item" Width="2*" MinWidth="140">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock VerticalAlignment="Center" Padding="2,0"
@@ -275,20 +276,20 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" IsReadOnly="True" Width="100" />
-                        <DataGridTextColumn Header="Exp" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="80" />
-                        <DataGridTextColumn Header="Qty" Width="70"
+                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="80" />
+                        <DataGridTextColumn Header="Quantity" Width="70"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="MRP" Width="80"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Sale" Width="80"
+                        <DataGridTextColumn Header="Sale price" Width="80"
                                             IsReadOnly="True"
                                             Binding="{Binding UnitPrice, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Disc%" Width="65"
+                        <DataGridTextColumn Header="Discount %" Width="65"
                                             IsReadOnly="{Binding DataContext.CanApplyDiscount, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="GST%" IsReadOnly="True" Width="65"
+                        <DataGridTextColumn Header="GST %" IsReadOnly="True" Width="65"
                                             Binding="{Binding GstPercent, StringFormat=N2}" />
                         <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="90"
                                             Binding="{Binding LineTotal, StringFormat=N2}" />
@@ -339,6 +340,25 @@
             <DockPanel LastChildFill="True">
                 <!-- Actions (bottom) -->
                 <StackPanel DockPanel.Dock="Bottom">
+                    <Border Margin="0,0,0,8" Padding="8,6" Background="#FFF8E1" CornerRadius="6"
+                            BorderBrush="#FFD54F" BorderThickness="1"
+                            Visibility="{Binding ShowLockBanner, Converter={StaticResource BoolToVisibility}}">
+                        <WrapPanel>
+                            <TextBlock Text="{Binding LockBannerText}" TextWrapping="Wrap"
+                                       Foreground="#F57F17" FontSize="12" VerticalAlignment="Center"
+                                       MaxWidth="180" Margin="0,0,8,4" />
+                            <Button Margin="0,0,0,4"
+                                    Command="{Binding UnlockBillCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Padding="10,2" Height="28"
+                                    Visibility="{Binding CanUnlockBill, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="LockOpenVariantOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                    <TextBlock Text="Unlock" Margin="4,0,0,0" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </WrapPanel>
+                    </Border>
                     <Grid Margin="0,6,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -346,14 +366,16 @@
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0" Margin="0,0,4,0" Command="{Binding NewBillCommand}"
                                 IsEnabled="{Binding CanCreate}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}">
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                HorizontalAlignment="Stretch" Padding="6,6">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="FileDocumentPlusOutline" VerticalAlignment="Center" />
-                                <TextBlock Text="New (Esc)" Margin="6,0,0,0" />
+                                <TextBlock Text="New (Esc)" Margin="6,0,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding PrintCommand}"
-                                IsEnabled="{Binding CanPrint}">
+                                IsEnabled="{Binding CanPrint}"
+                                HorizontalAlignment="Stretch" Padding="6,6">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -366,11 +388,12 @@
                             </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Printer" VerticalAlignment="Center" />
-                                <TextBlock Text="Print (F9)" Margin="6,0,0,0" />
+                                <TextBlock Text="Print (F9)" Margin="6,0,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding SaveCommand}"
-                                IsEnabled="{Binding CanCreate}">
+                                IsEnabled="{Binding CanCreate}"
+                                HorizontalAlignment="Stretch" Padding="6,6">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -383,7 +406,7 @@
                             </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                <TextBlock Margin="6,0,0,0">
+                                <TextBlock Margin="6,0,0,0" TextWrapping="Wrap">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="Save &amp; Print (F9)" />

@@ -101,5 +101,7 @@ internal sealed class ParkedSaleBill
     public string? DoctorName { get; init; }
     public PaymentMethod PaymentMethod { get; init; } = PaymentMethod.Cash;
     public int? EditingSaleId { get; init; }
+    public bool IsInvoiceLocked { get; init; }
+    public string? LockedBy { get; init; }
     public string? StatusMessage { get; init; }
 }
