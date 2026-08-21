@@ -242,8 +242,8 @@ public sealed class PosUpdateService : IPosUpdateService
         {
             return PosPublishResult.Fail(
                 "Could not upload the installer to the VPS.\n\n" +
-                "Set SFTP details under Settings → Preferences (same as bill upload),\n" +
-                "and create folder /var/www/html/updates on the server.\n\n" +
+                "Uses the same SFTP settings as bill upload (Settings → Preferences).\n" +
+                "Target folder is <bills remote folder>/updates (e.g. /bills/updates).\n\n" +
                 ex.Message);
         }
 
@@ -381,10 +381,8 @@ public sealed class PosUpdateService : IPosUpdateService
             throw new InvalidOperationException("SFTP password is not set in Settings → Preferences.");
 
         var port = cfg.SftpPort > 0 ? cfg.SftpPort : 22;
-        var remoteDir = FirstNonEmpty(
-            _config["App:UpdatesSftpDirectory"],
-            DeriveUpdatesDirectory(cfg.SftpRemoteDirectory),
-            "/var/www/html/updates")!;
+        var billsDir = FirstNonEmpty(cfg.SftpRemoteDirectory, "/bills")!;
+        var configuredUpdates = _config["App:UpdatesSftpDirectory"];
 
         return await Task.Run(() =>
         {
@@ -394,42 +392,143 @@ public sealed class PosUpdateService : IPosUpdateService
             client.Connect();
             try
             {
-                EnsureRemoteDirectory(client, remoteDir);
-                var remotePath = $"{remoteDir.TrimEnd('/')}/{fileName}".Replace('\\', '/');
-                using (var fs = File.OpenRead(localPath))
-                    client.UploadFile(fs, remotePath, canOverride: true);
+                var home = client.WorkingDirectory ?? "/";
+                var candidates = BuildUpdatesDirectoryCandidates(billsDir, configuredUpdates, home);
+                var attempts = new List<string>();
+                Exception? lastError = null;
+                string? successDir = null;
+
+                foreach (var dir in candidates)
+                {
+                    attempts.Add(dir);
+                    try
+                    {
+                        EnsureRemoteDirectory(client, dir);
+                        var remotePath = $"{dir.TrimEnd('/')}/{fileName}".Replace('\\', '/');
+                        using (var fs = File.OpenRead(localPath))
+                            client.UploadFile(fs, remotePath, canOverride: true);
+                        successDir = dir;
+                        break;
+                    }
+                    catch (Exception ex) when (IsPermissionDenied(ex) || IsPathError(ex))
+                    {
+                        lastError = ex;
+                    }
+                }
+
+                if (successDir is null)
+                {
+                    throw new InvalidOperationException(
+                        BuildUpdatesPermissionHelp(user, home, attempts, lastError),
+                        lastError);
+                }
+
+                var publicBase = FirstNonEmpty(
+                    DeriveUpdatesPublicUrl(cfg.PublicBaseUrl),
+                    _config["App:UpdatesPublicBaseUrl"],
+                    "http://50.6.251.47/bills/updates/")!;
+                return $"{publicBase.TrimEnd('/')}/{fileName}";
             }
             finally
             {
                 client.Disconnect();
             }
-
-            var publicBase = FirstNonEmpty(
-                _config["App:UpdatesPublicBaseUrl"],
-                DeriveUpdatesPublicUrl(cfg.PublicBaseUrl),
-                "http://50.6.251.47/updates/")!;
-            return $"{publicBase.TrimEnd('/')}/{fileName}";
         }, ct);
     }
 
-    private static string DeriveUpdatesDirectory(string billsDir)
+    /// <summary>
+    /// Prefer Preferences bills folder + /updates, then chroot-friendly variants
+    /// (same idea as bill PDF upload — absolute /var/www/... often fails).
+    /// </summary>
+    internal static List<string> BuildUpdatesDirectoryCandidates(
+        string billsDirectory, string? configuredUpdatesDir, string workingDirectory)
     {
-        if (string.IsNullOrWhiteSpace(billsDir)) return "/var/www/html/updates";
-        var d = billsDir.Trim().Replace('\\', '/').TrimEnd('/');
-        if (d.EndsWith("/bills", StringComparison.OrdinalIgnoreCase))
-            return d[..^"/bills".Length] + "/updates";
-        if (d.EndsWith("bills", StringComparison.OrdinalIgnoreCase))
-            return d[..^"bills".Length] + "updates";
-        return "/var/www/html/updates";
+        var list = new List<string>();
+        void Add(string? p)
+        {
+            if (string.IsNullOrWhiteSpace(p)) return;
+            p = p.Trim().Replace('\\', '/').TrimEnd('/');
+            if (p.Length == 0) return;
+            if (!list.Contains(p, StringComparer.Ordinal))
+                list.Add(p);
+        }
+
+        // Same bills folder candidates as bill upload, each with /updates (try these first)
+        foreach (var bills in BillPdfUploadService.BuildRemoteDirectoryCandidates(billsDirectory, workingDirectory))
+            Add(bills.TrimEnd('/') + "/updates");
+
+        // Common chroot-friendly defaults
+        Add("/bills/updates");
+        Add("bills/updates");
+        Add("public_html/bills/updates");
+
+        // Optional override from appsettings (last — often absolute /var/www and chroot-blocked)
+        Add(configuredUpdatesDir);
+
+        return list;
     }
 
     private static string DeriveUpdatesPublicUrl(string billsUrl)
     {
-        if (string.IsNullOrWhiteSpace(billsUrl)) return "http://50.6.251.47/updates/";
+        if (string.IsNullOrWhiteSpace(billsUrl)) return "http://50.6.251.47/bills/updates/";
         var u = billsUrl.Trim().TrimEnd('/');
-        if (u.EndsWith("/bills", StringComparison.OrdinalIgnoreCase))
-            return u[..^"/bills".Length] + "/updates/";
-        return "http://50.6.251.47/updates/";
+        return u + "/updates/";
+    }
+
+    private static string BuildUpdatesPermissionHelp(
+        string sftpUser, string home, List<string> attempts, Exception? lastError)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Permission denied — SFTP cannot write the updates folder.");
+        sb.AppendLine();
+        sb.AppendLine($"SFTP user: {sftpUser}");
+        sb.AppendLine($"Login folder: {home}");
+        sb.AppendLine("Tried:");
+        foreach (var a in attempts)
+            sb.AppendLine("  • " + a);
+        sb.AppendLine();
+        sb.AppendLine("Most SFTP users are jailed and cannot use /var/www/html/...");
+        sb.AppendLine();
+        sb.AppendLine("On the VPS as root (use the SAME bills folder bill upload uses):");
+        sb.AppendLine();
+        sb.AppendLine("  sudo mkdir -p /path/to/bills/updates");
+        sb.AppendLine($"  sudo chown -R {sftpUser}:www-data /path/to/bills/updates");
+        sb.AppendLine("  sudo chmod -R 775 /path/to/bills/updates");
+        sb.AppendLine();
+        sb.AppendLine("In PharmaPOS Settings → Preferences, Remote folder should be the");
+        sb.AppendLine("writable bills path (e.g. /bills or public_html/bills), not /var/www/...");
+        sb.AppendLine("Publish then writes to <that folder>/updates.");
+        if (lastError is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Server message: " + lastError.Message);
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    private static bool IsPermissionDenied(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e.GetType().Name.Contains("PermissionDenied", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (e.Message.Contains("Permission denied", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool IsPathError(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            var msg = e.Message;
+            if (msg.Contains("No such file", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("Failure", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static void EnsureRemoteDirectory(SftpClient client, string directory)

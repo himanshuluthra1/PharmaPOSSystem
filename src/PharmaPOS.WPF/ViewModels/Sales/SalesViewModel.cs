@@ -4,6 +4,7 @@ using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Counters;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Application.Features.ShortageBook;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
@@ -27,10 +28,12 @@ public class SalesViewModel : ObservableObject
     private readonly ICounterContextService _counterContext;
     private readonly IBillingCounterService _counters;
     private readonly ICounterPickerUiService _counterPicker;
+    private readonly ICounterDayCloseUiService _dayCloseUi;
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
     private readonly IBarcodeCameraService _barcodeCamera;
     private readonly IBillShareService _billShare;
+    private readonly IShortageBookService _shortageBook;
 
     private string _customerName = string.Empty;
     private string? _customerMobile;
@@ -56,13 +59,14 @@ public class SalesViewModel : ObservableObject
         set => _suppressBillSelection = value;
     }
 
-    private PaymentMethod _paymentMethod = PaymentMethod.Cash;
     private bool _isBusy;
     private string? _statusMessage;
     private int _activeBillIndex;
     private bool _suppressSlotSummary;
+    private bool _suppressPaymentSync;
 
     public const int MaxOpenCustomerBills = 4;
+    public const int MaxPaymentLines = 6;
 
     public SalesViewModel(
         ISalesService salesService,
@@ -74,10 +78,12 @@ public class SalesViewModel : ObservableObject
         ICounterContextService counterContext,
         IBillingCounterService counters,
         ICounterPickerUiService counterPicker,
+        ICounterDayCloseUiService dayCloseUi,
         IDialogService dialog,
         IInvoicePrintService printService,
         IBarcodeCameraService barcodeCamera,
-        IBillShareService billShare)
+        IBillShareService billShare,
+        IShortageBookService shortageBook)
     {
         _salesService = salesService;
         _settings = settings;
@@ -88,10 +94,12 @@ public class SalesViewModel : ObservableObject
         _counterContext = counterContext;
         _counters = counters;
         _counterPicker = counterPicker;
+        _dayCloseUi = dayCloseUi;
         _dialog = dialog;
         _printService = printService;
         _barcodeCamera = barcodeCamera;
         _billShare = billShare;
+        _shortageBook = shortageBook;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesCreate, AppConstants.Permissions.SalesManage);
@@ -126,11 +134,18 @@ public class SalesViewModel : ObservableObject
         RefreshCounterCashCommand = new AsyncRelayCommand(RefreshCounterCashAsync, () => !IsBusy);
         ShowCounterCashSummaryCommand = new AsyncRelayCommand(ShowCounterCashSummaryAsync, () => !IsBusy);
         ChangeCounterCommand = new AsyncRelayCommand(ChangeCounterAsync, () => !IsBusy);
+        DayCloseCommand = new AsyncRelayCommand(DayCloseAsync, () => !IsBusy && HasCounterSession);
+        LastSaleRefillCommand = new AsyncRelayCommand(_ => OpenLastSaleRefillAsync(), _ => CanModifyBill);
+        AddPaymentCommand = new RelayCommand(_ => AddPaymentLine(), _ => CanAddPayment);
+        RemovePaymentCommand = new RelayCommand(
+            p => RemovePaymentLine(p as SalePaymentLineViewModel),
+            _ => CanModifyBill && PaymentLines.Count > 1);
 
         OpenBills.Add(CreateSlot(1));
         OpenBills[0].IsActive = true;
 
         EnsureTrailingEmptyRow();
+        ResetPaymentLines();
         _ = InitializeAsync();
     }
 
@@ -161,6 +176,7 @@ public class SalesViewModel : ObservableObject
     public event Action? RequestCustomerFocus;
 
     public ObservableCollection<CartLineViewModel> Cart { get; } = new();
+    public ObservableCollection<SalePaymentLineViewModel> PaymentLines { get; } = new();
     public ObservableCollection<SaleListItemDto> BillHistory { get; } = new();
     public ObservableCollection<OpenSaleBillSlot> OpenBills { get; } = new();
 
@@ -181,6 +197,10 @@ public class SalesViewModel : ObservableObject
     public ICommand RefreshCounterCashCommand { get; }
     public ICommand ShowCounterCashSummaryCommand { get; }
     public ICommand ChangeCounterCommand { get; }
+    public ICommand DayCloseCommand { get; }
+    public ICommand LastSaleRefillCommand { get; }
+    public ICommand AddPaymentCommand { get; }
+    public ICommand RemovePaymentCommand { get; }
 
     public string CounterDisplay =>
         _counterContext.ActiveCounterDisplay ?? "No counter selected";
@@ -302,6 +322,12 @@ public class SalesViewModel : ObservableObject
             if (newQty > selection.AvailableStock)
             {
                 _dialog.ShowError($"Only {selection.AvailableStock} units available in batch {selection.BatchNumber}.");
+                await OfferRecordShortageAsync(
+                    selection.MedicineId,
+                    selection.MedicineName,
+                    requestedQty: newQty,
+                    availableQty: selection.AvailableStock,
+                    ShortageSource.SalesCart);
                 return;
             }
             duplicate.Quantity = newQty;
@@ -350,6 +376,12 @@ public class SalesViewModel : ObservableObject
                     if (newQty > selection.AvailableStock)
                     {
                         _dialog.ShowError($"Only {selection.AvailableStock} units available in batch {selection.BatchNumber}.");
+                        await OfferRecordShortageAsync(
+                            selection.MedicineId,
+                            selection.MedicineName,
+                            requestedQty: newQty,
+                            availableQty: selection.AvailableStock,
+                            ShortageSource.Barcode);
                         return;
                     }
                     existing.Quantity = newQty;
@@ -445,6 +477,185 @@ public class SalesViewModel : ObservableObject
         RequestItemFocus?.Invoke(line);
     }
 
+    private Task OpenLastSaleRefillAsync()
+    {
+        if (!CanModifyBill) return Task.CompletedTask;
+
+        var refillVm = new LastSaleRefillViewModel(
+            _salesService,
+            _shortageBook,
+            _currentUser.CurrentUser?.BranchId,
+            _currentUser.CurrentUser?.FullName ?? _currentUser.CurrentUser?.Username,
+            _dialog);
+
+        var seed = !string.IsNullOrWhiteSpace(CustomerName)
+            ? CustomerName.Trim()
+            : CustomerMobile?.Trim();
+        if (!string.IsNullOrWhiteSpace(seed))
+            refillVm.SearchText = seed;
+
+        var window = new Views.LastSaleRefillWindow(refillVm)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+
+        if (window.ShowDialog() != true || refillVm.PendingAdds.Count == 0)
+            return Task.CompletedTask;
+
+        ApplyRefillToCart(refillVm);
+        return Task.CompletedTask;
+    }
+
+    private void ApplyRefillToCart(LastSaleRefillViewModel refillVm)
+    {
+        var refill = refillVm.Refill;
+        if (refill is not null)
+        {
+            if (string.IsNullOrWhiteSpace(CustomerName)
+                && !string.IsNullOrWhiteSpace(refill.PatientName)
+                && !string.Equals(refill.PatientName, "Walk-in", StringComparison.OrdinalIgnoreCase))
+                CustomerName = refill.PatientName;
+
+            if (string.IsNullOrWhiteSpace(CustomerMobile) && !string.IsNullOrWhiteSpace(refill.Mobile))
+                CustomerMobile = refill.Mobile;
+
+            if (string.IsNullOrWhiteSpace(CustomerAddress) && !string.IsNullOrWhiteSpace(refill.Address))
+                CustomerAddress = refill.Address;
+
+            if (string.IsNullOrWhiteSpace(DoctorName) && !string.IsNullOrWhiteSpace(refill.DoctorName))
+                DoctorName = refill.DoctorName;
+        }
+
+        CartLineViewModel? lastFocus = null;
+        var added = 0;
+
+        foreach (var (line, qty) in refillVm.PendingAdds)
+        {
+            if (line.SuggestedBatchId is not int batchId || batchId <= 0 || qty <= 0)
+                continue;
+
+            var selection = new MedicineBatchSelection(
+                line.MedicineId,
+                batchId,
+                line.MedicineName,
+                line.SuggestedBatchNumber ?? string.Empty,
+                line.SuggestedExpiryDate,
+                line.SuggestedMrp,
+                line.SuggestedGstPercent,
+                line.SuggestedUnitPrice,
+                line.AvailableStock,
+                0m);
+
+            var existing = Cart.FirstOrDefault(l =>
+                l.BatchId == batchId && l.BatchId > 0 && !l.IsReturnLine);
+            if (existing is not null)
+            {
+                var newQty = existing.Quantity + qty;
+                if (newQty > selection.AvailableStock)
+                {
+                    _dialog.ShowError(
+                        $"Only {selection.AvailableStock:0.##} units available for {selection.MedicineName} (batch {selection.BatchNumber}).");
+                    newQty = selection.AvailableStock;
+                }
+
+                if (newQty <= existing.Quantity)
+                    continue;
+
+                existing.Quantity = newQty;
+                lastFocus = existing;
+                added++;
+                continue;
+            }
+
+            var target = Cart.FirstOrDefault(l => l.IsEmpty) ?? CartLineViewModel.CreateEmpty();
+            if (!Cart.Contains(target))
+            {
+                target.Changed += RecalculateTotals;
+                Cart.Add(target);
+            }
+
+            target.ApplySelection(selection);
+            target.Quantity = Math.Min(qty, selection.AvailableStock);
+            lastFocus = target;
+            added++;
+        }
+
+        EnsureTrailingEmptyRow();
+        RecalculateTotals();
+        if (lastFocus is not null)
+            RequestItemFocus?.Invoke(lastFocus);
+
+        StatusMessage = added > 0
+            ? $"Refilled {added} item(s) from last sale."
+            : StatusMessage;
+    }
+
+    public Task OfferRecordShortageAsync(
+        int medicineId,
+        string medicineName,
+        decimal requestedQty,
+        decimal availableQty,
+        ShortageSource source)
+        => OfferRecordShortageCoreAsync(medicineId, medicineName, requestedQty, availableQty, source, confirm: true);
+
+    public async Task RecordShortageSilentAsync(
+        int medicineId,
+        decimal requestedQty,
+        decimal availableQty,
+        ShortageSource source)
+        => await OfferRecordShortageCoreAsync(medicineId, null, requestedQty, availableQty, source, confirm: false);
+
+    private async Task OfferRecordShortageCoreAsync(
+        int medicineId,
+        string? medicineName,
+        decimal requestedQty,
+        decimal availableQty,
+        ShortageSource source,
+        bool confirm)
+    {
+        var shortfall = Math.Max(0, requestedQty - availableQty);
+        if (medicineId <= 0 || shortfall <= 0) return;
+
+        if (confirm)
+        {
+            var label = string.IsNullOrWhiteSpace(medicineName) ? "this medicine" : $"\"{medicineName}\"";
+            if (!_dialog.Confirm(
+                    $"{label} is short by {shortfall:0.##}. Add to shortage book for purchase ordering?",
+                    "Shortage book"))
+                return;
+        }
+
+        try
+        {
+            var result = await _shortageBook.RecordAsync(
+                new RecordShortageRequest(
+                    medicineId,
+                    requestedQty,
+                    availableQty,
+                    source,
+                    string.IsNullOrWhiteSpace(CustomerName) ? null : CustomerName.Trim(),
+                    string.IsNullOrWhiteSpace(CustomerMobile) ? null : CustomerMobile.Trim()),
+                _currentUser.CurrentUser?.BranchId,
+                _currentUser.CurrentUser?.FullName ?? _currentUser.CurrentUser?.Username);
+
+            if (result.IsFailure)
+            {
+                if (confirm)
+                    _dialog.ShowError(result.Error ?? "Could not record shortage.");
+                return;
+            }
+
+            StatusMessage = $"Shortage recorded for {result.Value!.MedicineName} ({shortfall:0.##}).";
+            if (confirm)
+                _dialog.ShowInfo($"Added to shortage book: {result.Value.MedicineName} × {shortfall:0.##}", "Shortage book");
+        }
+        catch (Exception ex)
+        {
+            if (confirm)
+                _dialog.ShowError(ex.Message);
+        }
+    }
+
     private void EnsureTrailingEmptyRow()
     {
         if (Cart.Count == 0 || !Cart[^1].IsEmpty)
@@ -537,22 +748,33 @@ public class SalesViewModel : ObservableObject
 
     public int ItemCount => Cart.Count(l => !l.IsEmpty);
 
-    public PaymentMethod PaymentMethod
+    public PaymentMethod PaymentMethod =>
+        PaymentLines.FirstOrDefault()?.Method ?? PaymentMethod.Cash;
+
+    public bool IsCreditSale => BalanceDue > 0.009m;
+
+    public decimal BalanceDue
     {
-        get => _paymentMethod;
-        set
+        get
         {
-            if (SetProperty(ref _paymentMethod, value))
-            {
-                OnPropertyChanged(nameof(BalanceDue));
-                OnPropertyChanged(nameof(IsCreditSale));
-            }
+            var collected = PaymentLines.Where(p => p.Method != PaymentMethod.Credit).Sum(p => p.Amount);
+            return Math.Max(0m, Math.Round(GrandTotal - collected, 2));
         }
     }
 
-    public bool IsCreditSale => PaymentMethod == PaymentMethod.Credit;
-
-    public decimal BalanceDue => IsCreditSale ? GrandTotal : 0m;
+    public decimal PaymentAllocated => Math.Round(PaymentLines.Sum(p => p.Amount), 2);
+    public decimal PaymentRemaining => Math.Round(GrandTotal - PaymentAllocated, 2);
+    public bool ShowPaymentRemaining => Math.Abs(PaymentRemaining) > 0.009m;
+    public decimal ChangeDue
+    {
+        get
+        {
+            var collected = PaymentLines.Where(p => p.Method != PaymentMethod.Credit).Sum(p => p.Amount);
+            return collected > GrandTotal ? Math.Round(collected - GrandTotal, 2) : 0m;
+        }
+    }
+    public bool ShowChangeDue => ChangeDue > 0.009m;
+    public bool CanAddPayment => CanModifyBill && PaymentLines.Count < MaxPaymentLines;
 
     private void RecalculateTotals()
     {
@@ -568,11 +790,96 @@ public class SalesViewModel : ObservableObject
         RoundOff = summary.RoundOff;
         GrandTotal = summary.GrandTotal;
 
+        if (!_suppressPaymentSync && PaymentLines.Count == 1)
+            PaymentLines[0].SetAmountSilent(GrandTotal);
+
         OnPropertyChanged(nameof(ItemCount));
         OnPropertyChanged(nameof(HasItems));
-        OnPropertyChanged(nameof(BalanceDue));
+        NotifyPaymentProperties();
         RefreshActiveSlotSummary();
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void NotifyPaymentProperties()
+    {
+        OnPropertyChanged(nameof(PaymentMethod));
+        OnPropertyChanged(nameof(IsCreditSale));
+        OnPropertyChanged(nameof(BalanceDue));
+        OnPropertyChanged(nameof(PaymentAllocated));
+        OnPropertyChanged(nameof(PaymentRemaining));
+        OnPropertyChanged(nameof(ShowPaymentRemaining));
+        OnPropertyChanged(nameof(ChangeDue));
+        OnPropertyChanged(nameof(ShowChangeDue));
+        OnPropertyChanged(nameof(CanAddPayment));
+    }
+
+    private void OnPaymentLineChanged()
+    {
+        if (_suppressPaymentSync) return;
+        NotifyPaymentProperties();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void ResetPaymentLines()
+    {
+        ReplacePaymentLines([new SalePaymentRequest { Method = PaymentMethod.Cash, Amount = GrandTotal }]);
+    }
+
+    private void ReplacePaymentLines(IEnumerable<SalePaymentRequest> payments)
+    {
+        _suppressPaymentSync = true;
+        foreach (var line in PaymentLines)
+            line.Changed -= OnPaymentLineChanged;
+        PaymentLines.Clear();
+
+        var rows = payments.Where(p => p.Amount > 0).ToList();
+        if (rows.Count == 0)
+            rows.Add(new SalePaymentRequest { Method = PaymentMethod.Cash, Amount = GrandTotal });
+
+        foreach (var row in rows)
+        {
+            var line = new SalePaymentLineViewModel(row.Method, row.Amount);
+            line.Changed += OnPaymentLineChanged;
+            PaymentLines.Add(line);
+        }
+
+        _suppressPaymentSync = false;
+        NotifyPaymentProperties();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void AddPaymentLine()
+    {
+        if (!CanAddPayment) return;
+        var remaining = Math.Max(0m, PaymentRemaining);
+        var line = new SalePaymentLineViewModel(NextUnusedPaymentMethod(), remaining);
+        line.Changed += OnPaymentLineChanged;
+        PaymentLines.Add(line);
+        NotifyPaymentProperties();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void RemovePaymentLine(SalePaymentLineViewModel? line)
+    {
+        if (line is null || PaymentLines.Count <= 1) return;
+        line.Changed -= OnPaymentLineChanged;
+        PaymentLines.Remove(line);
+        if (PaymentLines.Count == 1)
+            PaymentLines[0].SetAmountSilent(GrandTotal);
+        NotifyPaymentProperties();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private PaymentMethod NextUnusedPaymentMethod()
+    {
+        var used = PaymentLines.Select(p => p.Method).ToHashSet();
+        foreach (PaymentMethod method in Enum.GetValues<PaymentMethod>())
+        {
+            if (method == PaymentMethod.Credit) continue;
+            if (!used.Contains(method)) return method;
+        }
+
+        return used.Contains(PaymentMethod.Credit) ? PaymentMethod.Cash : PaymentMethod.Credit;
     }
 
     #endregion
@@ -861,7 +1168,10 @@ public class SalesViewModel : ObservableObject
         CustomerMobile = sale.BillingCustomerPhone;
         CustomerAddress = sale.BillingCustomerAddress;
         DoctorName = sale.BillingDoctorName;
-        PaymentMethod = sale.PaymentMethod;
+        if (sale.Payments.Count > 0)
+            ReplacePaymentLines(sale.Payments);
+        else
+            ReplacePaymentLines([new SalePaymentRequest { Method = sale.PaymentMethod, Amount = 0 }]);
 
         foreach (var line in sale.Lines)
         {
@@ -899,6 +1209,7 @@ public class SalesViewModel : ObservableObject
         OnPropertyChanged(nameof(CanUnlockBill));
         OnPropertyChanged(nameof(ShowLockBanner));
         OnPropertyChanged(nameof(LockBannerText));
+        OnPropertyChanged(nameof(CanAddPayment));
         CommandManager.InvalidateRequerySuggested();
     }
 
@@ -916,9 +1227,26 @@ public class SalesViewModel : ObservableObject
             }
         }
 
-        if (PaymentMethod == PaymentMethod.Credit && string.IsNullOrWhiteSpace(CustomerName))
+        if (PaymentRemaining > 0.009m)
         {
-            _dialog.ShowError("Enter the customer name for credit sales.");
+            _dialog.ShowError($"Allocate the remaining ₹{PaymentRemaining:N2} to another payment method, or add Credit for the unpaid part.");
+            return;
+        }
+
+        if (PaymentRemaining < -0.009m)
+        {
+            var cash = PaymentLines.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.Amount);
+            if (Math.Abs(PaymentRemaining) > cash + 0.009m)
+            {
+                _dialog.ShowError("Split payments exceed the bill total. Extra amount is allowed on Cash only (as change).");
+                return;
+            }
+        }
+
+        if (PaymentLines.Any(p => p.Method == PaymentMethod.Credit && p.Amount > 0)
+            && string.IsNullOrWhiteSpace(CustomerName))
+        {
+            _dialog.ShowError("Enter the customer name for credit / unpaid sales.");
             RequestCustomerFocus?.Invoke();
             return;
         }
@@ -940,15 +1268,14 @@ public class SalesViewModel : ObservableObject
             DiscountPercent = l.DiscountPercent
         }).ToList();
 
-        // Credit tenders are recorded for audit but do not count as cash paid.
-        var payments = new List<SalePaymentRequest>
-        {
-            new()
+        var payments = PaymentLines
+            .Where(p => p.Amount > 0)
+            .Select(p => new SalePaymentRequest
             {
-                Method = PaymentMethod,
-                Amount = GrandTotal
-            }
-        };
+                Method = p.Method,
+                Amount = p.Amount
+            })
+            .ToList();
 
         IsBusy = true;
         try
@@ -1118,7 +1445,7 @@ public class SalesViewModel : ObservableObject
         CustomerAddress = null;
         DoctorName = null;
         _suppressSlotSummary = false;
-        PaymentMethod = PaymentMethod.Cash;
+        ResetPaymentLines();
         RecalculateTotals();
         if (clearStatus) StatusMessage = null;
     }
@@ -1236,6 +1563,7 @@ public class SalesViewModel : ObservableObject
         CustomerAddress = CustomerAddress,
         DoctorName = DoctorName,
         PaymentMethod = PaymentMethod,
+        Payments = PaymentLines.Select(p => new ParkedPaymentLine { Method = p.Method, Amount = p.Amount }).ToList(),
         EditingSaleId = _editingSaleId,
         IsInvoiceLocked = IsInvoiceLocked,
         LockedBy = LockedBy,
@@ -1260,7 +1588,10 @@ public class SalesViewModel : ObservableObject
         CustomerAddress = parked.CustomerAddress;
         DoctorName = parked.DoctorName;
         _suppressSlotSummary = false;
-        PaymentMethod = parked.PaymentMethod;
+        if (parked.Payments.Count > 0)
+            ReplacePaymentLines(parked.Payments.Select(p => new SalePaymentRequest { Method = p.Method, Amount = p.Amount }));
+        else
+            ReplacePaymentLines([new SalePaymentRequest { Method = parked.PaymentMethod, Amount = GrandTotal }]);
         StatusMessage = parked.StatusMessage;
 
         foreach (var parkedLine in parked.Lines)
@@ -1306,6 +1637,7 @@ public class SalesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CounterDisplay));
         OnPropertyChanged(nameof(HasCounterSession));
+        CommandManager.InvalidateRequerySuggested();
 
         if (_counterContext.ActiveCounterId is not int counterId)
         {
@@ -1372,6 +1704,27 @@ public class SalesViewModel : ObservableObject
         // Cached Sales VM keeps old header until we refresh.
         await RefreshCounterCashAsync();
         StatusMessage = $"Now billing on {_counterContext.ActiveCounterDisplay}.";
+    }
+
+    private async Task DayCloseAsync()
+    {
+        if (!_counterContext.HasActiveCounter)
+        {
+            _dialog.ShowError("Open a billing counter before day close.", "Day close");
+            return;
+        }
+
+        if (!_dayCloseUi.ShowForActiveSession())
+            return;
+
+        _counterContext.Clear();
+        await RefreshCounterCashAsync();
+        StatusMessage = "Counter day closed. Open a counter to continue billing.";
+
+        if (_dialog.Confirm("Open a billing counter now?", "Day close"))
+            _counterPicker.ShowPicker(switchMode: false);
+
+        await RefreshCounterCashAsync();
     }
 
     #endregion

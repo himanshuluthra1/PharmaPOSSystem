@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Threading;
+using PharmaPOS.Application.Features.Accounting;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.WPF.Views;
 
@@ -24,6 +25,17 @@ public interface IBillShareService
 {
     bool ShouldOfferAfterSave(SaleReceiptDto receipt);
     void OfferShareAfterSave(SaleReceiptDto receipt);
+
+    /// <summary>One-click WhatsApp / SMS reminder for customer outstanding dues.</summary>
+    void OfferDuesReminder(
+        string customerName,
+        string? phone,
+        decimal outstanding,
+        string? companyName,
+        IReadOnlyList<(string InvoiceNumber, decimal BalanceDue)>? openBills = null);
+
+    /// <summary>Share a collection (receipt) voucher after collecting dues.</summary>
+    void OfferCollectionShare(CustomerCollectionReceiptDto receipt);
 }
 
 /// <summary>
@@ -95,6 +107,156 @@ public sealed class BillShareService : IBillShareService
 
         var channel = window.SelectedChannel;
         _ = ShareInBackgroundAsync(receipt, channel, phone, cfg);
+    }
+
+    public void OfferDuesReminder(
+        string customerName,
+        string? phone,
+        decimal outstanding,
+        string? companyName,
+        IReadOnlyList<(string InvoiceNumber, decimal BalanceDue)>? openBills = null)
+    {
+        var cfg = _settings.Current;
+        if (!cfg.EnableWhatsApp && !cfg.EnableSms)
+        {
+            _dialog.ShowError("Enable WhatsApp or SMS sharing in Settings → Preferences.");
+            return;
+        }
+
+        var shop = string.IsNullOrWhiteSpace(companyName) ? "Pharmacy" : companyName.Trim();
+        var window = new BillSharePromptWindow(
+            title: "Remind customer",
+            headline: customerName,
+            hint: $"Outstanding: ₹ {outstanding:N2}. Send a polite payment reminder.",
+            customerPhone: phone,
+            enableWhatsApp: cfg.EnableWhatsApp,
+            enableSms: cfg.EnableSms);
+
+        if (!ShowSharePrompt(window))
+            return;
+
+        var normalized = NormalizePhone(window.EnteredPhone);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            _dialog.ShowError("Enter a valid 10-digit mobile number.");
+            return;
+        }
+
+        var message = BuildDuesReminderMessage(shop, customerName, outstanding, openBills);
+        _ = SendTextShareAsync(window.SelectedChannel, normalized, message, cfg);
+    }
+
+    public void OfferCollectionShare(CustomerCollectionReceiptDto receipt)
+    {
+        var cfg = _settings.Current;
+        if (!cfg.EnableWhatsApp && !cfg.EnableSms)
+            return;
+
+        var window = new BillSharePromptWindow(
+            title: "Send collection receipt",
+            headline: $"Receipt {receipt.VoucherNumber}",
+            hint: "WhatsApp / SMS the payment acknowledgment to the customer.",
+            customerPhone: receipt.CustomerPhone,
+            enableWhatsApp: cfg.EnableWhatsApp,
+            enableSms: cfg.EnableSms);
+
+        if (!ShowSharePrompt(window))
+            return;
+
+        var normalized = NormalizePhone(window.EnteredPhone);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            _dialog.ShowError("Enter a valid 10-digit mobile number.");
+            return;
+        }
+
+        var message = BuildCollectionMessage(receipt);
+        _ = SendTextShareAsync(window.SelectedChannel, normalized, message, cfg);
+    }
+
+    private bool ShowSharePrompt(BillSharePromptWindow window)
+    {
+        var owner = System.Windows.Application.Current?.MainWindow;
+        if (owner is not null && owner.IsLoaded && owner.IsVisible && !ReferenceEquals(owner, window))
+        {
+            try { window.Owner = owner; }
+            catch { /* ignore */ }
+        }
+
+        if (window.Owner is null)
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+        return window.ShowDialog() == true && window.SelectedChannel != BillShareChannel.None;
+    }
+
+    private async Task SendTextShareAsync(
+        BillShareChannel channel,
+        string phone,
+        string message,
+        BillShareSettings cfg)
+    {
+        try
+        {
+            await RunOnUiAsync(async () =>
+            {
+                if (channel.HasFlag(BillShareChannel.WhatsApp) && cfg.EnableWhatsApp)
+                {
+                    await OpenWhatsAppAndPasteAsync(phone, message).ConfigureAwait(true);
+                    _dialog.ShowInfo(
+                        "WhatsApp chat is open with the message.\nReview and tap Send.\n\n" +
+                        "If the box is empty, click the message box and press Ctrl+V.",
+                        "WhatsApp");
+                }
+
+                if (channel.HasFlag(BillShareChannel.Sms) && cfg.EnableSms)
+                    OpenSms(phone, message);
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await RunOnUiAsync(() => _dialog.ShowError($"Could not send message: {ex.Message}"))
+                .ConfigureAwait(false);
+        }
+    }
+
+    internal static string BuildDuesReminderMessage(
+        string shop,
+        string customerName,
+        decimal outstanding,
+        IReadOnlyList<(string InvoiceNumber, decimal BalanceDue)>? openBills)
+    {
+        var sb = new StringBuilder();
+        sb.Append(shop).AppendLine();
+        sb.Append("Dear ").Append(string.IsNullOrWhiteSpace(customerName) ? "Customer" : customerName.Trim())
+            .AppendLine(",");
+        sb.Append("Your outstanding balance is Rs ").Append(outstanding.ToString("N2")).AppendLine(".");
+        if (openBills is { Count: > 0 })
+        {
+            sb.AppendLine("Open bills:");
+            foreach (var bill in openBills.Take(8))
+                sb.Append(" - ").Append(bill.InvoiceNumber)
+                    .Append(": Rs ").AppendLine(bill.BalanceDue.ToString("N2"));
+            if (openBills.Count > 8)
+                sb.Append(" - … and ").Append(openBills.Count - 8).AppendLine(" more");
+        }
+        sb.AppendLine("Please settle at your earliest convenience. Thank you.");
+        return sb.ToString();
+    }
+
+    internal static string BuildCollectionMessage(CustomerCollectionReceiptDto receipt)
+    {
+        var shop = string.IsNullOrWhiteSpace(receipt.CompanyName) ? "Pharmacy" : receipt.CompanyName.Trim();
+        var sb = new StringBuilder();
+        sb.Append(shop).AppendLine();
+        sb.Append("Payment received").AppendLine();
+        sb.Append("Receipt: ").AppendLine(receipt.VoucherNumber);
+        sb.Append("Date: ").AppendLine(receipt.EntryDate.ToString("dd-MMM-yyyy"));
+        if (!string.IsNullOrWhiteSpace(receipt.CustomerName))
+            sb.Append("Customer: ").AppendLine(receipt.CustomerName.Trim());
+        sb.Append("Amount: Rs ").AppendLine(receipt.AmountCollected.ToString("N2"));
+        sb.Append("Balance due: Rs ").AppendLine(receipt.OutstandingAfter.ToString("N2"));
+        sb.Append("Thank you!");
+        return sb.ToString();
     }
 
     private async Task ShareInBackgroundAsync(
@@ -214,7 +376,13 @@ public sealed class BillShareService : IBillShareService
             && !string.Equals(receipt.CustomerName, "Walk-in Customer", StringComparison.OrdinalIgnoreCase))
             sb.Append("Customer: ").AppendLine(receipt.CustomerName.Trim());
         sb.Append("Amount: Rs ").AppendLine(receipt.GrandTotal.ToString("N2"));
-        if (receipt.PaidAmount > 0)
+        if (receipt.Payments.Count > 1)
+        {
+            foreach (var p in receipt.Payments.Where(x => x.Amount > 0))
+                sb.Append(InvoicePrintService.PaymentMethodLabel(p.Method))
+                    .Append(": Rs ").AppendLine(p.Amount.ToString("N2"));
+        }
+        else if (receipt.PaidAmount > 0)
             sb.Append("Paid: Rs ").AppendLine(receipt.PaidAmount.ToString("N2"));
         if (!string.IsNullOrWhiteSpace(billUrl))
         {

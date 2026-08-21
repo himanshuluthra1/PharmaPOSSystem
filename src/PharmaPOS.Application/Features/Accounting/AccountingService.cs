@@ -5,6 +5,7 @@ using PharmaPOS.Domain.Entities.Accounting;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Entities.Sales;
+using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Results;
 
@@ -475,12 +476,29 @@ public class AccountingService : IAccountingService
 
                 await _uow.SaveChangesAsync(token);
 
+                var company = await _uow.Repository<CompanyProfile>().Query().AsNoTracking()
+                    .FirstOrDefaultAsync(token);
+                decimal outstandingAfter = 0m;
+                string? partyPhone = null;
+                if (partyKind == PartyLedgerKind.Customer)
+                {
+                    var refreshed = await _uow.Repository<Customer>().GetByIdAsync(partyId, token);
+                    outstandingAfter = refreshed?.OutstandingBalance ?? 0m;
+                    partyPhone = refreshed?.Phone;
+                }
+
                 return new VoucherReceiptDto
                 {
                     JournalEntryId = entry.Id,
                     VoucherNumber = voucherNumber,
                     EntryDate = entryDate,
-                    Amount = amount
+                    Amount = amount,
+                    PartyName = partyName,
+                    PartyPhone = partyPhone,
+                    OutstandingAfter = outstandingAfter,
+                    CompanyName = company?.CompanyName,
+                    CashOrBankAccountName = cashAccount.Name,
+                    Narration = entry.Narration
                 };
             }, ct);
 

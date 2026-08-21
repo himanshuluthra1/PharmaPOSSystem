@@ -169,6 +169,83 @@
                         </Grid>
                     </TabItem>
 
+                    <!-- CUSTOMER DUES -->
+                    <TabItem Header="Customer Dues" Padding="10,4">
+                        <Grid DataContext="{Binding CustomerDues}" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding RemindCommand}"
+                                            Style="{StaticResource AcctToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="WhatsApp / SMS payment reminder">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="MessageText" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Remind" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding CollectCommand}"
+                                            Style="{StaticResource AcctToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Collect payment and print receipt"
+                                            Visibility="{Binding DataContext.CanCreateVouchers, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="CashPlus" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Collect now" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}"
+                                            Width="30" Height="30" ToolTip="Refresh">
+                                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                                    </Button>
+                                </StackPanel>
+                                <TextBox materialDesign:HintAssist.Hint="Search customer..."
+                                         Style="{StaticResource AcctOutlinedBox}"
+                                         Margin="0,0,6,0"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <Grid Grid.Row="1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.35*" MinWidth="220" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" MinWidth="180" />
+                                </Grid.ColumnDefinitions>
+
+                                <DockPanel Grid.Column="0">
+                                    <TextBlock DockPanel.Dock="Bottom" Margin="0,6,0,0" Opacity="0.7" FontSize="11"
+                                               Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+                                    <DataGrid Style="{StaticResource AcctDataGrid}"
+                                              ItemsSource="{Binding Dues}" SelectedItem="{Binding SelectedDue}">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Customer" Binding="{Binding Name}" Width="*" MinWidth="140" />
+                                            <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="110" />
+                                            <DataGridTextColumn Header="Owes" Binding="{Binding OutstandingBalance, StringFormat=N2}" Width="100" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+
+                                <Border Grid.Column="1" Width="1" Margin="6,0"
+                                        Background="{DynamicResource MaterialDesignDivider}" />
+
+                                <DockPanel Grid.Column="2">
+                                    <TextBlock DockPanel.Dock="Top" Text="Open bills for selected customer" FontSize="11" FontWeight="SemiBold"
+                                               Opacity="0.5" Margin="0,0,0,4" />
+                                    <DataGrid Style="{StaticResource AcctDataGrid}" ItemsSource="{Binding OpenBills}">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="110" />
+                                            <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="90" />
+                                            <DataGridTextColumn Header="Balance due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="85" />
+                                            <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="75" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+
                     <!-- VOUCHERS -->
                     <TabItem Header="Vouchers" Padding="10,4"
                              Visibility="{Binding CanCreateVouchers, Converter={StaticResource BoolToVisibility}}">

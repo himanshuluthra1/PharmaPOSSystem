@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Application.Features.ShortageBook;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
@@ -12,11 +13,13 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
 {
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly IShortageBookService _shortageBook;
 
-    public PurchaseOrderService(IUnitOfWork uow, IDateTimeProvider clock)
+    public PurchaseOrderService(IUnitOfWork uow, IDateTimeProvider clock, IShortageBookService shortageBook)
     {
         _uow = uow;
         _clock = clock;
+        _shortageBook = shortageBook;
     }
 
     public async Task<List<PurchaseOrderListItemDto>> ListAsync(int? branchId, CancellationToken ct = default)
@@ -172,48 +175,79 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
     }
 
     public async Task<Result<SuggestReorderResultDto>> GenerateFromLowStockAsync(int? branchId, CancellationToken ct = default)
+        => await GenerateDemandOrdersAsync(branchId, includeReorder: true, includeShortages: true, ct);
+
+    public async Task<Result<SuggestReorderResultDto>> GenerateFromShortageBookAsync(int? branchId, CancellationToken ct = default)
+        => await GenerateDemandOrdersAsync(branchId, includeReorder: false, includeShortages: true, ct);
+
+    private async Task<Result<SuggestReorderResultDto>> GenerateDemandOrdersAsync(
+        int? branchId, bool includeReorder, bool includeShortages, CancellationToken ct)
     {
         try
         {
             var result = await _uow.ExecuteInTransactionAsync(async token =>
             {
-                var medicines = await _uow.Repository<Medicine>().Query().AsNoTracking()
-                    .Where(m => m.Status == EntityStatus.Active && !m.IsDeleted && m.ReorderLevel > 0)
-                    .Select(m => new { m.Id, m.Name, m.PurchasePrice, m.ReorderLevel, m.ReorderQuantity })
-                    .ToListAsync(token);
+                var demand = new Dictionary<int, DemandLine>();
 
-                var stockQ = _uow.Repository<MedicineBatch>().Query().AsNoTracking()
-                    .Where(b => !b.IsDeleted);
-                if (branchId.HasValue)
-                    stockQ = stockQ.Where(b => b.BranchId == branchId);
-                var stockLookup = await stockQ
-                    .GroupBy(b => b.MedicineId)
-                    .Select(g => new { MedicineId = g.Key, Qty = g.Sum(x => x.QuantityAvailable) })
-                    .ToDictionaryAsync(x => x.MedicineId, x => x.Qty, token);
+                if (includeReorder)
+                {
+                    var medicines = await _uow.Repository<Medicine>().Query().AsNoTracking()
+                        .Where(m => m.Status == EntityStatus.Active && !m.IsDeleted && m.ReorderLevel > 0)
+                        .Select(m => new { m.Id, m.Name, m.PurchasePrice, m.ReorderLevel, m.ReorderQuantity })
+                        .ToListAsync(token);
 
-                var low = medicines
-                    .Select(m =>
+                    var stockQ = _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+                        .Where(b => !b.IsDeleted);
+                    if (branchId.HasValue)
+                        stockQ = stockQ.Where(b => b.BranchId == branchId);
+                    var stockLookup = await stockQ
+                        .GroupBy(b => b.MedicineId)
+                        .Select(g => new { MedicineId = g.Key, Qty = g.Sum(x => x.QuantityAvailable) })
+                        .ToDictionaryAsync(x => x.MedicineId, x => x.Qty, token);
+
+                    foreach (var m in medicines)
                     {
                         stockLookup.TryGetValue(m.Id, out var qty);
-                        var suggest = m.ReorderQuantity > 0 ? m.ReorderQuantity : m.ReorderLevel;
-                        return new { m.Id, m.Name, m.PurchasePrice, OnHand = qty, m.ReorderLevel, SuggestQty = (decimal)suggest };
-                    })
-                    .Where(x => x.OnHand <= x.ReorderLevel && x.SuggestQty > 0)
-                    .ToList();
-
-                if (low.Count == 0)
-                {
-                    return new SuggestReorderResultDto(0, 0, 0, Array.Empty<PurchaseOrderListItemDto>());
+                        if (qty > m.ReorderLevel) continue;
+                        var suggest = (decimal)(m.ReorderQuantity > 0 ? m.ReorderQuantity : m.ReorderLevel);
+                        if (suggest <= 0) continue;
+                        demand[m.Id] = new DemandLine(m.Id, m.Name, m.PurchasePrice, suggest, FromShortage: false);
+                    }
                 }
 
-                var lastSupplier = await GetLastSupplierByMedicineAsync(
-                    low.Select(x => x.Id).ToList(), branchId, token);
-
-                var grouped = new Dictionary<int, List<(int MedicineId, decimal Qty, decimal Price)>>();
-                var skipped = 0;
-                foreach (var item in low)
+                if (includeShortages)
                 {
-                    if (!lastSupplier.TryGetValue(item.Id, out var supplierId))
+                    var shortages = await _shortageBook.GetOpenAggregatesAsync(branchId, token);
+                    foreach (var s in shortages)
+                    {
+                        if (s.ShortfallQuantity <= 0) continue;
+                        if (demand.TryGetValue(s.MedicineId, out var existing))
+                        {
+                            demand[s.MedicineId] = existing with
+                            {
+                                SuggestQty = Math.Max(existing.SuggestQty, s.ShortfallQuantity),
+                                FromShortage = true
+                            };
+                        }
+                        else
+                        {
+                            demand[s.MedicineId] = new DemandLine(
+                                s.MedicineId, s.MedicineName, s.PurchasePrice, s.ShortfallQuantity, FromShortage: true);
+                        }
+                    }
+                }
+
+                if (demand.Count == 0)
+                    return new SuggestReorderResultDto(0, 0, 0, Array.Empty<PurchaseOrderListItemDto>());
+
+                var lastSupplier = await GetLastSupplierByMedicineAsync(
+                    demand.Keys.ToList(), branchId, token);
+
+                var grouped = new Dictionary<int, List<DemandLine>>();
+                var skipped = 0;
+                foreach (var item in demand.Values)
+                {
+                    if (!lastSupplier.TryGetValue(item.MedicineId, out var supplierId))
                     {
                         skipped++;
                         continue;
@@ -221,15 +255,22 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
 
                     if (!grouped.TryGetValue(supplierId, out var list))
                     {
-                        list = new List<(int, decimal, decimal)>();
+                        list = new List<DemandLine>();
                         grouped[supplierId] = list;
                     }
 
-                    list.Add((item.Id, item.SuggestQty, item.PurchasePrice));
+                    list.Add(item);
                 }
 
                 var created = new List<PurchaseOrderListItemDto>();
+                var medicineToPo = new Dictionary<int, int>();
                 var included = 0;
+                var remarks = includeReorder && includeShortages
+                    ? "Auto-generated from low stock + shortage book"
+                    : includeShortages
+                        ? "Auto-generated from shortage book"
+                        : "Auto-generated from low stock";
+
                 foreach (var (supplierId, lines) in grouped)
                 {
                     var po = new PurchaseOrder
@@ -239,20 +280,20 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                         OrderDate = _clock.Now,
                         SupplierId = supplierId,
                         Status = PurchaseStatus.Draft,
-                        Remarks = "Auto-generated from low stock"
+                        Remarks = remarks
                     };
 
                     decimal total = 0m;
-                    foreach (var (medicineId, qty, price) in lines)
+                    foreach (var line in lines)
                     {
                         po.Items.Add(new PurchaseOrderItem
                         {
-                            MedicineId = medicineId,
-                            Quantity = qty,
+                            MedicineId = line.MedicineId,
+                            Quantity = line.SuggestQty,
                             ReceivedQuantity = 0,
-                            EstimatedPrice = price
+                            EstimatedPrice = line.PurchasePrice
                         });
-                        total += Math.Round(qty * price, 2);
+                        total += Math.Round(line.SuggestQty * line.PurchasePrice, 2);
                         included++;
                     }
 
@@ -260,9 +301,36 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                     await _uow.Repository<PurchaseOrder>().AddAsync(po, token);
                     await _uow.SaveChangesAsync(token);
 
+                    foreach (var line in lines)
+                        medicineToPo[line.MedicineId] = po.Id;
+
                     var reloaded = await LoadTrackedAsync(po.Id, branchId, asNoTracking: true, token);
                     if (reloaded is not null)
                         created.Add(MapList(reloaded));
+                }
+
+                if (includeShortages && medicineToPo.Count > 0)
+                {
+                    var medicineIds = medicineToPo.Keys.ToList();
+                    var openQ = _uow.Repository<ShortageBookEntry>().Query()
+                        .Where(e => !e.IsDeleted
+                                    && e.Status == ShortageStatus.Open
+                                    && medicineIds.Contains(e.MedicineId));
+                    if (branchId.HasValue)
+                        openQ = openQ.Where(e => e.BranchId == branchId);
+
+                    var openRows = await openQ.ToListAsync(token);
+                    foreach (var row in openRows)
+                    {
+                        if (!medicineToPo.TryGetValue(row.MedicineId, out var poId))
+                            continue;
+                        row.Status = ShortageStatus.Ordered;
+                        row.PurchaseOrderId = poId;
+                        _uow.Repository<ShortageBookEntry>().Update(row);
+                    }
+
+                    if (openRows.Count > 0)
+                        await _uow.SaveChangesAsync(token);
                 }
 
                 return new SuggestReorderResultDto(created.Count, included, skipped, created);
@@ -275,6 +343,9 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
             return Result.Failure<SuggestReorderResultDto>(ex.Message);
         }
     }
+
+    private sealed record DemandLine(
+        int MedicineId, string Name, decimal PurchasePrice, decimal SuggestQty, bool FromShortage);
 
     public async Task<Result<PurchaseOrderReceiveDraftDto>> GetReceiveDraftAsync(
         int purchaseOrderId, int? branchId, CancellationToken ct = default)
@@ -351,6 +422,17 @@ public sealed class PurchaseOrderService : IPurchaseOrderService
                 : po.Status;
         _uow.Repository<PurchaseOrder>().Update(po);
         await _uow.SaveChangesAsync(ct);
+
+        // Best-effort close of shortage book (separate UoW lifetime is OK after PO receipt saved).
+        try
+        {
+            await _shortageBook.MarkFulfilledForMedicinesAsync(
+                receivedByMedicineId.Keys, po.BranchId, ct);
+        }
+        catch
+        {
+            // Receipt already applied; shortage close must not fail GRN.
+        }
     }
 
     private async Task<Dictionary<int, int>> GetLastSupplierByMedicineAsync(

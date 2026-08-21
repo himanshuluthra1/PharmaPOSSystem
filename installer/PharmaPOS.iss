@@ -1,9 +1,11 @@
-; PharmaPOS Inno Setup installer script
-; Requires: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
-; Build with: scripts\build-installer.ps1
+; PharmaPOS Inno Setup installer
+; Fresh install OR in-place shop update (same AppId).
+; Build: scripts\build-installer.ps1
+; Silent shop update (AppUpdateWorker):
+;   Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /DIR="C:\Program Files\PharmaPOS"
 
 #define MyAppName "PharmaPOS"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.1"
 #define MyAppPublisher "PharmaPOS"
 #define MyAppExeName "PharmaPOS.exe"
 #ifndef PublishDir
@@ -21,6 +23,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+UsePreviousAppDir=yes
 OutputDir=..\artifacts\installer
 OutputBaseFilename=PharmaPOS-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
@@ -35,6 +38,9 @@ RestartApplications=yes
 SetupIconFile=..\src\PharmaPOS.WPF\Assets\app.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 InfoBeforeFile=INSTALL_NOTES.txt
+AppMutex=PharmaPOS.SingleInstance
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -43,11 +49,16 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Published application (self-contained win-x64)
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Master-data SQL backup (medicines/salts/suppliers/manufacturers — no shop transactions)
-Source: "{#DistDataDir}\PharmaPosDb_Master.bak"; DestDir: "{app}\Data"; Flags: ignoreversion
-Source: "{#DistDataDir}\PharmaPosDb_Master.meta.json"; DestDir: "{app}\Data"; Flags: ignoreversion
+; Application binaries — replace on upgrade
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "appsettings.json,appsettings.Production.json,Data\*"
+
+; Shop settings — keep existing on upgrade; write only on first install
+Source: "{#PublishDir}\appsettings.json"; DestDir: "{app}"; Flags: onlyifdoesntexist ignoreversion
+Source: "{#PublishDir}\appsettings.Production.json"; DestDir: "{app}"; Flags: onlyifdoesntexist ignoreversion
+
+; Master catalogue backup — first install only (shop LocalDB data is never overwritten)
+Source: "{#DistDataDir}\PharmaPosDb_Master.bak"; DestDir: "{app}\Data"; Flags: onlyifdoesntexist ignoreversion
+Source: "{#DistDataDir}\PharmaPosDb_Master.meta.json"; DestDir: "{app}\Data"; Flags: onlyifdoesntexist ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -60,7 +71,6 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 function InitializeSetup(): Boolean;
 begin
   Result := True;
-  // LocalDB is required. Warn if sqllocaldb is missing (non-blocking for silent).
   if not FileExists(ExpandConstant('{sys}\SqlLocalDB.exe')) and
      not FileExists(ExpandConstant('{commonpf}\Microsoft SQL Server\150\Tools\Binn\SqlLocalDB.exe')) and
      not FileExists(ExpandConstant('{commonpf}\Microsoft SQL Server\160\Tools\Binn\SqlLocalDB.exe')) then

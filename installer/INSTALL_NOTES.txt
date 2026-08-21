@@ -1,5 +1,5 @@
-PharmaPOS — Installation notes
-================================
+PharmaPOS — Installation & update notes
+=======================================
 
 Requirements
 ------------
@@ -7,8 +7,8 @@ Requirements
 • SQL Server Express LocalDB (free). If the installer warns that LocalDB is missing,
   install it from Microsoft, then launch PharmaPOS.
 
-What is included in the database
---------------------------------
+Fresh install
+-------------
 On first launch, PharmaPOS restores a master-data backup that includes:
 
   • Medicines catalogue (including salts / generic names)
@@ -19,21 +19,26 @@ On first launch, PharmaPOS restores a master-data backup that includes:
 
 It does NOT include shop-specific data:
 
-  • Customers / patients
-  • Doctors
-  • Employees
+  • Customers / patients, doctors, employees
   • Stock batches / inventory quantities
   • Sales, purchases, returns, or accounting journals
 
-First launch
-------------
 1. Enter the store code provided by the vendor (one-time per PC).
-2. Login:
-     Username: admin
-     Password: Admin@123
-   You will be prompted to change the password.
+2. Login: admin / Admin@123 (you will be prompted to change the password).
+
+Updating an existing shop
+-------------------------
+Run the newer PharmaPOS-Setup-x.y.z.exe on the shop PC (or accept the in-app
+update prompt). This replaces program files only.
+
+Preserved on upgrade:
+  • Shop LocalDB database (sales, stock, customers, settings)
+  • Existing appsettings.json / Production settings
+  • Existing Data\ master backup file (if already present)
+
+After update, reopen PharmaPOS. EF migrations apply automatically on startup.
 
 Data location
 -------------
-Database files are created under:
+Database files live under:
   %LocalAppData%\PharmaPOS\Data\

@@ -637,6 +637,15 @@ public class SalesService : ISalesService
             IsLocked = sale.IsLocked,
             LockedBy = sale.LockedBy,
             LockedAtUtc = sale.LockedAtUtc,
+            Payments = sale.Payments
+                .OrderBy(p => p.Id)
+                .Select(p => new SalePaymentRequest
+                {
+                    Method = p.Method,
+                    Amount = p.Amount,
+                    ReferenceNumber = p.ReferenceNumber
+                })
+                .ToList(),
             Lines = sale.Items.Select(item =>
             {
                 var batchQty = item.MedicineBatchId is int bid && batches.TryGetValue(bid, out var batch)
@@ -1001,16 +1010,42 @@ public class SalesService : ISalesService
 
     private void ApplySalePayments(Sale sale, List<SalePaymentRequest> payments)
     {
-        // Credit tenders record the credit portion but do not increase PaidAmount.
-        var paid = payments
-            .Where(p => p.Method != PaymentMethod.Credit)
-            .Sum(p => p.Amount);
+        var rows = (payments ?? [])
+            .Where(p => p.Amount > 0)
+            .Select(p => new SalePaymentRequest
+            {
+                Method = p.Method,
+                Amount = Math.Round(p.Amount, 2),
+                ReferenceNumber = p.ReferenceNumber
+            })
+            .ToList();
+
+        if (rows.Count == 0)
+            throw new BillingException("Add at least one payment amount.");
+        if (rows.Any(p => p.Amount < 0))
+            throw new BillingException("Payment amounts cannot be negative.");
+
+        var allocated = rows.Sum(p => p.Amount);
+        var paid = rows.Where(p => p.Method != PaymentMethod.Credit).Sum(p => p.Amount);
+        var over = allocated - sale.GrandTotal;
+        if (over > 0.009m)
+        {
+            var cash = rows.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.Amount);
+            if (over > cash + 0.009m)
+                throw new BillingException("Split payments exceed the bill total. Extra amount is allowed on Cash only (as change).");
+        }
+        else if (over < -0.009m)
+        {
+            throw new BillingException(
+                $"Allocate the remaining ₹{Math.Abs(over):N2} to another method, or add Credit for the unpaid part.");
+        }
+
         sale.PaidAmount = paid;
-        sale.ChangeReturned = paid > sale.GrandTotal ? paid - sale.GrandTotal : 0m;
+        sale.ChangeReturned = paid > sale.GrandTotal ? Math.Round(paid - sale.GrandTotal, 2) : 0m;
         sale.PaymentStatus = paid >= sale.GrandTotal ? PaymentStatus.Paid
             : paid > 0 ? PaymentStatus.PartiallyPaid : PaymentStatus.Unpaid;
 
-        foreach (var p in payments)
+        foreach (var p in rows)
         {
             sale.Payments.Add(new SalePayment
             {
@@ -1246,7 +1281,15 @@ public class SalesService : ISalesService
             GrandTotal = sale.GrandTotal,
             PaidAmount = sale.PaidAmount,
             ChangeReturned = sale.ChangeReturned,
-            RewardPointsEarned = sale.RewardPointsEarned
+            RewardPointsEarned = sale.RewardPointsEarned,
+            Payments = (sale.Payments ?? [])
+                .Select(p => new SalePaymentRequest
+                {
+                    Method = p.Method,
+                    Amount = p.Amount,
+                    ReferenceNumber = p.ReferenceNumber
+                })
+                .ToList()
         };
 
         decimal totalTaxable = 0m, totalTax = 0m;
@@ -1472,6 +1515,138 @@ public class SalesService : ISalesService
             location,
             packingSize,
             packingType);
+    }
+
+    public async Task<List<LastSalePatientMatchDto>> SearchLastSalesByPatientAsync(
+        string term, int? branchId, CancellationToken ct = default)
+    {
+        term = term.Trim();
+        if (term.Length < 2)
+            return [];
+
+        var q = _uow.Repository<Sale>().Query().AsNoTracking()
+            .Include(s => s.Customer)
+            .Where(s => BillHistoryStatuses.Contains(s.Status));
+        if (branchId.HasValue)
+            q = q.Where(s => s.BranchId == branchId);
+
+        var digits = new string(term.Where(char.IsDigit).ToArray());
+        if (digits.Length >= 4)
+        {
+            q = q.Where(s =>
+                (s.BillingCustomerPhone != null && s.BillingCustomerPhone.Contains(digits)) ||
+                (s.Customer != null && s.Customer.Phone != null && s.Customer.Phone.Contains(digits)));
+        }
+        else
+        {
+            q = q.Where(s =>
+                (s.BillingCustomerName != null && EF.Functions.Like(s.BillingCustomerName, "%" + term + "%")) ||
+                (s.Customer != null && EF.Functions.Like(s.Customer.Name, "%" + term + "%")));
+        }
+
+        var rows = await q
+            .OrderByDescending(s => s.InvoiceDate)
+            .ThenByDescending(s => s.Id)
+            .Select(s => new
+            {
+                s.Id,
+                s.InvoiceNumber,
+                s.InvoiceDate,
+                s.GrandTotal,
+                PatientName = s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null),
+                Mobile = s.BillingCustomerPhone ?? (s.Customer != null ? s.Customer.Phone : null)
+            })
+            .Take(200)
+            .ToListAsync(ct);
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<LastSalePatientMatchDto>();
+        foreach (var row in rows)
+        {
+            var name = string.IsNullOrWhiteSpace(row.PatientName) ? "Walk-in" : row.PatientName.Trim();
+            if (string.Equals(name, "Walk-in", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrWhiteSpace(row.Mobile))
+                continue;
+
+            var key = $"{name}|{(row.Mobile ?? "").Trim()}";
+            if (!seen.Add(key)) continue;
+
+            result.Add(new LastSalePatientMatchDto(
+                row.Id,
+                row.InvoiceNumber,
+                row.InvoiceDate,
+                name,
+                row.Mobile,
+                row.GrandTotal));
+
+            if (result.Count >= 40) break;
+        }
+
+        return result;
+    }
+
+    public async Task<Result<LastSaleRefillDto>> GetLastSaleRefillAsync(
+        int saleId, int? branchId, CancellationToken ct = default)
+    {
+        var sale = await _uow.Repository<Sale>().Query().AsNoTracking()
+            .Include(s => s.Items)
+            .Include(s => s.Customer)
+            .FirstOrDefaultAsync(s => s.Id == saleId && BillHistoryStatuses.Contains(s.Status), ct);
+
+        if (sale is null)
+            return Result.Failure<LastSaleRefillDto>("Invoice not found.");
+        if (branchId.HasValue && sale.BranchId != branchId)
+            return Result.Failure<LastSaleRefillDto>("Invoice belongs to another branch.");
+
+        var preferMedWinNames = sale.InvoiceNumber.StartsWith("MW-S-", StringComparison.OrdinalIgnoreCase);
+        var medNames = await ResolveMedicineDisplayNamesAsync(
+            sale.Items.Select(i => i.MedicineId), preferMedWinNames, ct);
+
+        var lines = new List<LastSaleRefillLineDto>();
+        foreach (var item in sale.Items.OrderBy(i => i.Id))
+        {
+            if (item.Quantity <= 0) continue;
+
+            var name = medNames.TryGetValue(item.MedicineId, out var n) ? n : "Medicine";
+            var batches = await GetBatchesAsync(item.MedicineId, branchId, ct);
+            var batch = batches.FirstOrDefault();
+
+            var lastMrp = item.Mrp > 0 ? item.Mrp : item.UnitPrice;
+            lines.Add(new LastSaleRefillLineDto
+            {
+                MedicineId = item.MedicineId,
+                MedicineName = name,
+                LastQuantity = item.Quantity,
+                LastUnitPrice = item.UnitPrice,
+                LastMrp = lastMrp,
+                LastGstPercent = item.GstPercent,
+                SuggestedBatchId = batch?.BatchId,
+                SuggestedBatchNumber = batch?.BatchNumber,
+                SuggestedExpiryDate = batch?.ExpiryDate,
+                AvailableStock = batch?.QuantityAvailable ?? 0m,
+                SuggestedUnitPrice = batch is not null
+                    ? (batch.SellingPrice > 0 ? batch.SellingPrice : batch.Mrp)
+                    : item.UnitPrice,
+                SuggestedMrp = batch is not null && batch.Mrp > 0 ? batch.Mrp : lastMrp,
+                SuggestedGstPercent = batch?.GstPercent ?? item.GstPercent
+            });
+        }
+
+        var patient = sale.BillingCustomerName
+                      ?? sale.Customer?.Name
+                      ?? "Walk-in";
+
+        return Result.Success(new LastSaleRefillDto
+        {
+            SaleId = sale.Id,
+            InvoiceNumber = sale.InvoiceNumber,
+            InvoiceDate = sale.InvoiceDate,
+            PatientName = patient,
+            Mobile = sale.BillingCustomerPhone ?? sale.Customer?.Phone,
+            Address = sale.BillingCustomerAddress ?? sale.Customer?.Address,
+            DoctorName = sale.BillingDoctorName,
+            Lines = lines
+        });
     }
 
     private async Task<Dictionary<(int MedicineId, string BatchNumber), DateTime?>> LoadBatchExpiryLookupAsync(

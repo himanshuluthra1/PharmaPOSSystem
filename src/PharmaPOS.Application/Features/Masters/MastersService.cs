@@ -409,6 +409,7 @@ public class MastersService : IMastersService
             Mrp = m.Mrp, PurchasePrice = m.PurchasePrice, SellingPrice = m.SellingPrice,
             DefaultDiscountPercent = m.DefaultDiscountPercent,
             ReorderLevel = m.ReorderLevel, ReorderQuantity = m.ReorderQuantity,
+            ScheduleType = m.ScheduleType,
             PrescriptionRequired = m.PrescriptionRequired, Status = m.Status,
             ManufacturerId = m.ManufacturerId,
             ManufacturerName = m.Manufacturer?.Name
@@ -465,6 +466,7 @@ public class MastersService : IMastersService
         entity.DefaultDiscountPercent = dto.DefaultDiscountPercent;
         entity.ReorderLevel = dto.ReorderLevel;
         entity.ReorderQuantity = dto.ReorderQuantity;
+        entity.ScheduleType = dto.ScheduleType;
         entity.PrescriptionRequired = dto.PrescriptionRequired;
         entity.Status = dto.Status;
     }

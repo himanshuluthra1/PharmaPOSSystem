@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Identity;
 using PharmaPOS.Domain.Entities.Sales;
+using PharmaPOS.Domain.Entities.System;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Results;
 
@@ -323,15 +324,29 @@ public sealed class BillingCounterService : IBillingCounterService
             .FirstOrDefaultAsync(s => !s.IsDeleted && s.Status == CounterSessionStatus.Open
                                       && s.CounterId == counter.Id, ct);
 
+        CounterSession? sessionRow = openSession;
+        if (preferSessionId is int sidWanted)
+        {
+            sessionRow = await _uow.Repository<CounterSession>().Query().AsNoTracking()
+                .Include(s => s.User)
+                .FirstOrDefaultAsync(s => s.Id == sidWanted && !s.IsDeleted, ct)
+                      ?? openSession;
+        }
+
         var salesQ = _uow.Repository<Sale>().Query().AsNoTracking()
             .Include(s => s.Payments)
             .Where(s => !s.IsDeleted
-                        && s.CounterId == counter.Id
-                        && s.InvoiceDate >= dayStart && s.InvoiceDate < dayEnd
                         && s.Status != SaleStatus.Cancelled && s.Status != SaleStatus.Draft);
 
         if (preferSessionId is int sid)
+        {
             salesQ = salesQ.Where(s => s.CounterSessionId == sid);
+        }
+        else
+        {
+            salesQ = salesQ.Where(s => s.CounterId == counter.Id
+                                       && s.InvoiceDate >= dayStart && s.InvoiceDate < dayEnd);
+        }
 
         var sales = await salesQ.ToListAsync(ct);
         decimal cash = 0, card = 0, upi = 0, other = 0;
@@ -344,12 +359,13 @@ public sealed class BillingCounterService : IBillingCounterService
                     case PaymentMethod.Cash: cash += p.Amount; break;
                     case PaymentMethod.Card: card += p.Amount; break;
                     case PaymentMethod.Upi: upi += p.Amount; break;
+                    case PaymentMethod.Credit: break;
                     default: other += p.Amount; break;
                 }
             }
         }
 
-        var floatAmt = openSession?.OpeningFloat ?? 0m;
+        var floatAmt = sessionRow?.OpeningFloat ?? 0m;
         return new CounterCashSummaryDto(
             counter.Id,
             counter.Code,
@@ -361,8 +377,8 @@ public sealed class BillingCounterService : IBillingCounterService
             other,
             floatAmt,
             floatAmt + cash,
-            openSession?.User?.FullName,
-            openSession?.Id);
+            sessionRow?.User?.FullName,
+            sessionRow?.Id);
     }
 
     private CounterSessionDto MapSession(CounterSession s) => new(
@@ -374,4 +390,113 @@ public sealed class BillingCounterService : IBillingCounterService
         s.User?.FullName ?? $"User {s.UserId}",
         s.OpenedAtUtc.ToLocalTime(),
         s.OpeningFloat);
+
+    public async Task<Result<CounterDayCloseDto>> PreviewDayCloseAsync(int sessionId, CancellationToken ct = default)
+    {
+        var dto = await BuildDayCloseDtoAsync(sessionId, countedOverride: null, ct);
+        if (dto is null)
+            return Result.Failure<CounterDayCloseDto>("Counter session was not found.");
+        if (dto.IsClosed)
+            return Result.Failure<CounterDayCloseDto>("This counter session is already closed.");
+        return Result.Success(dto);
+    }
+
+    public async Task<Result<CounterDayCloseDto>> CloseDayAsync(
+        int sessionId, decimal countedCash, string? remarks, CancellationToken ct = default)
+    {
+        if (countedCash < 0)
+            return Result.Failure<CounterDayCloseDto>("Counted cash cannot be negative.");
+
+        var preview = await BuildDayCloseDtoAsync(sessionId, countedCash, ct);
+        if (preview is null)
+            return Result.Failure<CounterDayCloseDto>("Counter session was not found.");
+        if (preview.IsClosed)
+            return Result.Failure<CounterDayCloseDto>("This counter session is already closed.");
+
+        var note = BuildCloseRemark(preview.ExpectedCashInDrawer, countedCash, remarks);
+        var closed = await CloseSessionAsync(sessionId, countedCash, note, ct);
+        if (closed.IsFailure)
+            return Result.Failure<CounterDayCloseDto>(closed.Error ?? "Could not close the counter.");
+
+        var report = await BuildDayCloseDtoAsync(sessionId, countedCash, ct);
+        return report is null
+            ? Result.Failure<CounterDayCloseDto>("Counter closed, but the report could not be loaded.")
+            : Result.Success(report);
+    }
+
+    private async Task<CounterDayCloseDto?> BuildDayCloseDtoAsync(
+        int sessionId, decimal? countedOverride, CancellationToken ct)
+    {
+        var session = await _uow.Repository<CounterSession>().Query().AsNoTracking()
+            .Include(s => s.Counter)
+            .Include(s => s.User)
+            .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, ct);
+        if (session is null) return null;
+
+        var company = await _uow.Repository<CompanyProfile>().Query().AsNoTracking()
+            .FirstOrDefaultAsync(ct);
+
+        var sales = await _uow.Repository<Sale>().Query().AsNoTracking()
+            .Include(s => s.Payments)
+            .Where(s => !s.IsDeleted
+                        && s.CounterSessionId == sessionId
+                        && s.Status != SaleStatus.Cancelled
+                        && s.Status != SaleStatus.Draft)
+            .ToListAsync(ct);
+
+        decimal cash = 0, card = 0, upi = 0, other = 0, credit = 0;
+        foreach (var sale in sales)
+        {
+            foreach (var p in sale.Payments.Where(x => !x.IsDeleted))
+            {
+                switch (p.Method)
+                {
+                    case PaymentMethod.Cash: cash += p.Amount; break;
+                    case PaymentMethod.Card: card += p.Amount; break;
+                    case PaymentMethod.Upi: upi += p.Amount; break;
+                    case PaymentMethod.Credit: credit += p.Amount; break;
+                    default: other += p.Amount; break;
+                }
+            }
+        }
+
+        var expected = Math.Round(session.OpeningFloat + cash, 2);
+        var counted = countedOverride
+                      ?? session.DeclaredClosingCash
+                      ?? expected;
+
+        return new CounterDayCloseDto
+        {
+            SessionId = session.Id,
+            CompanyName = string.IsNullOrWhiteSpace(company?.CompanyName) ? "PharmaPOS" : company!.CompanyName,
+            CounterCode = session.Counter?.Code ?? $"#{session.CounterId}",
+            CounterName = session.Counter?.Name ?? $"Counter {session.CounterId}",
+            OperatorName = session.User?.FullName ?? $"User {session.UserId}",
+            OpenedAtLocal = session.OpenedAtUtc.ToLocalTime(),
+            ClosedAtLocal = session.ClosedAtUtc?.ToLocalTime(),
+            OpeningFloat = session.OpeningFloat,
+            BillCount = sales.Count,
+            CashCollected = cash,
+            CardCollected = card,
+            UpiCollected = upi,
+            OtherCollected = other,
+            CreditCollected = credit,
+            ExpectedCashInDrawer = expected,
+            CountedCash = counted,
+            Remarks = session.Remarks,
+            MachineName = session.MachineName,
+            IsClosed = session.Status == CounterSessionStatus.Closed
+        };
+    }
+
+    private static string BuildCloseRemark(decimal expected, decimal counted, string? remarks)
+    {
+        var variance = Math.Round(counted - expected, 2);
+        var label = variance > 0.009m ? "excess" : variance < -0.009m ? "shortage" : "matched";
+        var auto = $"Counted ₹{counted:N2}; system ₹{expected:N2}; {label} ₹{Math.Abs(variance):N2}.";
+        if (string.IsNullOrWhiteSpace(remarks))
+            return auto.Length <= 500 ? auto : auto[..500];
+        var combined = auto + " " + remarks.Trim();
+        return combined.Length <= 500 ? combined : combined[..500];
+    }
 }

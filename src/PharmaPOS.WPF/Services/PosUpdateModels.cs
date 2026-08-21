@@ -22,6 +22,10 @@ public sealed class PosReleaseRow
     public long? FileSizeBytes { get; init; }
     public string? Notes { get; init; }
     public DateTime CreatedAtUtc { get; init; }
+
+    /// <summary>Shown in the Published version combo (version + installer file name).</summary>
+    public string DisplayLabel =>
+        string.IsNullOrWhiteSpace(FileName) ? Version : $"{Version}  ({FileName})";
 }
 
 public sealed class PosPendingUpdate

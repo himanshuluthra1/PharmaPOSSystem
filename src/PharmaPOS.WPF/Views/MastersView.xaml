@@ -518,6 +518,10 @@
                                         </StackPanel>
                                     </Grid>
                                     <CheckBox Content="Prescription Required" IsChecked="{Binding Editor.PrescriptionRequired}" Margin="0,0,0,8" />
+                                    <TextBlock Text="Schedule" Style="{StaticResource FieldCaption}" />
+                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,8"
+                                              ItemsSource="{Binding ScheduleDrugTypes}"
+                                              SelectedItem="{Binding Editor.ScheduleType}" />
                                     <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
                                     <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
                                               ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />

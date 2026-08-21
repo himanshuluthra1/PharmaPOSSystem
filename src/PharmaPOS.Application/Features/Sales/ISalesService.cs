@@ -58,4 +58,11 @@ public interface ISalesService
 
     /// <summary>Medicine details for the billing grid F4 popup.</summary>
     Task<SaleMedicineDetailDto?> GetMedicineLineDetailAsync(int medicineId, int? batchId, int? branchId, CancellationToken ct = default);
+
+    /// <summary>Find recent patient bills by name or mobile for last-sale / refill.</summary>
+    Task<List<LastSalePatientMatchDto>> SearchLastSalesByPatientAsync(
+        string term, int? branchId, CancellationToken ct = default);
+
+    /// <summary>Load a completed bill with FEFO batch suggestions for one-tap refill.</summary>
+    Task<Result<LastSaleRefillDto>> GetLastSaleRefillAsync(int saleId, int? branchId, CancellationToken ct = default);
 }

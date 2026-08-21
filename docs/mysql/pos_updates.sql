@@ -35,10 +35,11 @@ ALTER TABLE store_activations ADD COLUMN last_seen_utc DATETIME(6) NULL;
 UPDATE store_activations SET is_vendor = 1 WHERE store_code = 'STORE-001';
 
 -- ---------------------------------------------------------------------------
--- nginx: serve installers from /var/www/html/updates
---   location /updates/ {
---     alias /var/www/html/updates/;
+-- nginx: serve installers from /var/www/html/bills/updates
+-- (usually already covered if /bills/ is served from that tree)
+--   location /bills/updates/ {
+--     alias /var/www/html/bills/updates/;
 --     autoindex off;
 --   }
--- mkdir -p /var/www/html/updates && chown www-data:www-data /var/www/html/updates
+-- mkdir -p /var/www/html/bills/updates && chown www-data:www-data /var/www/html/bills/updates
 -- ---------------------------------------------------------------------------

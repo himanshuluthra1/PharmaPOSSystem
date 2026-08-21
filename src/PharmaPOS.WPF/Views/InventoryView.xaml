@@ -421,6 +421,68 @@
                             </DataGrid>
                         </Grid>
                     </TabItem>
+
+                    <!-- SHORTAGE BOOK -->
+                    <TabItem Header="Shortage book" Padding="10,4">
+                        <Grid DataContext="{Binding ShortageBook}" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Margin="0,0,0,8" Opacity="0.7" TextWrapping="Wrap"
+                                       Text="Lost sales when stock was unavailable. Use these with Purchase Order → Generate reorder / From shortage book." />
+
+                            <DockPanel Grid.Row="1" Margin="0,0,0,6">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Command="{Binding RecordManualCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Manually record a shortage">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                            <TextBlock Text="Record" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding CancelEntryCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            ToolTip="Cancel selected open/ordered entry">
+                                        <TextBlock Text="Cancel entry" />
+                                    </Button>
+                                    <Button Command="{Binding RefreshCommand}" Style="{StaticResource InvToolbarButton}" ToolTip="Refresh">
+                                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                                    </Button>
+                                </StackPanel>
+                                <ComboBox Width="140" Margin="0,0,8,0"
+                                          Style="{StaticResource InvOutlinedCombo}"
+                                          ItemsSource="{Binding FilterOptions}"
+                                          SelectedItem="{Binding SelectedFilter}"
+                                          DisplayMemberPath="Label" />
+                                <TextBox Style="{StaticResource InvOutlinedBox}"
+                                         materialDesign:HintAssist.Hint="Search medicine / customer"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="2" Style="{StaticResource InvReadOnlyGrid}"
+                                      ItemsSource="{Binding Items}"
+                                      SelectedItem="{Binding SelectedItem}"
+                                      SelectionMode="Single">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="When" Binding="{Binding RecordedAtLabel}" Width="140" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Wanted" Binding="{Binding RequestedQuantity, StringFormat=0.##}" Width="70" />
+                                    <DataGridTextColumn Header="Had" Binding="{Binding AvailableQuantity, StringFormat=0.##}" Width="60" />
+                                    <DataGridTextColumn Header="Short" Binding="{Binding ShortfallQuantity, StringFormat=0.##}" Width="60" />
+                                    <DataGridTextColumn Header="Status" Binding="{Binding StatusLabel}" Width="80" />
+                                    <DataGridTextColumn Header="Source" Binding="{Binding SourceLabel}" Width="80" />
+                                    <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="100" />
+                                    <DataGridTextColumn Header="PO" Binding="{Binding PurchaseOrderNumber}" Width="110" />
+                                    <DataGridTextColumn Header="By" Binding="{Binding RecordedBy}" Width="90" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="3" Margin="0,8,0,0" Opacity="0.7" Text="{Binding StatusMessage}" />
+                        </Grid>
+                    </TabItem>
                 </TabControl>
             </DockPanel>
         </materialDesign:Card>

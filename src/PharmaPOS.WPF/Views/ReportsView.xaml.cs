@@ -55,4 +55,20 @@ public partial class ReportsView : UserControl
             e.Handled = true;
         }
     }
+
+    private void ScheduleGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DataGrid { SelectedItem: ScheduleRegisterRowDto row })
+            ViewModel?.OpenScheduleRowCommand.Execute(row);
+    }
+
+    private void ScheduleGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (sender is DataGrid { SelectedItem: ScheduleRegisterRowDto row })
+        {
+            ViewModel?.OpenScheduleRowCommand.Execute(row);
+            e.Handled = true;
+        }
+    }
 }

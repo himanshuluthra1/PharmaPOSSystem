@@ -77,6 +77,26 @@ public class NonSaleableStockConfiguration : IEntityTypeConfiguration<NonSaleabl
     }
 }
 
+public class ShortageBookEntryConfiguration : IEntityTypeConfiguration<ShortageBookEntry>
+{
+    public void Configure(EntityTypeBuilder<ShortageBookEntry> b)
+    {
+        b.Property(x => x.CustomerName).HasMaxLength(200);
+        b.Property(x => x.CustomerPhone).HasMaxLength(40);
+        b.Property(x => x.Notes).HasMaxLength(500);
+        b.Property(x => x.RecordedBy).HasMaxLength(100);
+
+        b.HasOne(x => x.Medicine).WithMany()
+            .HasForeignKey(x => x.MedicineId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.PurchaseOrder).WithMany()
+            .HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.SetNull);
+
+        b.HasIndex(x => new { x.BranchId, x.Status, x.RecordedAtUtc });
+        b.HasIndex(x => new { x.MedicineId, x.Status });
+        b.HasIndex(x => x.PurchaseOrderId);
+    }
+}
+
 public class AuditLogEntryConfiguration : IEntityTypeConfiguration<AuditLogEntry>
 {
     public void Configure(EntityTypeBuilder<AuditLogEntry> b)

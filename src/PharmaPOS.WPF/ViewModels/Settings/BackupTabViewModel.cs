@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows.Input;
 using Microsoft.Win32;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
+using PharmaPOS.WPF.Views;
 
 namespace PharmaPOS.WPF.ViewModels.Settings;
 
@@ -56,6 +59,8 @@ public sealed class BackupTabViewModel : ObservableObject
         _selectedFrequency = Frequencies[3];
 
         ManualBackupCommand = new AsyncRelayCommand(ManualBackupAsync, () => !IsBusy);
+        RestoreFromFileCommand = new AsyncRelayCommand(RestoreFromFileAsync, () => !IsBusy);
+        RestoreFromDriveCommand = new AsyncRelayCommand(RestoreFromDriveAsync, () => !IsBusy && IsGoogleConnected);
         ConnectGoogleCommand = new AsyncRelayCommand(ConnectGoogleAsync, () => !IsBusy && !IsGoogleConnected);
         DisconnectGoogleCommand = new RelayCommand(_ => DisconnectGoogle(), _ => !IsBusy && IsGoogleConnected);
         SaveSettingsCommand = new AsyncRelayCommand(SaveSettingsAsync, () => !IsBusy);
@@ -64,6 +69,8 @@ public sealed class BackupTabViewModel : ObservableObject
     public ObservableCollection<BackupFrequencyOption> Frequencies { get; }
 
     public ICommand ManualBackupCommand { get; }
+    public ICommand RestoreFromFileCommand { get; }
+    public ICommand RestoreFromDriveCommand { get; }
     public ICommand ConnectGoogleCommand { get; }
     public ICommand DisconnectGoogleCommand { get; }
     public ICommand SaveSettingsCommand { get; }
@@ -193,6 +200,124 @@ public sealed class BackupTabViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    private async Task RestoreFromFileAsync()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Restore database backup",
+            Filter = "SQL Server backup (*.bak)|*.bak",
+            InitialDirectory = Directory.Exists(_backup.AutoBackupFolder)
+                ? _backup.AutoBackupFolder
+                : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        await RestoreAndRestartAsync(dialog.FileName);
+    }
+
+    private async Task RestoreFromDriveAsync()
+    {
+        IsBusy = true;
+        StatusMessage = null;
+        IReadOnlyList<DriveBackupFile> files;
+        try
+        {
+            files = await _drive.ListBackupFilesAsync(GoogleClientId, GoogleClientSecret);
+        }
+        catch (Exception ex)
+        {
+            IsBusy = false;
+            _dialog.ShowError($"Could not list Google Drive backups: {ex.Message}", "Restore");
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (files.Count == 0)
+        {
+            _dialog.ShowError("No .bak files were found in the PharmaPOS Backups folder on Google Drive.", "Restore");
+            return;
+        }
+
+        var picker = new RestoreBackupPickerWindow(files)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        if (picker.ShowDialog() != true || picker.SelectedFile is null)
+            return;
+
+        if (!_dialog.Confirm(
+                "Restore replaces ALL current shop data with this Google Drive backup.\n\n" +
+                "PharmaPOS will close and reopen after restore. Continue?",
+                "Restore backup"))
+            return;
+
+        var localPath = Path.Combine(_backup.AutoBackupFolder, picker.SelectedFile.Name);
+        IsBusy = true;
+        try
+        {
+            await _drive.DownloadFileAsync(
+                picker.SelectedFile.Id, localPath, GoogleClientId, GoogleClientSecret);
+        }
+        catch (Exception ex)
+        {
+            IsBusy = false;
+            _dialog.ShowError($"Could not download backup: {ex.Message}", "Restore");
+            return;
+        }
+
+        await RestoreAndRestartAsync(localPath, alreadyConfirmed: true);
+    }
+
+    private async Task RestoreAndRestartAsync(string bakPath, bool alreadyConfirmed = false)
+    {
+        if (!alreadyConfirmed && !_dialog.Confirm(
+                "Restore replaces ALL current shop data with this backup.\n\n" +
+                "PharmaPOS will close and reopen after restore. Continue?",
+                "Restore backup"))
+        {
+            IsBusy = false;
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = null;
+        try
+        {
+            await _backup.RestoreFromFileAsync(bakPath);
+            StatusMessage = "Restore completed. PharmaPOS will restart.";
+            _dialog.ShowInfo("Restore completed. PharmaPOS will restart now.", "Restore");
+            RestartApp();
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Restore failed: {ex.Message}", "Restore");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private static void RestartApp()
+    {
+        var exe = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(exe))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                UseShellExecute = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            });
+        }
+
+        System.Windows.Application.Current?.Shutdown();
     }
 
     private async Task ConnectGoogleAsync()

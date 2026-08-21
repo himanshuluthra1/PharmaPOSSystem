@@ -10,11 +10,28 @@ public partial class BillSharePromptWindow : Window
         string? customerPhone,
         bool enableWhatsApp,
         bool enableSms)
+        : this(
+            title: "Send bill to customer",
+            headline: $"Invoice {invoiceNumber}",
+            hint: "WhatsApp / SMS the bill. Enter the customer mobile if it is blank.",
+            customerPhone: customerPhone,
+            enableWhatsApp: enableWhatsApp,
+            enableSms: enableSms)
+    {
+    }
+
+    public BillSharePromptWindow(
+        string title,
+        string headline,
+        string hint,
+        string? customerPhone,
+        bool enableWhatsApp,
+        bool enableSms)
     {
         InitializeComponent();
-        Title = "Send bill to customer";
-        InvoiceText.Text = $"Invoice {invoiceNumber}";
-        HintText.Text = "WhatsApp / SMS the bill. Enter the customer mobile if it is blank.";
+        Title = title;
+        InvoiceText.Text = headline;
+        HintText.Text = hint;
         PhoneBox.Text = customerPhone ?? string.Empty;
 
         WhatsAppButton.Visibility = enableWhatsApp ? Visibility.Visible : Visibility.Collapsed;

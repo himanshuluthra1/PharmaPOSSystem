@@ -62,6 +62,7 @@ public class PurchaseOrderViewModel : ObservableObject
         ConfirmCommand = new AsyncRelayCommand(ConfirmAsync, () => CanCreate && !IsBusy && Status == PurchaseStatus.Draft && _editingId.HasValue);
         CancelCommand = new AsyncRelayCommand(CancelAsync, () => CanManage && !IsBusy && CanCancelSelected);
         GenerateReorderCommand = new AsyncRelayCommand(GenerateReorderAsync, () => CanCreate && !IsBusy);
+        GenerateFromShortageCommand = new AsyncRelayCommand(GenerateFromShortageAsync, () => CanCreate && !IsBusy);
         ReceiveCommand = new AsyncRelayCommand(ReceiveAsync, () => CanCreate && !IsBusy && CanReceiveSelected);
         AddMedicineCommand = new AsyncRelayCommand(AddMedicineAsync, () => CanCreate && !IsBusy && IsEditable);
         RemoveLineCommand = new RelayCommand(p =>
@@ -85,6 +86,7 @@ public class PurchaseOrderViewModel : ObservableObject
     public ICommand ConfirmCommand { get; }
     public ICommand CancelCommand { get; }
     public ICommand GenerateReorderCommand { get; }
+    public ICommand GenerateFromShortageCommand { get; }
     public ICommand ReceiveCommand { get; }
     public ICommand AddMedicineCommand { get; }
     public ICommand RemoveLineCommand { get; }
@@ -519,17 +521,34 @@ public class PurchaseOrderViewModel : ObservableObject
     private async Task GenerateReorderAsync()
     {
         if (!_dialog.Confirm(
-                "Create draft purchase orders from medicines at or below reorder level?\n\nGrouped by last purchase supplier.",
-                "Generate from low stock"))
+                "Create draft purchase orders from:\n• medicines at/below reorder level\n• open shortage-book (lost sales)\n\nGrouped by last purchase supplier. Qty = max(reorder qty, shortage).",
+                "Generate reorder"))
             return;
 
+        await RunGenerateAsync(() => _orders.GenerateFromLowStockAsync(_currentUser.CurrentUser?.BranchId), "Auto reorder");
+    }
+
+    private async Task GenerateFromShortageAsync()
+    {
+        if (!_dialog.Confirm(
+                "Create draft purchase orders from open shortage-book entries only (lost sales)?\n\nGrouped by last purchase supplier.",
+                "Generate from shortage book"))
+            return;
+
+        await RunGenerateAsync(() => _orders.GenerateFromShortageBookAsync(_currentUser.CurrentUser?.BranchId), "Shortage book");
+    }
+
+    private async Task RunGenerateAsync(
+        Func<Task<PharmaPOS.Shared.Results.Result<SuggestReorderResultDto>>> generate,
+        string title)
+    {
         IsBusy = true;
         try
         {
-            var result = await _orders.GenerateFromLowStockAsync(_currentUser.CurrentUser?.BranchId);
+            var result = await generate();
             if (result.IsFailure || result.Value is null)
             {
-                _dialog.ShowError(result.Error ?? "Could not generate reorder.");
+                _dialog.ShowError(result.Error ?? "Could not generate purchase orders.");
                 return;
             }
 
@@ -539,9 +558,9 @@ public class PurchaseOrderViewModel : ObservableObject
             {
                 _dialog.ShowInfo(
                     r.MedicinesSkippedNoSupplier > 0
-                        ? $"No draft POs created. {r.MedicinesSkippedNoSupplier} low-stock medicine(s) have no prior supplier."
-                        : "Nothing is below reorder level right now.",
-                    "Auto reorder");
+                        ? $"No draft POs created. {r.MedicinesSkippedNoSupplier} medicine(s) have no prior supplier."
+                        : "Nothing to order right now.",
+                    title);
                 StatusMessage = "No draft POs generated.";
                 return;
             }
@@ -551,7 +570,7 @@ public class PurchaseOrderViewModel : ObservableObject
                 (r.MedicinesSkippedNoSupplier > 0
                     ? $"\nSkipped {r.MedicinesSkippedNoSupplier} without a last supplier."
                     : string.Empty),
-                "Auto reorder");
+                title);
             StatusMessage = $"Generated {r.DraftOrdersCreated} draft PO(s).";
             if (r.CreatedOrders.Count > 0)
                 SelectedListItem = Orders.FirstOrDefault(o => o.Id == r.CreatedOrders[0].Id);

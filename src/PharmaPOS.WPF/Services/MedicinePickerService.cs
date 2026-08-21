@@ -3,6 +3,8 @@ using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Inventory;
 using PharmaPOS.Application.Features.Masters;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.ShortageBook;
+using PharmaPOS.Domain.Enums;
 using PharmaPOS.WPF.ViewModels.Sales;
 using PharmaPOS.WPF.Views;
 
@@ -29,8 +31,11 @@ public class MedicinePickerService : IMedicinePickerService
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
+        var shortageBook = scope.ServiceProvider.GetRequiredService<IShortageBookService>();
         var medicine = ShowMedicineSearch(scope, salesService, branchId);
         if (medicine is null) return null;
+
+        await TryRecordZeroStockShortageAsync(shortageBook, medicine, ShortageSource.SalesCart, branchId);
 
         return await PickBatchForSaleAsync(salesService, medicine, branchId);
     }
@@ -122,7 +127,33 @@ public class MedicinePickerService : IMedicinePickerService
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
+        var shortageBook = scope.ServiceProvider.GetRequiredService<IShortageBookService>();
+        await TryRecordZeroStockShortageAsync(shortageBook, medicine, ShortageSource.Barcode, branchId);
         return await PickBatchForSaleAsync(salesService, medicine, branchId);
+    }
+
+    private async Task TryRecordZeroStockShortageAsync(
+        IShortageBookService shortageBook,
+        MedicineLookupDto medicine,
+        ShortageSource source,
+        int? branchId)
+    {
+        if (medicine.TotalStock > 0) return;
+        if (!_dialog.Confirm(
+                $"\"{medicine.Name}\" has no stock (lost sale). Add to shortage book?",
+                "Shortage book"))
+            return;
+
+        var onHand = await shortageBook.GetOnHandQuantityAsync(medicine.Id, branchId);
+        var result = await shortageBook.RecordAsync(
+            new RecordShortageRequest(medicine.Id, 1m, onHand, source),
+            branchId,
+            _currentUser.CurrentUser?.FullName ?? _currentUser.CurrentUser?.Username);
+
+        if (result.IsFailure)
+            _dialog.ShowError(result.Error ?? "Could not record shortage.");
+        else
+            _dialog.ShowInfo($"Added to shortage book: {medicine.Name}", "Shortage book");
     }
 
     private static async Task<MedicineBatchSelection?> PickBatchForSaleAsync(

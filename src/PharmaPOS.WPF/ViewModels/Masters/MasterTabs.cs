@@ -445,6 +445,7 @@ public class MedicineTabViewModel : MasterTabViewModelBase
     public ObservableCollection<MedicineListDto> Items { get; } = new();
     public ObservableCollection<ManufacturerListDto> Manufacturers { get; } = new();
     public Array EntityStatuses => Enum.GetValues(typeof(EntityStatus));
+    public Array ScheduleDrugTypes => Enum.GetValues(typeof(ScheduleDrugType));
 
     public ICommand GenerateBarcodeCommand { get; }
     public ICommand PreviewBarcodeCommand { get; }
@@ -647,6 +648,7 @@ public class MedicineTabViewModel : MasterTabViewModelBase
             DefaultDiscountPercent = src.DefaultDiscountPercent,
             ReorderLevel = src.ReorderLevel,
             ReorderQuantity = src.ReorderQuantity,
+            ScheduleType = src.ScheduleType,
             PrescriptionRequired = src.PrescriptionRequired,
             Status = src.Status,
             ManufacturerId = src.ManufacturerId,

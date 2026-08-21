@@ -574,6 +574,14 @@ public partial class SalesView : UserControl
             return;
         }
 
+        if (key == Key.F6)
+        {
+            e.Handled = true;
+            if (ViewModel.LastSaleRefillCommand.CanExecute(null))
+                ViewModel.LastSaleRefillCommand.Execute(null);
+            return;
+        }
+
         if (key == Key.F8)
         {
             e.Handled = true;
@@ -667,6 +675,12 @@ public partial class SalesView : UserControl
                     CommitGridEdit();
                     if (CartGrid.SelectedItem is CartLineViewModel substituteLine)
                         _ = vm.ReplaceWithSubstituteAsync(substituteLine);
+                    return;
+                case Key.F6:
+                    e.Handled = true;
+                    CommitGridEdit();
+                    if (vm.LastSaleRefillCommand.CanExecute(null))
+                        vm.LastSaleRefillCommand.Execute(null);
                     return;
                 case Key.F8:
                     if (vm.OpenSaleReturnCommand.CanExecute(null))

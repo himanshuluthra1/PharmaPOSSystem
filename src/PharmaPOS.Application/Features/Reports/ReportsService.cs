@@ -522,6 +522,95 @@ public class ReportsService : IReportsService
         }, rows);
     }
 
+    public async Task<(ReportSummaryDto Summary, ScheduleRegisterReportDto Report)> GetScheduleRegisterAsync(
+        DateTime from,
+        DateTime to,
+        int? branchId,
+        ScheduleRegisterFilter filter = ScheduleRegisterFilter.HAndH1,
+        CancellationToken ct = default)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var schedules = filter switch
+        {
+            ScheduleRegisterFilter.ScheduleH => new[] { ScheduleDrugType.ScheduleH },
+            ScheduleRegisterFilter.ScheduleH1 => new[] { ScheduleDrugType.ScheduleH1 },
+            _ => new[] { ScheduleDrugType.ScheduleH, ScheduleDrugType.ScheduleH1 }
+        };
+
+        var completedSales = SalesQuery(branchId)
+            .Where(s => s.InvoiceDate >= start && s.InvoiceDate < end);
+
+        var raw = await (
+            from item in _uow.Repository<SaleItem>().Query().AsNoTracking()
+            join sale in completedSales on item.SaleId equals sale.Id
+            join med in _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+                on item.MedicineId equals med.Id
+            where schedules.Contains(med.ScheduleType) && item.Quantity > 0
+            orderby sale.InvoiceDate, sale.InvoiceNumber, med.Name
+            select new
+            {
+                sale.Id,
+                sale.InvoiceDate,
+                sale.InvoiceNumber,
+                PatientName = sale.Customer != null
+                    ? sale.Customer.Name
+                    : (sale.BillingCustomerName ?? "Walk-in"),
+                PatientPhone = sale.BillingCustomerPhone
+                    ?? (sale.Customer != null ? sale.Customer.Phone : null),
+                DoctorName = sale.Doctor != null
+                    ? sale.Doctor.Name
+                    : sale.BillingDoctorName,
+                DoctorRegistration = sale.Doctor != null ? sale.Doctor.RegistrationNumber : null,
+                MedicineName = med.Name,
+                med.ScheduleType,
+                item.BatchNumber,
+                item.Quantity
+            }).ToListAsync(ct);
+
+        var rows = raw.Select(r => new ScheduleRegisterRowDto(
+            r.Id,
+            r.InvoiceDate,
+            r.InvoiceNumber,
+            string.IsNullOrWhiteSpace(r.PatientName) ? "Walk-in" : r.PatientName.Trim(),
+            r.PatientPhone,
+            r.DoctorName,
+            r.DoctorRegistration,
+            r.MedicineName,
+            r.ScheduleType,
+            r.BatchNumber,
+            r.Quantity)).ToList();
+
+        var company = await _settings.GetCompanyProfileAsync(ct);
+        var filterLabel = filter switch
+        {
+            ScheduleRegisterFilter.ScheduleH => "Schedule H",
+            ScheduleRegisterFilter.ScheduleH1 => "Schedule H1",
+            _ => "Schedule H / H1"
+        };
+
+        var report = new ScheduleRegisterReportDto
+        {
+            FromDate = start,
+            ToDate = end.AddDays(-1),
+            Filter = filter,
+            FilterLabel = filterLabel,
+            CompanyName = !string.IsNullOrWhiteSpace(company?.CompanyName)
+                ? company!.CompanyName
+                : (!string.IsNullOrWhiteSpace(company?.LegalName) ? company!.LegalName! : "Pharmacy"),
+            DrugLicenseNumber = company?.DrugLicenseNumber,
+            Address = company?.Address,
+            Phone = company?.Phone,
+            Rows = rows
+        };
+
+        return (new ReportSummaryDto
+        {
+            RecordCount = rows.Count,
+            TotalAmount = rows.Sum(r => r.Quantity),
+            FooterNote = $"{rows.Count} line(s) · qty {rows.Sum(r => r.Quantity):0.##} · {filterLabel}"
+        }, report);
+    }
+
     private IQueryable<Sale> SalesQuery(int? branchId)
     {
         var q = _uow.Repository<Sale>().Query()

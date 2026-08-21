@@ -25,4 +25,14 @@ public interface IReportsService
 
     Task<(ReportSummaryDto Summary, List<LowStockReportRowDto> Rows)> GetLowStockReportAsync(
         int? branchId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Schedule H / H1 sales register for inspectors: date, patient, doctor, qty, invoice.
+    /// </summary>
+    Task<(ReportSummaryDto Summary, ScheduleRegisterReportDto Report)> GetScheduleRegisterAsync(
+        DateTime from,
+        DateTime to,
+        int? branchId,
+        ScheduleRegisterFilter filter = ScheduleRegisterFilter.HAndH1,
+        CancellationToken ct = default);
 }

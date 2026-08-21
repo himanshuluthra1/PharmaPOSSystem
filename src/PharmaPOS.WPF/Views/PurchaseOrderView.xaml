@@ -20,7 +20,11 @@
                     <Button Margin="0,0,8,0" Command="{Binding RefreshCommand}"
                             Style="{StaticResource MaterialDesignOutlinedButton}" Content="Refresh" Padding="14,8" />
                     <Button Margin="0,0,8,0" Command="{Binding GenerateReorderCommand}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}" Content="Generate from low stock" Padding="14,8" />
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Content="Generate reorder" ToolTip="Low stock + shortage book" Padding="14,8" />
+                    <Button Margin="0,0,8,0" Command="{Binding GenerateFromShortageCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Content="From shortage book" Padding="14,8" />
                     <Button Command="{Binding NewCommand}"
                             Style="{StaticResource MaterialDesignRaisedButton}" Content="New draft" Padding="14,8" />
                 </StackPanel>

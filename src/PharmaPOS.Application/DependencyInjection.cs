@@ -12,6 +12,7 @@ using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Application.Features.PurchaseReturns;
 using PharmaPOS.Application.Features.SaleReturns;
 using PharmaPOS.Application.Features.ReportingSync;
+using PharmaPOS.Application.Features.ShortageBook;
 
 namespace PharmaPOS.Application;
 
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddTransient<IMastersService, MastersService>();
         services.AddTransient<IMedicineMappingService, MedicineMappingService>();
         services.AddTransient<IInventoryService, InventoryService>();
+        services.AddTransient<IShortageBookService, ShortageBookService>();
         services.AddTransient<IStockTransferService, StockTransferService>();
         services.AddTransient<IAccountingService, AccountingService>();
         services.AddTransient<IReportsService, ReportsService>();

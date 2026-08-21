@@ -79,6 +79,7 @@ public partial class App : System.Windows.Application
         });
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ICounterPickerUiService, CounterPickerUiService>();
+        services.AddSingleton<ICounterDayCloseUiService, CounterDayCloseUiService>();
         services.AddTransient<StoreCodeSetupWindow>();
         services.AddSingleton<IInvoicePrintService, InvoicePrintService>();
         services.AddSingleton<IMedicinePickerService, MedicinePickerService>();
@@ -108,6 +109,7 @@ public partial class App : System.Windows.Application
         // View models (transient so each navigation gets fresh data/context).
         services.AddTransient<LoginViewModel>();
         services.AddTransient<CounterSelectViewModel>();
+        services.AddTransient<CounterDayCloseViewModel>();
         services.AddTransient<MainViewModel>();
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<SalesViewModel>();
@@ -123,6 +125,7 @@ public partial class App : System.Windows.Application
 
         services.AddTransient<LoginWindow>();
         services.AddTransient<CounterSelectWindow>();
+        services.AddTransient<CounterDayCloseWindow>();
         services.AddTransient<MainWindow>();
     }
 

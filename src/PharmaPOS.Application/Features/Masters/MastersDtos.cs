@@ -104,6 +104,7 @@ public class MedicineDetailDto
     public decimal DefaultDiscountPercent { get; set; }
     public int ReorderLevel { get; set; }
     public int ReorderQuantity { get; set; }
+    public ScheduleDrugType ScheduleType { get; set; } = ScheduleDrugType.None;
     public bool PrescriptionRequired { get; set; }
     public EntityStatus Status { get; set; } = EntityStatus.Active;
     public int? ManufacturerId { get; set; }

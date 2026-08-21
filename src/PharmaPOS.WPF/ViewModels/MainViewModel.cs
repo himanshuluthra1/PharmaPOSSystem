@@ -162,6 +162,7 @@ public class MainViewModel : ObservableObject
             new("F4", "Medicine details"),
             new("Ctrl+L", "Medicine ledger"),
             new("F5", "Substitute"),
+            new("F6", "Refill / last sale"),
             new("F8", "Sale return"),
             new("F9", "Save / Print"),
             new("Enter", "Search item")

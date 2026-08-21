@@ -1,0 +1,29 @@
+<Window x:Class="PharmaPOS.WPF.Views.RestoreBackupPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Restore from Google Drive" Height="420" Width="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Select a backup to restore. This replaces all current shop data."
+                   TextWrapping="Wrap" Margin="0,0,0,12" />
+        <ListBox x:Name="FileList" Grid.Row="1"
+                 DisplayMemberPath="DisplayLabel"
+                 MouseDoubleClick="FileList_MouseDoubleClick" />
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0"
+                    Style="{StaticResource MaterialDesignOutlinedButton}" Padding="14,6" />
+            <Button Content="Restore" Click="Restore_Click" IsDefault="True"
+                    Style="{StaticResource MaterialDesignRaisedButton}" Padding="14,6" />
+        </StackPanel>
+    </Grid>
+</Window>

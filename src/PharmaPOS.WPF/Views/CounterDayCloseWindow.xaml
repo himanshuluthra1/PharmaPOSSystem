@@ -1,0 +1,85 @@
+<Window x:Class="PharmaPOS.WPF.Views.CounterDayCloseWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Counter day close" Height="560" Width="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Icon="/Assets/app.ico"
+        Background="{DynamicResource MaterialDesignPaper}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Counter day close" FontSize="22" FontWeight="Bold" />
+            <TextBlock Margin="0,4,0,0" Opacity="0.75" TextWrapping="Wrap"
+                       Text="Count the drawer, compare with system cash, then print or save a PDF for the owner." />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      Visibility="{Binding HasReport, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock FontWeight="SemiBold" Text="{Binding SystemReport.CounterCode}" />
+                <TextBlock Opacity="0.8" Margin="0,0,0,10">
+                    <Run Text="{Binding SystemReport.CounterName, Mode=OneWay}" />
+                    <Run Text="  ·  " />
+                    <Run Text="{Binding SystemReport.OperatorName, Mode=OneWay}" />
+                </TextBlock>
+
+                <DockPanel Margin="0,2"><TextBlock Text="Opened" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.OpenedAtLocal, StringFormat=dd-MMM HH:mm}" HorizontalAlignment="Right" /></DockPanel>
+                <DockPanel Margin="0,2"><TextBlock Text="Bills" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.BillCount}" HorizontalAlignment="Right" /></DockPanel>
+                <DockPanel Margin="0,2"><TextBlock Text="Opening float" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.OpeningFloat, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
+                <DockPanel Margin="0,2"><TextBlock Text="Cash collected" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.CashCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
+                <DockPanel Margin="0,2"><TextBlock Text="Card" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.CardCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
+                <DockPanel Margin="0,2"><TextBlock Text="UPI" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.UpiCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
+                <DockPanel Margin="0,2"><TextBlock Text="Credit / unpaid" Opacity="0.7" />
+                    <TextBlock Text="{Binding SystemReport.CreditCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
+
+                <Separator Margin="0,10" />
+                <DockPanel Margin="0,2">
+                    <TextBlock Text="System cash in drawer" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ExpectedCash, Converter={StaticResource Currency}}"
+                               HorizontalAlignment="Right" FontWeight="SemiBold" />
+                </DockPanel>
+
+                <TextBlock Text="Cash counted" FontSize="11" Opacity="0.7" Margin="0,10,0,2" />
+                <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                         Text="{Binding CountedCash, UpdateSourceTrigger=PropertyChanged}" />
+
+                <DockPanel Margin="0,10,0,0">
+                    <TextBlock Text="{Binding VarianceLabel}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding VarianceAmountText}" HorizontalAlignment="Right" FontWeight="SemiBold"
+                               FontSize="16" />
+                </DockPanel>
+
+                <TextBlock Text="Notes (optional)" FontSize="11" Opacity="0.7" Margin="0,10,0,2" />
+                <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                         AcceptsReturn="True" MinHeight="56" TextWrapping="Wrap"
+                         Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock Grid.Row="2" Foreground="#D32F2F" TextWrapping="Wrap" Margin="0,8,0,8"
+                   Text="{Binding ErrorMessage}" />
+
+        <WrapPanel Grid.Row="3" HorizontalAlignment="Right">
+            <Button Content="Preview" Command="{Binding PreviewCommand}" Margin="0,0,8,4"
+                    Style="{StaticResource MaterialDesignOutlinedButton}" Padding="14,8" />
+            <Button Content="Close &amp; save PDF" Command="{Binding CloseAndPdfCommand}" Margin="0,0,8,4"
+                    Style="{StaticResource MaterialDesignOutlinedButton}" Padding="14,8" />
+            <Button Content="Close &amp; print" Command="{Binding CloseAndPrintCommand}"
+                    Style="{StaticResource MaterialDesignRaisedButton}" Padding="16,8" />
+        </WrapPanel>
+    </Grid>
+</Window>

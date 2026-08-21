@@ -16,6 +16,7 @@ public class ReportsViewModel : ObservableObject
     private readonly IReportsService _reports;
     private readonly ISaleReturnService _saleReturns;
     private readonly IInvoiceViewerDialogService _invoiceViewer;
+    private readonly IInvoicePrintService _printService;
     private readonly int? _branchId;
     private readonly IDialogService _dialog;
 
@@ -44,22 +45,35 @@ public class ReportsViewModel : ObservableObject
     private List<LowStockReportRowDto> _allLowStock = [];
     private List<SaleReturnSummaryRowDto> _allSaleReturns = [];
     private List<MedicineReturnReportRowDto> _allMedicineReturns = [];
+    private List<ScheduleRegisterRowDto> _allScheduleRegister = [];
+    private ScheduleRegisterReportDto? _scheduleRegisterReport;
+    private ScheduleRegisterFilterOption _selectedScheduleFilter;
 
     public ReportsViewModel(
         IReportsService reports,
         ISaleReturnService saleReturns,
         IInvoiceViewerDialogService invoiceViewer,
+        IInvoicePrintService printService,
         ICurrentUserService currentUser,
         IDialogService dialog)
     {
         _reports = reports;
         _saleReturns = saleReturns;
         _invoiceViewer = invoiceViewer;
+        _printService = printService;
         _branchId = currentUser.CurrentUser?.BranchId;
         _dialog = dialog;
 
         CanExport = currentUser.HasAnyPermission(
             AppConstants.Permissions.ReportsExport, AppConstants.Permissions.ReportsManage);
+
+        ScheduleFilterOptions =
+        [
+            new(ScheduleRegisterFilter.HAndH1, "H + H1"),
+            new(ScheduleRegisterFilter.ScheduleH, "Schedule H only"),
+            new(ScheduleRegisterFilter.ScheduleH1, "Schedule H1 only")
+        ];
+        _selectedScheduleFilter = ScheduleFilterOptions[0];
 
         ReportOptions =
         [
@@ -68,6 +82,8 @@ public class ReportsViewModel : ObservableObject
             new(ReportKind.GstSummary, "GST Summary", "Output vs input GST with invoice-wise detail."),
             new(ReportKind.Profit, "Gross Profit", "Revenue vs estimated cost per sale invoice."),
             new(ReportKind.SalesByMedicine, "Sales by Medicine", "Quantity and revenue ranked by medicine."),
+            new(ReportKind.ScheduleRegister, "Schedule H / H1 Register",
+                "Inspector register: date, patient, doctor, qty, invoice for Schedule H and H1 sales."),
             new(ReportKind.StockValuation, "Stock Valuation", "Current stock value at purchase cost."),
             new(ReportKind.Expiry, "Expiry Report", "Expired stock and batches expiring within 1–12 months."),
             new(ReportKind.LowStock, "Low Stock", "Medicines at or below reorder level."),
@@ -79,12 +95,18 @@ public class ReportsViewModel : ObservableObject
 
         RunReportCommand = new AsyncRelayCommand(_ => RunReportAsync(), _ => !IsBusy);
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => CanExport && HasData && !IsBusy);
+        PrintScheduleRegisterCommand = new RelayCommand(
+            _ => PrintScheduleRegister(),
+            _ => ShowScheduleRegisterGrid && HasData && !IsBusy);
         ClearFilterCommand = new RelayCommand(_ => ClearFilters());
         OpenSaleRowCommand = new AsyncRelayCommand(
             p => OpenSaleRowAsync(p as SalesReportRowDto),
             _ => !IsBusy);
         OpenPurchaseRowCommand = new AsyncRelayCommand(
             p => OpenPurchaseRowAsync(p as PurchaseReportRowDto),
+            _ => !IsBusy);
+        OpenScheduleRowCommand = new AsyncRelayCommand(
+            p => OpenScheduleRowAsync(p as ScheduleRegisterRowDto),
             _ => !IsBusy);
         ApplyTodayCommand = new RelayCommand(_ => ApplyPreset(DateTime.Today, DateTime.Today));
         ApplyThisMonthCommand = new RelayCommand(_ =>
@@ -114,6 +136,21 @@ public class ReportsViewModel : ObservableObject
     public ObservableCollection<LowStockReportRowDto> LowStockRows { get; } = new();
     public ObservableCollection<SaleReturnSummaryRowDto> SaleReturnRows { get; } = new();
     public ObservableCollection<MedicineReturnReportRowDto> MedicineReturnRows { get; } = new();
+    public ObservableCollection<ScheduleRegisterRowDto> ScheduleRegisterRows { get; } = new();
+
+    public IReadOnlyList<ScheduleRegisterFilterOption> ScheduleFilterOptions { get; }
+
+    public ScheduleRegisterFilterOption SelectedScheduleFilter
+    {
+        get => _selectedScheduleFilter;
+        set
+        {
+            if (!SetProperty(ref _selectedScheduleFilter, value)) return;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public bool ShowScheduleFilter => SelectedReport.Kind == ReportKind.ScheduleRegister;
 
     public ReportKindOption SelectedReport
     {
@@ -124,6 +161,7 @@ public class ReportsViewModel : ObservableObject
             OnPropertyChanged(nameof(UsesDateRange));
             OnPropertyChanged(nameof(SelectedReportDescription));
             OnPropertyChanged(nameof(FilterTextHint));
+            OnPropertyChanged(nameof(ShowScheduleFilter));
             RefreshFilterOptions();
             ClearFilters(apply: false);
             ClearAllRows();
@@ -149,6 +187,7 @@ public class ReportsViewModel : ObservableObject
         ReportKind.Purchases => "Filter by invoice #, supplier, or due reason...",
         ReportKind.GstSummary => "Filter by invoice # or party...",
         ReportKind.SalesByMedicine or ReportKind.LowStock => "Filter by medicine or generic...",
+        ReportKind.ScheduleRegister => "Filter by invoice, patient, doctor, or medicine...",
         ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine, batch, or supplier...",
         ReportKind.SaleReturns => "Filter by return #, invoice, or customer...",
         ReportKind.MedicineReturns => "Filter by medicine or batch...",
@@ -241,11 +280,13 @@ public class ReportsViewModel : ObservableObject
     public bool ShowLowStockGrid => ActiveGrid == "LowStock";
     public bool ShowSaleReturnGrid => ActiveGrid == "SaleReturns";
     public bool ShowMedicineReturnGrid => ActiveGrid == "MedicineReturns";
+    public bool ShowScheduleRegisterGrid => ActiveGrid == "ScheduleRegister";
 
     /// <summary>Stock valuation uses Amount (MRP) + Cost KPIs instead of tax/discount.</summary>
     public bool ShowStockSummaryKpis => ShowStockGrid && HasData;
-    public bool ShowGenericSummaryKpis => HasData && !ShowStockGrid;
-    public bool ShowTaxDiscountKpis => HasData && !ShowStockGrid;
+    public bool ShowGenericSummaryKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid;
+    public bool ShowTaxDiscountKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid;
+    public bool ShowScheduleSummaryKpis => ShowScheduleRegisterGrid && HasData;
 
     public bool IsBusy
     {
@@ -270,9 +311,11 @@ public class ReportsViewModel : ObservableObject
 
     public ICommand RunReportCommand { get; }
     public ICommand ExportCsvCommand { get; }
+    public ICommand PrintScheduleRegisterCommand { get; }
     public ICommand ClearFilterCommand { get; }
     public ICommand OpenSaleRowCommand { get; }
     public ICommand OpenPurchaseRowCommand { get; }
+    public ICommand OpenScheduleRowCommand { get; }
     public ICommand ApplyTodayCommand { get; }
     public ICommand ApplyThisMonthCommand { get; }
     public ICommand ApplyLastMonthCommand { get; }
@@ -287,6 +330,36 @@ public class ReportsViewModel : ObservableObject
     {
         if (row is null || row.PurchaseId <= 0) return Task.CompletedTask;
         return _invoiceViewer.ShowPurchaseAsync(row.PurchaseId);
+    }
+
+    public Task OpenScheduleRowAsync(ScheduleRegisterRowDto? row)
+    {
+        if (row is null || row.SaleId <= 0) return Task.CompletedTask;
+        return _invoiceViewer.ShowSaleAsync(row.SaleId);
+    }
+
+    private void PrintScheduleRegister()
+    {
+        if (_scheduleRegisterReport is null || ScheduleRegisterRows.Count == 0)
+        {
+            _dialog.ShowInfo("Run the Schedule H / H1 register first.");
+            return;
+        }
+
+        // Print filtered view if user narrowed results.
+        var printable = new ScheduleRegisterReportDto
+        {
+            FromDate = _scheduleRegisterReport.FromDate,
+            ToDate = _scheduleRegisterReport.ToDate,
+            Filter = _scheduleRegisterReport.Filter,
+            FilterLabel = _scheduleRegisterReport.FilterLabel,
+            CompanyName = _scheduleRegisterReport.CompanyName,
+            DrugLicenseNumber = _scheduleRegisterReport.DrugLicenseNumber,
+            Address = _scheduleRegisterReport.Address,
+            Phone = _scheduleRegisterReport.Phone,
+            Rows = ScheduleRegisterRows.ToList()
+        };
+        _printService.ShowScheduleRegisterPreview(printable);
     }
 
     private void ApplyPreset(DateTime from, DateTime to)
@@ -437,6 +510,16 @@ public class ReportsViewModel : ObservableObject
                         _allMedicineSales = med.Rows;
                         Summary = med.Summary;
                         SetActiveGrid("Medicine");
+                        break;
+
+                    case ReportKind.ScheduleRegister:
+                        var schedule = await _reports.GetScheduleRegisterAsync(
+                            FromDate, ToDate, _branchId, SelectedScheduleFilter.Filter, token);
+                        if (runId != _runId) return;
+                        _scheduleRegisterReport = schedule.Report;
+                        _allScheduleRegister = schedule.Report.Rows;
+                        Summary = schedule.Summary;
+                        SetActiveGrid("ScheduleRegister");
                         break;
 
                     case ReportKind.StockValuation:
@@ -609,6 +692,11 @@ public class ReportsViewModel : ObservableObject
             case "MedicineReturns":
                 Fill(MedicineReturnRows, _allMedicineReturns.Where(r => Matches(term, r.MedicineName, r.BatchNumber)));
                 break;
+
+            case "ScheduleRegister":
+                Fill(ScheduleRegisterRows, _allScheduleRegister.Where(r =>
+                    Matches(term, r.InvoiceNumber, r.PatientName, r.PatientPhone, r.DoctorName, r.MedicineName, r.BatchNumber)));
+                break;
         }
 
         UpdateFilteredSummary();
@@ -702,6 +790,7 @@ public class ReportsViewModel : ObservableObject
         "LowStock" => _allLowStock.Count,
         "SaleReturns" => _allSaleReturns.Count,
         "MedicineReturns" => _allMedicineReturns.Count,
+        "ScheduleRegister" => _allScheduleRegister.Count,
         _ => 0
     };
 
@@ -722,6 +811,7 @@ public class ReportsViewModel : ObservableObject
             "LowStock" => (LowStockRows.Count, 0m, 0m, LowStockRows.Sum(r => r.Shortfall)),
             "SaleReturns" => (SaleReturnRows.Count, SaleReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
             "MedicineReturns" => (MedicineReturnRows.Count, MedicineReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
+            "ScheduleRegister" => (ScheduleRegisterRows.Count, ScheduleRegisterRows.Sum(r => r.Quantity), 0m, 0m),
             _ => (0, 0m, 0m, 0m)
         };
 
@@ -739,12 +829,15 @@ public class ReportsViewModel : ObservableObject
                     : $"Showing {count} of {totalSource} record(s)")
                 : ActiveGrid == "Stock"
                     ? $"{count} batch(es) — Amount {amount:N2} · Cost {tax:N2}"
-                    : $"{count} record(s) — total {amount:N2}"
+                    : ActiveGrid == "ScheduleRegister"
+                        ? $"{count} line(s) — total qty {amount:0.##}"
+                        : $"{count} record(s) — total {amount:N2}"
         };
         StatusMessage = Summary.FooterNote;
         OnPropertyChanged(nameof(ShowStockSummaryKpis));
         OnPropertyChanged(nameof(ShowGenericSummaryKpis));
         OnPropertyChanged(nameof(ShowTaxDiscountKpis));
+        OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
     }
 
     private static void Fill<T>(ObservableCollection<T> target, IEnumerable<T> source)
@@ -775,9 +868,11 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowLowStockGrid));
         OnPropertyChanged(nameof(ShowSaleReturnGrid));
         OnPropertyChanged(nameof(ShowMedicineReturnGrid));
+        OnPropertyChanged(nameof(ShowScheduleRegisterGrid));
         OnPropertyChanged(nameof(ShowStockSummaryKpis));
         OnPropertyChanged(nameof(ShowGenericSummaryKpis));
         OnPropertyChanged(nameof(ShowTaxDiscountKpis));
+        OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
         OnPropertyChanged(nameof(ShowExpirySupplierFilter));
     }
 
@@ -788,6 +883,7 @@ public class ReportsViewModel : ObservableObject
         ReportKind.GstSummary => "Gst",
         ReportKind.Profit => "Profit",
         ReportKind.SalesByMedicine => "Medicine",
+        ReportKind.ScheduleRegister => "ScheduleRegister",
         ReportKind.StockValuation => "Stock",
         ReportKind.Expiry => "Expiry",
         ReportKind.LowStock => "LowStock",
@@ -808,6 +904,7 @@ public class ReportsViewModel : ObservableObject
         LowStockRows.Clear();
         SaleReturnRows.Clear();
         MedicineReturnRows.Clear();
+        ScheduleRegisterRows.Clear();
         _allSales = [];
         _allPurchases = [];
         _allGst = [];
@@ -818,6 +915,8 @@ public class ReportsViewModel : ObservableObject
         _allLowStock = [];
         _allSaleReturns = [];
         _allMedicineReturns = [];
+        _allScheduleRegister = [];
+        _scheduleRegisterReport = null;
         _expirySupplierOptions = [FilterOption.All];
         _selectedExpirySupplierKey = "all";
         OnPropertyChanged(nameof(ExpirySupplierOptions));
@@ -849,6 +948,7 @@ public class ReportsViewModel : ObservableObject
                 case "LowStock": ReportCsvExporter.Export(dialog.FileName, LowStockRows); break;
                 case "SaleReturns": ReportCsvExporter.Export(dialog.FileName, SaleReturnRows); break;
                 case "MedicineReturns": ReportCsvExporter.Export(dialog.FileName, MedicineReturnRows); break;
+                case "ScheduleRegister": ReportCsvExporter.Export(dialog.FileName, ScheduleRegisterRows); break;
             }
             _dialog.ShowInfo($"Exported to {dialog.FileName}");
         }
@@ -866,5 +966,12 @@ public sealed class FilterOption(string key, string label)
     public string Key { get; } = key;
     public string Label { get; } = label;
 
+    public override string ToString() => Label;
+}
+
+public sealed class ScheduleRegisterFilterOption(ScheduleRegisterFilter filter, string label)
+{
+    public ScheduleRegisterFilter Filter { get; } = filter;
+    public string Label { get; } = label;
     public override string ToString() => Label;
 }

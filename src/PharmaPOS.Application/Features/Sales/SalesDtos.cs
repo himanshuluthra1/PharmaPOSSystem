@@ -161,6 +161,7 @@ public class SaleEditDto
     public bool IsLocked { get; set; }
     public string? LockedBy { get; set; }
     public DateTime? LockedAtUtc { get; set; }
+    public List<SalePaymentRequest> Payments { get; set; } = new();
     public List<SaleEditLineDto> Lines { get; set; } = new();
 }
 
@@ -219,6 +220,7 @@ public class SaleReceiptDto
     public decimal PaidAmount { get; set; }
     public decimal ChangeReturned { get; set; }
     public int RewardPointsEarned { get; set; }
+    public List<SalePaymentRequest> Payments { get; set; } = new();
 }
 
 public record SaleReceiptLineDto(
@@ -245,3 +247,53 @@ public record SaleMedicineDetailDto(
     string? Location,
     string PackingSize,
     string PackingType);
+
+/// <summary>A recent patient bill match for last-sale / refill search.</summary>
+public record LastSalePatientMatchDto(
+    int SaleId,
+    string InvoiceNumber,
+    DateTime InvoiceDate,
+    string PatientName,
+    string? Mobile,
+    decimal GrandTotal)
+{
+    public string InvoiceDateLabel => InvoiceDate.ToString("dd-MMM-yyyy hh:mm tt");
+    public string DisplayLabel =>
+        $"{PatientName}  ·  {InvoiceDateLabel}  ·  {InvoiceNumber}  ·  ₹{GrandTotal:N0}";
+}
+
+/// <summary>One line from the patient's last invoice, with a suggested sellable batch.</summary>
+public class LastSaleRefillLineDto
+{
+    public int MedicineId { get; set; }
+    public string MedicineName { get; set; } = string.Empty;
+    public decimal LastQuantity { get; set; }
+    public decimal LastUnitPrice { get; set; }
+    public decimal LastMrp { get; set; }
+    public decimal LastGstPercent { get; set; }
+    public int? SuggestedBatchId { get; set; }
+    public string? SuggestedBatchNumber { get; set; }
+    public DateTime? SuggestedExpiryDate { get; set; }
+    public decimal AvailableStock { get; set; }
+    public decimal SuggestedUnitPrice { get; set; }
+    public decimal SuggestedMrp { get; set; }
+    public decimal SuggestedGstPercent { get; set; }
+    public bool HasStock => SuggestedBatchId is > 0 && AvailableStock > 0;
+    public string StockLabel => HasStock
+        ? $"Stock {AvailableStock:0.##} · {SuggestedBatchNumber}"
+        : "Out of stock";
+}
+
+/// <summary>Last completed sale for a patient, ready to refill into the cart.</summary>
+public class LastSaleRefillDto
+{
+    public int SaleId { get; set; }
+    public string InvoiceNumber { get; set; } = string.Empty;
+    public DateTime InvoiceDate { get; set; }
+    public string PatientName { get; set; } = string.Empty;
+    public string? Mobile { get; set; }
+    public string? Address { get; set; }
+    public string? DoctorName { get; set; }
+    public List<LastSaleRefillLineDto> Lines { get; set; } = new();
+    public string InvoiceDateLabel => InvoiceDate.ToString("dd-MMM-yyyy hh:mm tt");
+}

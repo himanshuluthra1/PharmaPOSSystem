@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Microsoft.Win32;
 using PharmaPOS.Shared.Constants;
@@ -139,32 +141,7 @@ public sealed class ShopUpdatesTabViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            IsVendor = await _updates.IsVendorConsoleAsync();
-            if (!IsVendor)
-            {
-                StatusMessage = "This PC is not a vendor console. Shop updates stay on the software-provider store only.";
-                return;
-            }
-
-            var shops = await _updates.ListShopsAsync();
-            var selected = Shops.Where(s => s.IsSelected).Select(s => s.StoreId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            Shops.Clear();
-            foreach (var shop in shops)
-            {
-                Shops.Add(new ShopUpdateItem
-                {
-                    Shop = shop,
-                    IsSelected = selected.Contains(shop.StoreId)
-                });
-            }
-
-            var previousVersion = SelectedRelease?.Version;
-            Releases.Clear();
-            foreach (var release in await _updates.ListReleasesAsync())
-                Releases.Add(release);
-            SelectedRelease = Releases.FirstOrDefault(r => r.Version == previousVersion) ?? Releases.FirstOrDefault();
-
-            StatusMessage = $"{Shops.Count} shop(s). This PC is {AppConstants.ApplicationVersion}.";
+            await ReloadReleasesAndShopsAsync();
         }
         catch (Exception ex)
         {
@@ -177,6 +154,36 @@ public sealed class ShopUpdatesTabViewModel : ObservableObject
         }
     }
 
+    private async Task ReloadReleasesAndShopsAsync()
+    {
+        IsVendor = await _updates.IsVendorConsoleAsync();
+        if (!IsVendor)
+        {
+            StatusMessage = "This PC is not a vendor console. Shop updates stay on the software-provider store only.";
+            return;
+        }
+
+        var shops = await _updates.ListShopsAsync();
+        var selected = Shops.Where(s => s.IsSelected).Select(s => s.StoreId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Shops.Clear();
+        foreach (var shop in shops)
+        {
+            Shops.Add(new ShopUpdateItem
+            {
+                Shop = shop,
+                IsSelected = selected.Contains(shop.StoreId)
+            });
+        }
+
+        var previousVersion = SelectedRelease?.Version;
+        Releases.Clear();
+        foreach (var release in await _updates.ListReleasesAsync())
+            Releases.Add(release);
+        SelectedRelease = Releases.FirstOrDefault(r => r.Version == previousVersion) ?? Releases.FirstOrDefault();
+
+        StatusMessage = $"{Shops.Count} shop(s), {Releases.Count} published version(s). This PC is {AppConstants.ApplicationVersion}.";
+    }
+
     private void BrowsePackage()
     {
         var dlg = new OpenFileDialog
@@ -185,19 +192,36 @@ public sealed class ShopUpdatesTabViewModel : ObservableObject
             Filter = "PharmaPOS setup|PharmaPOS-Setup-*.exe|Installer (*.exe)|*.exe",
             CheckFileExists = true
         };
-        if (dlg.ShowDialog() == true)
-            SelectedPackagePath = dlg.FileName;
+        if (dlg.ShowDialog() != true)
+            return;
+
+        SelectedPackagePath = dlg.FileName;
+        var fromFile = TryParseVersionFromFileName(dlg.FileName);
+        if (!string.IsNullOrWhiteSpace(fromFile))
+            PackageVersion = fromFile;
     }
 
     private async Task PublishAsync()
     {
         if (string.IsNullOrWhiteSpace(SelectedPackagePath)) return;
+
+        var version = PackageVersion.Trim();
+        var fromFile = TryParseVersionFromFileName(SelectedPackagePath);
+        if (!string.IsNullOrWhiteSpace(fromFile)
+            && !string.Equals(fromFile, version, StringComparison.OrdinalIgnoreCase)
+            && !_dialog.Confirm(
+                $"Version box is {version} but the file name looks like {fromFile}.\n\n" +
+                "The dropdown lists the Version box value, not the file name.\n\n" +
+                $"Publish as {version} anyway?",
+                "Version mismatch"))
+            return;
+
         IsBusy = true;
         try
         {
             var result = await _updates.PublishReleaseAsync(new PosPublishRequest
             {
-                Version = PackageVersion,
+                Version = version,
                 LocalFilePath = SelectedPackagePath,
                 Notes = string.IsNullOrWhiteSpace(PackageNotes) ? null : PackageNotes.Trim()
             });
@@ -208,9 +232,15 @@ public sealed class ShopUpdatesTabViewModel : ObservableObject
             }
 
             StatusMessage = result.Message;
-            await LoadAsync();
+            await ReloadReleasesAndShopsAsync();
             SelectedRelease = Releases.FirstOrDefault(r =>
-                string.Equals(r.Version, PackageVersion.Trim(), StringComparison.OrdinalIgnoreCase));
+                string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase));
+            if (SelectedRelease is null)
+            {
+                _dialog.ShowError(
+                    $"Upload finished but version {version} did not appear in the list.\n" +
+                    "Click Refresh. If it is still missing, check MySQL sync settings.");
+            }
         }
         catch (Exception ex)
         {
@@ -220,6 +250,14 @@ public sealed class ShopUpdatesTabViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>PharmaPOS-Setup-1.3.1.exe → 1.3.1</summary>
+    internal static string? TryParseVersionFromFileName(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path);
+        var m = Regex.Match(name, @"(\d+\.\d+\.\d+(?:\.\d+)?)", RegexOptions.CultureInvariant);
+        return m.Success ? m.Groups[1].Value : null;
     }
 
     private async Task SendAsync()
@@ -243,7 +281,7 @@ public sealed class ShopUpdatesTabViewModel : ObservableObject
         {
             await _updates.AssignUpdateAsync(ids, SelectedRelease.Version);
             StatusMessage = $"Update {SelectedRelease.Version} sent to {ids.Count} shop(s).";
-            await LoadAsync();
+            await ReloadReleasesAndShopsAsync();
         }
         catch (Exception ex)
         {

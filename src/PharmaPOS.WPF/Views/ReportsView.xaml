@@ -53,6 +53,9 @@
                         <TextBlock Text="Double-click a row (or press Enter) to open the purchase invoice."
                                    FontSize="11" Opacity="0.5" Margin="0,0,0,8"
                                    Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="Double-click a row to open the sale invoice. Print / PDF for inspector copy."
+                                   FontSize="11" Opacity="0.5" Margin="0,0,0,8"
+                                   Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}" />
 
                         <Grid Margin="0,0,0,8"
                               Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}">
@@ -82,6 +85,21 @@
                                 <StackPanel Orientation="Horizontal">
                                     <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" />
                                     <TextBlock Text="Run Report" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <ComboBox Width="150" Margin="0,0,8,0"
+                                      ItemsSource="{Binding ScheduleFilterOptions}"
+                                      SelectedItem="{Binding SelectedScheduleFilter}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Schedule"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                      Visibility="{Binding ShowScheduleFilter, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Command="{Binding PrintScheduleRegisterCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
+                                    Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Printer" VerticalAlignment="Center" />
+                                    <TextBlock Text="Print / PDF" Margin="6,0,0,0" />
                                 </StackPanel>
                             </Button>
                             <Button Command="{Binding ExportCsvCommand}" IsEnabled="{Binding CanExport}"
@@ -165,6 +183,23 @@
                             <StackPanel>
                                 <TextBlock Text="Discount / profit" Opacity="0.6" FontSize="11" />
                                 <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </UniformGrid>
+
+                    <UniformGrid DockPanel.Dock="Top" Columns="2" Margin="0,0,0,8"
+                                 Visibility="{Binding ShowScheduleSummaryKpis, Converter={StaticResource BoolToVisibility}}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Lines" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Total quantity" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalAmount, StringFormat=0.##}"
                                            FontSize="20" FontWeight="Bold" />
                             </StackPanel>
                         </materialDesign:Card>
@@ -359,6 +394,25 @@
                                 <DataGridTextColumn Header="Quantity returned" Binding="{Binding ReturnedQuantity, StringFormat=N2}" Width="100" />
                                 <DataGridTextColumn Header="Refund" Binding="{Binding RefundAmount, StringFormat=N2}" Width="90" />
                                 <DataGridTextColumn Header="Return count" Binding="{Binding ReturnCount}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding ScheduleRegisterRows}"
+                                  Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
+                                  Cursor="Hand"
+                                  MouseDoubleClick="ScheduleGrid_MouseDoubleClick"
+                                  PreviewKeyDown="ScheduleGrid_PreviewKeyDown">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="110" />
+                                <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="120" />
+                                <DataGridTextColumn Header="Patient" Binding="{Binding PatientName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Phone" Binding="{Binding PatientPhone}" Width="100" />
+                                <DataGridTextColumn Header="Doctor" Binding="{Binding DoctorDisplay}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="Sch" Binding="{Binding ScheduleLabel}" Width="45" />
+                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="80" />
+                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat=0.##}" Width="60" />
                             </DataGrid.Columns>
                         </DataGrid>
                         </Grid>

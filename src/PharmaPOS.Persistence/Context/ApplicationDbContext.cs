@@ -60,6 +60,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<StockTransfer> StockTransfers => Set<StockTransfer>();
     public DbSet<StockTransferItem> StockTransferItems => Set<StockTransferItem>();
     public DbSet<NonSaleableStock> NonSaleableStocks => Set<NonSaleableStock>();
+    public DbSet<ShortageBookEntry> ShortageBookEntries => Set<ShortageBookEntry>();
 
     // Sales
     public DbSet<Sale> Sales => Set<Sale>();

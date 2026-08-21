@@ -169,3 +169,21 @@ public enum NotificationSeverity
     Warning = 1,
     Critical = 2
 }
+
+/// <summary>Lifecycle of a shortage-book (lost-sale) entry.</summary>
+public enum ShortageStatus
+{
+    Open = 0,
+    Ordered = 1,
+    Fulfilled = 2,
+    Cancelled = 3
+}
+
+/// <summary>Where a shortage / lost-sale demand was captured.</summary>
+public enum ShortageSource
+{
+    SalesCart = 0,
+    Barcode = 1,
+    Refill = 2,
+    Manual = 3
+}

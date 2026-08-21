@@ -111,6 +111,28 @@ public class VoucherReceiptDto
     public string VoucherNumber { get; set; } = string.Empty;
     public DateTime EntryDate { get; set; }
     public decimal Amount { get; set; }
+
+    /// <summary>Filled for customer receipts (collect now).</summary>
+    public string? PartyName { get; set; }
+    public string? PartyPhone { get; set; }
+    public decimal OutstandingAfter { get; set; }
+    public string? CompanyName { get; set; }
+    public string? CashOrBankAccountName { get; set; }
+    public string? Narration { get; set; }
+}
+
+/// <summary>Printable / shareable snapshot after collecting customer dues.</summary>
+public class CustomerCollectionReceiptDto
+{
+    public string CompanyName { get; set; } = "PharmaPOS";
+    public string VoucherNumber { get; set; } = string.Empty;
+    public DateTime EntryDate { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerPhone { get; set; }
+    public decimal AmountCollected { get; set; }
+    public decimal OutstandingAfter { get; set; }
+    public string? ReceivedInAccount { get; set; }
+    public string? Narration { get; set; }
 }
 
 public record CashBookRowDto(

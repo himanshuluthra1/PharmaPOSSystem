@@ -92,6 +92,12 @@ internal sealed class ParkedCartLine
     public string? ReturnNumber { get; init; }
 }
 
+internal sealed class ParkedPaymentLine
+{
+    public PaymentMethod Method { get; init; }
+    public decimal Amount { get; init; }
+}
+
 internal sealed class ParkedSaleBill
 {
     public IReadOnlyList<ParkedCartLine> Lines { get; init; } = Array.Empty<ParkedCartLine>();
@@ -100,6 +106,7 @@ internal sealed class ParkedSaleBill
     public string? CustomerAddress { get; init; }
     public string? DoctorName { get; init; }
     public PaymentMethod PaymentMethod { get; init; } = PaymentMethod.Cash;
+    public IReadOnlyList<ParkedPaymentLine> Payments { get; init; } = Array.Empty<ParkedPaymentLine>();
     public int? EditingSaleId { get; init; }
     public bool IsInvoiceLocked { get; init; }
     public string? LockedBy { get; init; }

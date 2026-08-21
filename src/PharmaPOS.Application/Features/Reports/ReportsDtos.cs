@@ -1,3 +1,5 @@
+using PharmaPOS.Domain.Enums;
+
 namespace PharmaPOS.Application.Features.Reports;
 
 public enum ReportKind
@@ -11,7 +13,8 @@ public enum ReportKind
     Expiry,
     LowStock,
     SaleReturns,
-    MedicineReturns
+    MedicineReturns,
+    ScheduleRegister
 }
 
 public sealed class ReportKindOption(ReportKind kind, string label, string description)
@@ -169,4 +172,57 @@ public record LowStockReportRowDto(
     decimal Shortfall)
 {
     public bool IsCritical => QuantityOnHand <= 0;
+}
+
+/// <summary>Which scheduled drugs to include in the inspector register.</summary>
+public enum ScheduleRegisterFilter
+{
+    HAndH1 = 0,
+    ScheduleH = 1,
+    ScheduleH1 = 2
+}
+
+public record ScheduleRegisterRowDto(
+    int SaleId,
+    DateTime InvoiceDate,
+    string InvoiceNumber,
+    string PatientName,
+    string? PatientPhone,
+    string? DoctorName,
+    string? DoctorRegistration,
+    string MedicineName,
+    ScheduleDrugType ScheduleType,
+    string? BatchNumber,
+    decimal Quantity)
+{
+    public string InvoiceDateLabel => InvoiceDate.ToString("dd-MMM-yyyy");
+    public string ScheduleLabel => ScheduleType switch
+    {
+        ScheduleDrugType.ScheduleH => "H",
+        ScheduleDrugType.ScheduleH1 => "H1",
+        ScheduleDrugType.ScheduleX => "X",
+        ScheduleDrugType.ScheduleG => "G",
+        ScheduleDrugType.Otc => "OTC",
+        _ => "—"
+    };
+    public string DoctorDisplay => string.IsNullOrWhiteSpace(DoctorName)
+        ? "—"
+        : string.IsNullOrWhiteSpace(DoctorRegistration)
+            ? DoctorName
+            : $"{DoctorName} ({DoctorRegistration})";
+}
+
+public sealed class ScheduleRegisterReportDto
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public ScheduleRegisterFilter Filter { get; set; }
+    public string FilterLabel { get; set; } = "Schedule H / H1";
+    public string CompanyName { get; set; } = string.Empty;
+    public string? DrugLicenseNumber { get; set; }
+    public string? Address { get; set; }
+    public string? Phone { get; set; }
+    public List<ScheduleRegisterRowDto> Rows { get; set; } = new();
+    public decimal TotalQuantity => Rows.Sum(r => r.Quantity);
+    public int RecordCount => Rows.Count;
 }

@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Inventory;
+using PharmaPOS.Application.Features.ShortageBook;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -16,6 +17,7 @@ public class InventoryViewModel : ObservableObject
     public InventoryViewModel(
         IInventoryService inventory,
         IStockTransferService stockTransfers,
+        IShortageBookService shortageBook,
         ICurrentUserService currentUser,
         IMedicinePickerService medicinePicker,
         IDialogService dialog,
@@ -30,6 +32,7 @@ public class InventoryViewModel : ObservableObject
         StockLedger = new StockLedgerTabViewModel(inventory, currentUser);
         StockAdjustment = new StockAdjustmentTabViewModel(inventory, currentUser, medicinePicker, dialog);
         StockTransfer = new StockTransferTabViewModel(stockTransfers, currentUser, medicinePicker, dialog);
+        ShortageBook = new ShortageBookTabViewModel(shortageBook, medicinePicker, currentUser, dialog);
 
         ViewLedgerCommand = new RelayCommand(_ =>
         {
@@ -43,6 +46,7 @@ public class InventoryViewModel : ObservableObject
     public StockLedgerTabViewModel StockLedger { get; }
     public StockAdjustmentTabViewModel StockAdjustment { get; }
     public StockTransferTabViewModel StockTransfer { get; }
+    public ShortageBookTabViewModel ShortageBook { get; }
 
     public bool CanAdjustStock { get; }
     public bool CanTransferStock { get; }
@@ -55,6 +59,8 @@ public class InventoryViewModel : ObservableObject
             if (!SetProperty(ref _selectedTab, value)) return;
             if (value == 1)
                 _ = StockLedger.RefreshAsync();
+            if (value == 4)
+                _ = ShortageBook.RefreshAsync();
         }
     }
 

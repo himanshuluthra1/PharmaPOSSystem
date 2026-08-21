@@ -182,6 +182,10 @@
                                 Style="{StaticResource MaterialDesignFlatButton}"
                                 Content="All counters" Margin="4,0,0,0" Padding="8,2"
                                 ToolTip="Today's cash by counter" />
+                        <Button Command="{Binding DayCloseCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Content="Day close" Margin="4,0,0,0" Padding="8,2"
+                                ToolTip="Count drawer cash, close this counter, print or save PDF" />
                     </StackPanel>
                 </DockPanel>
                 <TextBlock Text="Press Enter on Item to search medicine. F3 customer. Ctrl+T new customer. Ctrl+1–4 switch. Ctrl+W close."
@@ -427,13 +431,60 @@
                 </StackPanel>
 
                 <!-- Payment -->
-                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8">
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8"
+                            IsEnabled="{Binding CanModifyBill}">
                     <Separator Margin="0,0,0,8" />
-                    <TextBlock Text="Payment" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <TextBlock Text="Method" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
-                    <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                              ItemsSource="{Binding PaymentMethods}"
-                              SelectedItem="{Binding PaymentMethod}" />
+                    <DockPanel Margin="0,0,0,6">
+                        <Button DockPanel.Dock="Right"
+                                Command="{Binding AddPaymentCommand}"
+                                Style="{StaticResource MaterialDesignFlatButton}"
+                                Padding="8,2" Margin="8,0,0,0"
+                                ToolTip="Add another payment method">
+                            <TextBlock Text="+ Split" FontSize="12" />
+                        </Button>
+                        <TextBlock Text="Payment" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding PaymentLines}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="82" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0" Margin="0,0,6,0"
+                                              Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                              FontSize="12"
+                                              ItemsSource="{Binding DataContext.PaymentMethods, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              SelectedItem="{Binding Method}" />
+                                    <TextBox Grid.Column="1"
+                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                             Text="{Binding Amount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
+                                    <Button Grid.Column="2"
+                                            Command="{Binding DataContext.RemovePaymentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            Style="{StaticResource MaterialDesignToolButton}"
+                                            Padding="2"
+                                            ToolTip="Remove this method">
+                                        <materialDesign:PackIcon Kind="Close" Width="14" Height="14" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <DockPanel Margin="0,2,0,0"
+                               Visibility="{Binding ShowPaymentRemaining, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="To allocate" DockPanel.Dock="Left" Opacity="0.7" />
+                        <TextBlock Text="{Binding PaymentRemaining, Converter={StaticResource Currency}}"
+                                   HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="#EF6C00" />
+                    </DockPanel>
+                    <DockPanel Margin="0,2,0,0"
+                               Visibility="{Binding ShowChangeDue, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Change" DockPanel.Dock="Left" Opacity="0.7" />
+                        <TextBlock Text="{Binding ChangeDue, Converter={StaticResource Currency}}"
+                                   HorizontalAlignment="Right" />
+                    </DockPanel>
                 </StackPanel>
 
                 <!-- Bill Summary -->
@@ -475,7 +526,17 @@
                 <!-- Customer -->
                 <StackPanel x:Name="CustomerPanel" VerticalAlignment="Top">
                     <Separator Margin="0,0,0,8" />
-                    <TextBlock Text="Customer" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <DockPanel Margin="0,0,0,4">
+                        <Button DockPanel.Dock="Right"
+                                Command="{Binding LastSaleRefillCommand}"
+                                Content="Last sale"
+                                ToolTip="F6 — type patient and refill from their last bill"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Padding="10,2"
+                                Margin="8,0,0,0" />
+                        <TextBlock Text="Customer" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="F6 refill from last bill" FontSize="10" Opacity="0.55" Margin="0,0,0,6" />
 
                     <TextBlock Text="Customer name" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
                     <TextBox x:Name="CustomerNameBox"

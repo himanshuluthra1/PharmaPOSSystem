@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Accounting;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -18,6 +19,9 @@ public class AccountingViewModel : ObservableObject
 
     public AccountingViewModel(
         IAccountingService accounting,
+        ISettingsService settings,
+        IBillShareService billShare,
+        IInvoicePrintService print,
         ICurrentUserService currentUser,
         IDialogService dialog)
     {
@@ -31,6 +35,9 @@ public class AccountingViewModel : ObservableObject
             AppConstants.Permissions.AccountingManage);
 
         PartyLedger = new PartyLedgerTabViewModel(accounting, currentUser, OnPartySelected);
+        CustomerDues = new CustomerDuesTabViewModel(
+            accounting, settings, billShare, print, currentUser, dialog);
+        CustomerDues.DuesChanged += OnDuesChangedAsync;
         Vouchers = new VoucherTabViewModel(accounting, currentUser, dialog);
         Vouchers.VoucherSaved += OnVoucherSavedAsync;
         CashBook = new CashBookTabViewModel(accounting, currentUser);
@@ -41,7 +48,7 @@ public class AccountingViewModel : ObservableObject
             if (PartyLedger.SelectedParty is not PartyLedgerRowDto party) return;
             if (PartyLedger.SelectedKind.Kind != PartyLedgerKind.Supplier) return;
             Vouchers.PrefillPayment(party.PartyId, party.Name, party.OutstandingBalance);
-            SelectedTab = 1;
+            SelectedTab = 2;
         }, _ => CanCreateVouchers && PartyLedger.SelectedParty is not null &&
                  PartyLedger.SelectedKind.Kind == PartyLedgerKind.Supplier &&
                  PartyLedger.SelectedParty.OutstandingBalance > 0);
@@ -51,7 +58,7 @@ public class AccountingViewModel : ObservableObject
             if (PartyLedger.SelectedParty is not PartyLedgerRowDto party) return;
             if (PartyLedger.SelectedKind.Kind != PartyLedgerKind.Customer) return;
             Vouchers.PrefillReceipt(party.PartyId, party.Name, party.OutstandingBalance);
-            SelectedTab = 1;
+            SelectedTab = 2;
         }, _ => CanCreateVouchers && PartyLedger.SelectedParty is not null &&
                  PartyLedger.SelectedKind.Kind == PartyLedgerKind.Customer &&
                  PartyLedger.SelectedParty.OutstandingBalance > 0);
@@ -61,6 +68,7 @@ public class AccountingViewModel : ObservableObject
     }
 
     public PartyLedgerTabViewModel PartyLedger { get; }
+    public CustomerDuesTabViewModel CustomerDues { get; }
     public VoucherTabViewModel Vouchers { get; }
     public CashBookTabViewModel CashBook { get; }
     public JournalTabViewModel Journal { get; }
@@ -82,8 +90,9 @@ public class AccountingViewModel : ObservableObject
             if (!SetProperty(ref _selectedTab, value)) return;
             _ = value switch
             {
-                2 => CashBook.RefreshAsync(),
-                3 => Journal.RefreshAsync(),
+                1 => CustomerDues.RefreshAsync(),
+                3 => CashBook.RefreshAsync(),
+                4 => Journal.RefreshAsync(),
                 _ => Task.CompletedTask
             };
         }
@@ -100,14 +109,23 @@ public class AccountingViewModel : ObservableObject
     {
         Summary = await _accounting.GetSummaryAsync(_branchId);
         await PartyLedger.RefreshAsync();
-        if (SelectedTab == 2) await CashBook.RefreshAsync();
+        await CustomerDues.RefreshAsync();
+        if (SelectedTab == 3) await CashBook.RefreshAsync();
+    }
+
+    private async Task OnDuesChangedAsync()
+    {
+        Summary = await _accounting.GetSummaryAsync(_branchId);
+        await PartyLedger.RefreshAsync();
+        if (SelectedTab == 3) await CashBook.RefreshAsync();
     }
 
     private async Task RefreshAllAsync()
     {
         Summary = await _accounting.GetSummaryAsync(_branchId);
         await PartyLedger.RefreshAsync();
-        if (SelectedTab == 2) await CashBook.RefreshAsync();
-        if (SelectedTab == 3) await Journal.RefreshAsync();
+        await CustomerDues.RefreshAsync();
+        if (SelectedTab == 3) await CashBook.RefreshAsync();
+        if (SelectedTab == 4) await Journal.RefreshAsync();
     }
 }
