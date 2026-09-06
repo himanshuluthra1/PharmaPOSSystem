@@ -41,6 +41,7 @@ public class PurchaseReturn : BranchEntity
 
     public PurchaseReturnSettlementMode SettlementMode { get; set; } = PurchaseReturnSettlementMode.SupplierCredit;
     public PurchaseReturnStatus Status { get; set; } = PurchaseReturnStatus.Completed;
+    public PurchaseReturnKind ReturnKind { get; set; } = PurchaseReturnKind.Standard;
     public bool IsFullReturn { get; set; }
     public string? Remarks { get; set; }
 

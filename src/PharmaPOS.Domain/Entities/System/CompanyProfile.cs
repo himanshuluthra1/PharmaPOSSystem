@@ -1,4 +1,5 @@
 using PharmaPOS.Domain.Common;
+using PharmaPOS.Domain.Enums;
 
 namespace PharmaPOS.Domain.Entities.System;
 
@@ -19,6 +20,8 @@ public class CompanyProfile : BaseEntity
     public string? Pan { get; set; }
     public string? LogoPath { get; set; }
     public string? InvoiceFooter { get; set; }
+    /// <summary>UPI VPA (e.g. shop@okicici) printed as a pay QR on sale bills.</summary>
+    public string? UpiVpa { get; set; }
     public string Currency { get; set; } = "INR";
     public string? CurrencySymbol { get; set; } = "\u20B9";
 
@@ -35,6 +38,9 @@ public class CompanyProfile : BaseEntity
     public bool AllowEditSalesBills { get; set; }
     /// <summary>When true, received purchase invoices can be opened and saved again.</summary>
     public bool AllowEditPurchaseBills { get; set; }
+
+    /// <summary>Default sale-bill paper template (A4, A5, 80 mm, 58 mm).</summary>
+    public InvoicePaperSize InvoicePaperSize { get; set; } = InvoicePaperSize.A4;
 
     // Sale return policy (configurable).
     public int SaleReturnAllowedDays { get; set; } = 30;

@@ -29,6 +29,7 @@
                   MouseDoubleClick="BatchGrid_MouseDoubleClick">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="*" />
+                <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" Width="Auto" />
                 <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="Auto" />
                 <DataGridTextColumn Header="Stock" Binding="{Binding QuantityAvailable, StringFormat=0.##}" Width="Auto" />
                 <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="Auto" />

@@ -115,6 +115,7 @@ public class SalesViewModel : ObservableObject
             AppConstants.Permissions.SalesEdit, AppConstants.Permissions.SalesManage);
         CanUnlockInvoices = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesUnlock, AppConstants.Permissions.SalesManage);
+        HasSalesManage = currentUser.HasPermission(AppConstants.Permissions.SalesManage);
 
         Cart.CollectionChanged += (_, _) => RecalculateTotals();
 
@@ -220,6 +221,9 @@ public class SalesViewModel : ObservableObject
     public bool CanReturn { get; }
     public bool CanEditInvoices { get; }
     public bool CanUnlockInvoices { get; }
+    public bool HasSalesManage { get; }
+
+    public bool InvoiceEditEnabled => AllowEditSalesBills || HasSalesManage;
 
     public bool AllowEditSalesBills
     {
@@ -259,21 +263,21 @@ public class SalesViewModel : ObservableObject
     /// <summary>True when the loaded bill can be changed (new bill, or unlocked edit allowed).</summary>
     public bool CanModifyBill =>
         CanCreate
-        && (!IsEditing || (AllowEditSalesBills && CanEditInvoices && !IsInvoiceLocked))
+        && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked))
         && !IsBusy;
 
     public bool CanSaveBill => CanModifyBill && Cart.Any(l => !l.IsEmpty);
 
     public bool ShowSaveButton =>
-        CanCreate && (!IsEditing || (AllowEditSalesBills && CanEditInvoices && !IsInvoiceLocked));
+        CanCreate && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
 
     public bool IsBillReadOnly =>
-        IsEditing && !(AllowEditSalesBills && CanEditInvoices && !IsInvoiceLocked);
+        IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked);
 
     public bool CanUnlockBill =>
-        IsEditing && IsInvoiceLocked && AllowEditSalesBills && CanUnlockInvoices && !IsBusy;
+        IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices && !IsBusy;
 
-    public bool ShowLockBanner => IsEditing && IsInvoiceLocked && AllowEditSalesBills;
+    public bool ShowLockBanner => IsEditing && IsInvoiceLocked && InvoiceEditEnabled;
 
     public bool CanLoadOlderBills => _nextOlderBillDate is not null && !IsLoadingOlderBills && !IsBusy;
 
@@ -1190,18 +1194,19 @@ public class SalesViewModel : ObservableObject
 
     private string BuildEditStatusMessage(string invoiceNumber)
     {
-        if (!AllowEditSalesBills)
+        if (!InvoiceEditEnabled)
             return $"Viewing invoice {invoiceNumber} (edit is off in Settings → Preferences).";
         if (!CanEditInvoices)
             return $"Viewing invoice {invoiceNumber} (your role cannot edit sale invoices).";
         if (IsInvoiceLocked)
-            return $"Invoice {invoiceNumber} is locked. Unlock to edit.";
+            return $"Invoice {invoiceNumber} is locked. Click Unlock to edit.";
         return $"Editing invoice {invoiceNumber}. Save to update (re-locks on save).";
     }
 
     private void NotifyBillEditStateChanged()
     {
         OnPropertyChanged(nameof(IsEditing));
+        OnPropertyChanged(nameof(InvoiceEditEnabled));
         OnPropertyChanged(nameof(CanModifyBill));
         OnPropertyChanged(nameof(CanSaveBill));
         OnPropertyChanged(nameof(ShowSaveButton));

@@ -269,16 +269,10 @@
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Batch" IsReadOnly="False"
                                             Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="90" />
-                        <DataGridTemplateColumn Header="Expiry" Width="120">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <DatePicker SelectedDate="{Binding ExpiryDate, UpdateSourceTrigger=PropertyChanged}"
-                                                Style="{StaticResource PurchaseDate}"
-                                                BorderThickness="0" Width="120" Height="26"
-                                                MinHeight="26" MaxHeight="26" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Exp M" Width="48" IsReadOnly="False"
+                                            Binding="{Binding ExpiryMonth, UpdateSourceTrigger=PropertyChanged}" />
+                        <DataGridTextColumn Header="Exp Y" Width="58" IsReadOnly="False"
+                                            Binding="{Binding ExpiryYear, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="Quantity" Width="55" IsReadOnly="False"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
                         <DataGridTextColumn Header="Free" Width="50" IsReadOnly="False"

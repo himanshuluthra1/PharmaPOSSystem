@@ -82,20 +82,26 @@ public class InventoryService : IInventoryService
                     if (token.Length == 0) continue;
                     batches = batches.Where(b =>
                         b.BatchNumber.Replace(" ", "").Contains(token) ||
+                        (b.RackNumber != null && b.RackNumber.Contains(raw.Trim())) ||
                         (b.Medicine != null && (
                             b.Medicine.NameSearchKey.Contains(token) ||
                             (b.Medicine.GenericNameSearchKey != "" && b.Medicine.GenericNameSearchKey.Contains(token)) ||
-                            (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(token)))));
+                            (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(token)) ||
+                            (b.Medicine.RackNumber != null && b.Medicine.RackNumber.Contains(raw.Trim())) ||
+                            (b.Medicine.BinNumber != null && b.Medicine.BinNumber.Contains(raw.Trim())))));
                 }
             }
             else
             {
                 batches = batches.Where(b =>
                     b.BatchNumber.Replace(" ", "").Contains(normalized) ||
+                    (b.RackNumber != null && b.RackNumber.Contains(term)) ||
                     (b.Medicine != null && (
                         b.Medicine.NameSearchKey.Contains(normalized) ||
                         (b.Medicine.GenericNameSearchKey != "" && b.Medicine.GenericNameSearchKey.Contains(normalized)) ||
-                        (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(normalized)))));
+                        (b.Medicine.BarcodeSearchKey != "" && b.Medicine.BarcodeSearchKey.Contains(normalized)) ||
+                        (b.Medicine.RackNumber != null && b.Medicine.RackNumber.Contains(term)) ||
+                        (b.Medicine.BinNumber != null && b.Medicine.BinNumber.Contains(term)))));
             }
         }
 
@@ -142,6 +148,7 @@ public class InventoryService : IInventoryService
                 b.Mrp,
                 b.SellingPrice,
                 RackNumber = b.RackNumber ?? b.Medicine.RackNumber,
+                BinNumber = b.Medicine.BinNumber,
                 b.Medicine.ReorderLevel
             })
             .Take(take)
@@ -179,6 +186,7 @@ public class InventoryService : IInventoryService
                 r.Mrp,
                 r.SellingPrice,
                 r.RackNumber,
+                r.BinNumber,
                 r.ReorderLevel,
                 medTotal,
                 isLow,
@@ -570,7 +578,8 @@ public class InventoryService : IInventoryService
             PurchasePrice = medicine.PurchasePrice,
             Mrp = medicine.Mrp,
             SellingPrice = medicine.SellingPrice > 0 ? medicine.SellingPrice : medicine.Mrp,
-            GstPercent = medicine.GstPercent
+            GstPercent = medicine.GstPercent,
+            RackNumber = medicine.RackNumber
         };
         await _uow.Repository<MedicineBatch>().AddAsync(batch, ct);
         await _uow.SaveChangesAsync(ct);

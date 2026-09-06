@@ -32,6 +32,16 @@ Outputs:
 - `artifacts\publish\win-x64\` — self-contained app (+ `Data\` backup)
 - `artifacts\installer\PharmaPOS-Setup-1.3.1.exe` — installer (if Inno Setup is installed)
 
+## First-time install on a shop PC
+
+1. Publish the installer to VPS (`Settings → Shop updates` → Upload), or copy `PharmaPOS-Setup-x.y.z.exe` to the shop.
+2. Also upload `installer\latest.txt` next to it on the VPS (one line: `PharmaPOS-Setup-x.y.z.exe`) so the bat always gets the current build.
+3. On the shop PC, run **`installer\Install-PharmaPOS-Shop.bat`** (USB / email / WhatsApp). It downloads from `http://bills.cloudpharma.site/bills/updates/` and starts setup.
+4. Accept the admin (UAC) prompt. Install LocalDB if Windows / PharmaPOS asks for it.
+5. Open PharmaPOS → enter **store code** → login `admin` / `Admin@123`.
+
+Manual alternative: open the setup EXE URL in a browser and run it.
+
 ## Updating a shop (USB / manual)
 
 1. Build `PharmaPOS-Setup-1.3.1.exe`.

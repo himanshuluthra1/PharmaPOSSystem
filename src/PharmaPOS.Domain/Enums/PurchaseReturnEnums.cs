@@ -15,3 +15,16 @@ public enum PurchaseReturnSettlementMode
     /// <summary>Supplier refunds cash/bank (still recorded; receipt # attached later).</summary>
     CashRefund = 1
 }
+
+public enum PurchaseReturnKind
+{
+    Standard = 0,
+    ExpiryToCompany = 1
+}
+
+public enum ExpiryClaimStatus
+{
+    AwaitingCreditNote = 0,
+    CreditReceived = 1,
+    Cancelled = 2
+}

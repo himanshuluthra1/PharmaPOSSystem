@@ -81,6 +81,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
     public DbSet<PurchaseReturn> PurchaseReturns => Set<PurchaseReturn>();
     public DbSet<PurchaseReturnItem> PurchaseReturnItems => Set<PurchaseReturnItem>();
+    public DbSet<ExpirySupplierClaim> ExpirySupplierClaims => Set<ExpirySupplierClaim>();
+    public DbSet<ExpirySupplierClaimItem> ExpirySupplierClaimItems => Set<ExpirySupplierClaimItem>();
 
     // Accounting
     public DbSet<Account> Accounts => Set<Account>();

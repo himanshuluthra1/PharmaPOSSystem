@@ -1,3 +1,4 @@
+using PharmaPOS.Application.Common;
 using PharmaPOS.Domain.Enums;
 
 namespace PharmaPOS.Application.Features.Masters;
@@ -9,7 +10,18 @@ public record CustomerListDto(int Id, string Name, string? Phone, CustomerType T
 public record DoctorListDto(int Id, string Name, string? Specialization, string? Phone, EntityStatus Status);
 public record ManufacturerListDto(int Id, string Name, string? City, string? Phone, EntityStatus Status);
 public record EmployeeListDto(int Id, string Code, string Name, string? Designation, EntityStatus Status);
-public record MedicineListDto(int Id, string Name, string? GenericName, decimal Mrp, decimal PurchasePrice, EntityStatus Status);
+public record MedicineListDto(
+    int Id,
+    string Name,
+    string? GenericName,
+    decimal Mrp,
+    decimal PurchasePrice,
+    EntityStatus Status,
+    string? RackNumber = null,
+    string? BinNumber = null)
+{
+    public string? LocationLabel => StockLocation.Format(RackNumber, BinNumber);
+}
 
 // ── Editor forms (detail) ───────────────────────────────────────────────────
 
@@ -104,6 +116,8 @@ public class MedicineDetailDto
     public decimal DefaultDiscountPercent { get; set; }
     public int ReorderLevel { get; set; }
     public int ReorderQuantity { get; set; }
+    public string? RackNumber { get; set; }
+    public string? BinNumber { get; set; }
     public ScheduleDrugType ScheduleType { get; set; } = ScheduleDrugType.None;
     public bool PrescriptionRequired { get; set; }
     public EntityStatus Status { get; set; } = EntityStatus.Active;

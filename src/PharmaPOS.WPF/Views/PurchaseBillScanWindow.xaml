@@ -82,7 +82,8 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="90" />
-                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=dd/MM/yyyy, UpdateSourceTrigger=PropertyChanged}" Width="90" />
+                        <DataGridTextColumn Header="Exp M" Binding="{Binding ExpiryMonth, UpdateSourceTrigger=PropertyChanged}" Width="48" />
+                        <DataGridTextColumn Header="Exp Y" Binding="{Binding ExpiryYear, UpdateSourceTrigger=PropertyChanged}" Width="58" />
                         <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" Width="55" />
                         <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="70" />
                         <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" Width="70" />

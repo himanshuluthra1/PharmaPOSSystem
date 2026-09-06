@@ -17,6 +17,8 @@ public static class MedWinTransactionalDataCleaner
         "SalePayments",
         "SaleItems",
         "Sales",
+        "ExpirySupplierClaimItems",
+        "ExpirySupplierClaims",
         "PurchaseReturnItems",
         "PurchaseReturns",
         "PurchaseItems",
@@ -46,6 +48,15 @@ public static class MedWinTransactionalDataCleaner
             foreach (var table in DeleteTablesInOrder)
             {
                 ctx.ThrowIfCancellationRequested();
+
+                // Purchases.LinkedPurchaseReturnId → PurchaseReturns (Restrict). Clear before DELETE.
+                if (table == "PurchaseReturns")
+                {
+                    var cleared = await NullLinkedPurchaseReturnIdsAsync(target, tx, ctx.CancellationToken);
+                    if (cleared > 0)
+                        ctx.Log($"  Cleared LinkedPurchaseReturnId on {cleared:N0} purchase(s)");
+                }
+
                 var deleted = await DeleteAllAsync(target, tx, table, ctx.CancellationToken);
                 if (deleted > 0)
                     ctx.Log($"  Deleted {deleted:N0} from {table}");
@@ -95,6 +106,34 @@ public static class MedWinTransactionalDataCleaner
         }
 
         await using var cmd = new SqlCommand($"DELETE FROM [{table}]", conn, tx);
+        cmd.CommandTimeout = 0;
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task<int> NullLinkedPurchaseReturnIdsAsync(
+        SqlConnection conn, SqlTransaction tx, CancellationToken ct)
+    {
+        await using (var exists = new SqlCommand(
+                         """
+                         SELECT CASE WHEN EXISTS (
+                           SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                           WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Purchases'
+                             AND COLUMN_NAME = 'LinkedPurchaseReturnId'
+                         ) THEN 1 ELSE 0 END
+                         """, conn, tx))
+        {
+            var ok = Convert.ToInt32(await exists.ExecuteScalarAsync(ct)) == 1;
+            if (!ok) return 0;
+        }
+
+        await using var cmd = new SqlCommand(
+            """
+            UPDATE Purchases
+            SET LinkedPurchaseReturnId = NULL,
+                ReturnCreditApplied = 0
+            WHERE LinkedPurchaseReturnId IS NOT NULL
+               OR ReturnCreditApplied <> 0
+            """, conn, tx);
         cmd.CommandTimeout = 0;
         return await cmd.ExecuteNonQueryAsync(ct);
     }

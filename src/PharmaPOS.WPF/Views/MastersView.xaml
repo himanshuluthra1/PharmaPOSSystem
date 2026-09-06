@@ -432,6 +432,7 @@
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="150" />
                                         <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="Auto" />
+                                        <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" Width="Auto" />
                                         <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="Auto" />
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -515,6 +516,22 @@
                                         <StackPanel Grid.Column="2" Margin="4,0,0,0">
                                             <TextBlock Text="Reorder Level" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ReorderLevel, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
+                                            <TextBlock Text="Rack" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.RackNumber, UpdateSourceTrigger=PropertyChanged}"
+                                                     materialDesign:HintAssist.Hint="e.g. A3" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                            <TextBlock Text="Bin" Style="{StaticResource FieldCaption}" />
+                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.BinNumber, UpdateSourceTrigger=PropertyChanged}"
+                                                     materialDesign:HintAssist.Hint="e.g. 12" />
                                         </StackPanel>
                                     </Grid>
                                     <CheckBox Content="Prescription Required" IsChecked="{Binding Editor.PrescriptionRequired}" Margin="0,0,0,8" />

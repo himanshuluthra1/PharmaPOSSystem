@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using Microsoft.Win32;
 using PharmaPOS.Application.Common.Abstractions;
@@ -46,6 +47,8 @@ public class ReportsViewModel : ObservableObject
     private List<SaleReturnSummaryRowDto> _allSaleReturns = [];
     private List<MedicineReturnReportRowDto> _allMedicineReturns = [];
     private List<ScheduleRegisterRowDto> _allScheduleRegister = [];
+    private List<GstReturnPreviewRowDto> _allGstReturn = [];
+    private GstReturnExportDto? _gstReturnExport;
     private ScheduleRegisterReportDto? _scheduleRegisterReport;
     private ScheduleRegisterFilterOption _selectedScheduleFilter;
 
@@ -80,6 +83,8 @@ public class ReportsViewModel : ObservableObject
             new(ReportKind.Sales, "Sales Report", "Completed sales invoices for the selected period."),
             new(ReportKind.Purchases, "Purchase Report", "Received purchase / GRN invoices for the period."),
             new(ReportKind.GstSummary, "GST Summary", "Output vs input GST with invoice-wise detail."),
+            new(ReportKind.Gstr1, "GSTR-1 export", "B2B / B2CS / HSN / credit notes from sales. Export JSON or Excel."),
+            new(ReportKind.Gstr2B, "GSTR-2B worksheet", "Inward invoices and ITC by rate from purchases. Export JSON or Excel."),
             new(ReportKind.Profit, "Gross Profit", "Revenue vs estimated cost per sale invoice."),
             new(ReportKind.SalesByMedicine, "Sales by Medicine", "Quantity and revenue ranked by medicine."),
             new(ReportKind.ScheduleRegister, "Schedule H / H1 Register",
@@ -95,6 +100,8 @@ public class ReportsViewModel : ObservableObject
 
         RunReportCommand = new AsyncRelayCommand(_ => RunReportAsync(), _ => !IsBusy);
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => CanExport && HasData && !IsBusy);
+        ExportGstJsonCommand = new RelayCommand(_ => ExportGstJson(), _ => CanExport && ShowGstReturnExport && _gstReturnExport is not null && !IsBusy);
+        ExportGstExcelCommand = new RelayCommand(_ => ExportGstExcel(), _ => CanExport && ShowGstReturnExport && _gstReturnExport is not null && !IsBusy);
         PrintScheduleRegisterCommand = new RelayCommand(
             _ => PrintScheduleRegister(),
             _ => ShowScheduleRegisterGrid && HasData && !IsBusy);
@@ -137,6 +144,7 @@ public class ReportsViewModel : ObservableObject
     public ObservableCollection<SaleReturnSummaryRowDto> SaleReturnRows { get; } = new();
     public ObservableCollection<MedicineReturnReportRowDto> MedicineReturnRows { get; } = new();
     public ObservableCollection<ScheduleRegisterRowDto> ScheduleRegisterRows { get; } = new();
+    public ObservableCollection<GstReturnPreviewRowDto> GstReturnRows { get; } = new();
 
     public IReadOnlyList<ScheduleRegisterFilterOption> ScheduleFilterOptions { get; }
 
@@ -162,6 +170,7 @@ public class ReportsViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedReportDescription));
             OnPropertyChanged(nameof(FilterTextHint));
             OnPropertyChanged(nameof(ShowScheduleFilter));
+            OnPropertyChanged(nameof(ShowGstReturnExport));
             RefreshFilterOptions();
             ClearFilters(apply: false);
             ClearAllRows();
@@ -186,6 +195,7 @@ public class ReportsViewModel : ObservableObject
         ReportKind.Sales or ReportKind.Profit => "Filter by invoice # or customer...",
         ReportKind.Purchases => "Filter by invoice #, supplier, or due reason...",
         ReportKind.GstSummary => "Filter by invoice # or party...",
+        ReportKind.Gstr1 or ReportKind.Gstr2B => "Filter by invoice, party, GSTIN, or section...",
         ReportKind.SalesByMedicine or ReportKind.LowStock => "Filter by medicine or generic...",
         ReportKind.ScheduleRegister => "Filter by invoice, patient, doctor, or medicine...",
         ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine, batch, or supplier...",
@@ -273,6 +283,9 @@ public class ReportsViewModel : ObservableObject
     public bool ShowPurchaseGrid => ActiveGrid == "Purchases";
     public bool ShowGstGrid => ActiveGrid == "Gst";
     public bool ShowGstSummary => ActiveGrid == "Gst" && GstSummary is not null;
+    public bool ShowGstReturnGrid => ActiveGrid == "GstReturn";
+    public bool ShowGstReturnExport => SelectedReport.Kind is ReportKind.Gstr1 or ReportKind.Gstr2B;
+    public string? GstReturnDisclaimer => _gstReturnExport?.Disclaimer;
     public bool ShowProfitGrid => ActiveGrid == "Profit";
     public bool ShowMedicineGrid => ActiveGrid == "Medicine";
     public bool ShowStockGrid => ActiveGrid == "Stock";
@@ -284,9 +297,10 @@ public class ReportsViewModel : ObservableObject
 
     /// <summary>Stock valuation uses Amount (MRP) + Cost KPIs instead of tax/discount.</summary>
     public bool ShowStockSummaryKpis => ShowStockGrid && HasData;
-    public bool ShowGenericSummaryKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid;
-    public bool ShowTaxDiscountKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid;
+    public bool ShowGenericSummaryKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid && !ShowGstReturnGrid;
+    public bool ShowTaxDiscountKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid && !ShowGstReturnGrid;
     public bool ShowScheduleSummaryKpis => ShowScheduleRegisterGrid && HasData;
+    public bool ShowGstReturnKpis => ShowGstReturnGrid && HasData;
 
     public bool IsBusy
     {
@@ -311,6 +325,8 @@ public class ReportsViewModel : ObservableObject
 
     public ICommand RunReportCommand { get; }
     public ICommand ExportCsvCommand { get; }
+    public ICommand ExportGstJsonCommand { get; }
+    public ICommand ExportGstExcelCommand { get; }
     public ICommand PrintScheduleRegisterCommand { get; }
     public ICommand ClearFilterCommand { get; }
     public ICommand OpenSaleRowCommand { get; }
@@ -384,6 +400,20 @@ public class ReportsViewModel : ObservableObject
                 FilterOption.All,
                 new("sale", "Sales only"),
                 new("purchase", "Purchases only")
+            ],
+            ReportKind.Gstr1 =>
+            [
+                FilterOption.All,
+                new("B2B", "B2B"),
+                new("B2CS", "B2CS"),
+                new("CDNR", "Credit notes")
+            ],
+            ReportKind.Gstr2B =>
+            [
+                FilterOption.All,
+                new("B2B", "B2B registered"),
+                new("Unregistered", "Unregistered"),
+                new("CDN", "Credit/debit notes")
             ],
             ReportKind.Expiry =>
             [
@@ -494,6 +524,18 @@ public class ReportsViewModel : ObservableObject
                             FooterNote = $"Net GST payable: {gst.Summary.NetTaxPayable:N2}"
                         };
                         SetActiveGrid("Gst");
+                        break;
+
+                    case ReportKind.Gstr1:
+                        var gstr1 = await _reports.GetGstr1ExportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        ApplyGstReturn(gstr1);
+                        break;
+
+                    case ReportKind.Gstr2B:
+                        var gstr2 = await _reports.GetGstr2BExportAsync(FromDate, ToDate, _branchId, token);
+                        if (runId != _runId) return;
+                        ApplyGstReturn(gstr2);
                         break;
 
                     case ReportKind.Profit:
@@ -640,6 +682,12 @@ public class ReportsViewModel : ObservableObject
                         "purchase" => r.DocumentType.Contains("Purchase", StringComparison.OrdinalIgnoreCase),
                         _ => true
                     }));
+                break;
+
+            case "GstReturn":
+                Fill(GstReturnRows, _allGstReturn.Where(r =>
+                    Matches(term, r.InvoiceNumber, r.PartyName, r.Gstin, r.Section, r.HsnCode) &&
+                    (option is "all" || string.Equals(r.Section, option, StringComparison.OrdinalIgnoreCase))));
                 break;
 
             case "Profit":
@@ -791,6 +839,7 @@ public class ReportsViewModel : ObservableObject
         "SaleReturns" => _allSaleReturns.Count,
         "MedicineReturns" => _allMedicineReturns.Count,
         "ScheduleRegister" => _allScheduleRegister.Count,
+        "GstReturn" => _allGstReturn.Count,
         _ => 0
     };
 
@@ -812,6 +861,7 @@ public class ReportsViewModel : ObservableObject
             "SaleReturns" => (SaleReturnRows.Count, SaleReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
             "MedicineReturns" => (MedicineReturnRows.Count, MedicineReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
             "ScheduleRegister" => (ScheduleRegisterRows.Count, ScheduleRegisterRows.Sum(r => r.Quantity), 0m, 0m),
+            "GstReturn" => (GstReturnRows.Count, GstReturnRows.Sum(r => r.InvoiceValue), GstReturnRows.Sum(r => r.TotalTax), GstReturnRows.Sum(r => r.TaxableAmount)),
             _ => (0, 0m, 0m, 0m)
         };
 
@@ -831,13 +881,16 @@ public class ReportsViewModel : ObservableObject
                     ? $"{count} batch(es) — Amount {amount:N2} · Cost {tax:N2}"
                     : ActiveGrid == "ScheduleRegister"
                         ? $"{count} line(s) — total qty {amount:0.##}"
-                        : $"{count} record(s) — total {amount:N2}"
+                        : ActiveGrid == "GstReturn"
+                            ? $"{count} GST line(s) — taxable {discount:N2} · tax {tax:N2}"
+                            : $"{count} record(s) — total {amount:N2}"
         };
         StatusMessage = Summary.FooterNote;
         OnPropertyChanged(nameof(ShowStockSummaryKpis));
         OnPropertyChanged(nameof(ShowGenericSummaryKpis));
         OnPropertyChanged(nameof(ShowTaxDiscountKpis));
         OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
+        OnPropertyChanged(nameof(ShowGstReturnKpis));
     }
 
     private static void Fill<T>(ObservableCollection<T> target, IEnumerable<T> source)
@@ -869,10 +922,14 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSaleReturnGrid));
         OnPropertyChanged(nameof(ShowMedicineReturnGrid));
         OnPropertyChanged(nameof(ShowScheduleRegisterGrid));
+        OnPropertyChanged(nameof(ShowGstReturnGrid));
+        OnPropertyChanged(nameof(ShowGstReturnExport));
+        OnPropertyChanged(nameof(GstReturnDisclaimer));
         OnPropertyChanged(nameof(ShowStockSummaryKpis));
         OnPropertyChanged(nameof(ShowGenericSummaryKpis));
         OnPropertyChanged(nameof(ShowTaxDiscountKpis));
         OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
+        OnPropertyChanged(nameof(ShowGstReturnKpis));
         OnPropertyChanged(nameof(ShowExpirySupplierFilter));
     }
 
@@ -881,6 +938,7 @@ public class ReportsViewModel : ObservableObject
         ReportKind.Sales => "Sales",
         ReportKind.Purchases => "Purchases",
         ReportKind.GstSummary => "Gst",
+        ReportKind.Gstr1 or ReportKind.Gstr2B => "GstReturn",
         ReportKind.Profit => "Profit",
         ReportKind.SalesByMedicine => "Medicine",
         ReportKind.ScheduleRegister => "ScheduleRegister",
@@ -905,6 +963,7 @@ public class ReportsViewModel : ObservableObject
         SaleReturnRows.Clear();
         MedicineReturnRows.Clear();
         ScheduleRegisterRows.Clear();
+        GstReturnRows.Clear();
         _allSales = [];
         _allPurchases = [];
         _allGst = [];
@@ -916,6 +975,8 @@ public class ReportsViewModel : ObservableObject
         _allSaleReturns = [];
         _allMedicineReturns = [];
         _allScheduleRegister = [];
+        _allGstReturn = [];
+        _gstReturnExport = null;
         _scheduleRegisterReport = null;
         _expirySupplierOptions = [FilterOption.All];
         _selectedExpirySupplierKey = "all";
@@ -949,7 +1010,67 @@ public class ReportsViewModel : ObservableObject
                 case "SaleReturns": ReportCsvExporter.Export(dialog.FileName, SaleReturnRows); break;
                 case "MedicineReturns": ReportCsvExporter.Export(dialog.FileName, MedicineReturnRows); break;
                 case "ScheduleRegister": ReportCsvExporter.Export(dialog.FileName, ScheduleRegisterRows); break;
+                case "GstReturn": ReportCsvExporter.Export(dialog.FileName, GstReturnRows); break;
             }
+            _dialog.ShowInfo($"Exported to {dialog.FileName}");
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Export failed: {ex.Message}");
+        }
+    }
+
+    private void ApplyGstReturn(GstReturnExportDto export)
+    {
+        _gstReturnExport = export;
+        _allGstReturn = export.PreviewRows;
+        OnPropertyChanged(nameof(GstReturnDisclaimer));
+        OnPropertyChanged(nameof(ShowGstReturnExport));
+        Summary = new ReportSummaryDto
+        {
+            RecordCount = export.PreviewRows.Count,
+            TotalAmount = export.PreviewRows.Sum(r => r.InvoiceValue),
+            TotalTax = export.PreviewRows.Sum(r => r.TotalTax),
+            TotalDiscount = export.PreviewRows.Sum(r => r.TaxableAmount),
+            FooterNote = $"{export.Title} · GSTIN {export.Gstin} · FP {export.FilingPeriod}"
+        };
+        SetActiveGrid("GstReturn");
+    }
+
+    private void ExportGstJson()
+    {
+        if (_gstReturnExport is null) return;
+        var kind = _gstReturnExport.Kind == GstReturnKind.Gstr1 ? "GSTR1" : "GSTR2B";
+        var dialog = new SaveFileDialog
+        {
+            Filter = "JSON files (*.json)|*.json",
+            FileName = $"{kind}_{_gstReturnExport.FilingPeriod}.json"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            File.WriteAllText(dialog.FileName, _gstReturnExport.JsonPayload);
+            _dialog.ShowInfo($"Exported to {dialog.FileName}");
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Export failed: {ex.Message}");
+        }
+    }
+
+    private void ExportGstExcel()
+    {
+        if (_gstReturnExport is null) return;
+        var kind = _gstReturnExport.Kind == GstReturnKind.Gstr1 ? "GSTR1" : "GSTR2B";
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Excel workbook (*.xlsx)|*.xlsx",
+            FileName = $"{kind}_{_gstReturnExport.FilingPeriod}.xlsx"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            GstReturnWorkbookWriter.Write(dialog.FileName, _gstReturnExport.ExcelSheets);
             _dialog.ShowInfo($"Exported to {dialog.FileName}");
         }
         catch (Exception ex)

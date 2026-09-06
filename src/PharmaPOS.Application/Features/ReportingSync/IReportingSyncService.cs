@@ -6,6 +6,7 @@ public static class ReportingSyncEntityTypes
     public const string Medicine = "Medicine";
     public const string MedicineBatch = "MedicineBatch";
     public const string Customer = "Customer";
+    public const string Supplier = "Supplier";
     public const string Sale = "Sale";
     public const string SaleReturn = "SaleReturn";
     public const string Purchase = "Purchase";
@@ -33,6 +34,7 @@ public interface IReportingSyncService
     Task EnqueueMedicineAsync(int medicineId, CancellationToken ct = default);
     Task EnqueueMedicineBatchAsync(int batchId, CancellationToken ct = default);
     Task EnqueueCustomerAsync(int customerId, CancellationToken ct = default);
+    Task EnqueueSupplierAsync(int supplierId, CancellationToken ct = default);
     Task EnqueueSaleAsync(int saleId, CancellationToken ct = default);
     Task EnqueueSaleReturnAsync(int saleReturnId, CancellationToken ct = default);
     Task EnqueuePurchaseAsync(int purchaseId, CancellationToken ct = default);
@@ -48,6 +50,7 @@ public sealed class NullReportingSyncService : IReportingSyncService
     public Task EnqueueMedicineAsync(int medicineId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueueMedicineBatchAsync(int batchId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueueCustomerAsync(int customerId, CancellationToken ct = default) => Task.CompletedTask;
+    public Task EnqueueSupplierAsync(int supplierId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueueSaleAsync(int saleId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueueSaleReturnAsync(int saleReturnId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueuePurchaseAsync(int purchaseId, CancellationToken ct = default) => Task.CompletedTask;

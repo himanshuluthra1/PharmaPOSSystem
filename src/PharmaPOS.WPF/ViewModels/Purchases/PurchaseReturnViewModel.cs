@@ -377,13 +377,28 @@ public class PurchaseReturnViewModel : ObservableObject
             }
 
             _dialog.ShowInfo(
-                $"Return {result.Value!.ReturnNumber} saved for ₹{result.Value.GrandTotal:N2}.\n\nWhen the supplier sends the return receipt, enter its number under Return Records.",
+                BuildReturnSavedMessage(result.Value!),
                 "Purchase return");
             ClearLoaded();
             await RefreshReturnsAsync();
             StatusMessage = $"Created {result.Value.ReturnNumber}.";
         }
         finally { IsBusy = false; }
+    }
+
+    private static string BuildReturnSavedMessage(PurchaseReturnReceiptDto r)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Return {r.ReturnNumber} saved for ₹{r.GrandTotal:N2}.");
+        if (!r.IsDirectReturn && !string.IsNullOrWhiteSpace(r.PurchaseInvoiceNumber))
+        {
+            sb.Append($"\n\nBill {r.PurchaseInvoiceNumber} amount reduced by ₹{r.GrandTotal:N2}.");
+            sb.Append($"\nBill balance due now: ₹{r.PurchaseBalanceDueAfter:N2}.");
+        }
+        if (r.RemainingSupplierCredit > 0)
+            sb.Append($"\nRemaining supplier credit: ₹{r.RemainingSupplierCredit:N2} (can settle another purchase).");
+        sb.Append("\n\nWhen the supplier sends the return receipt, enter its number under Return Records.");
+        return sb.ToString();
     }
 
     private async Task SearchDirectSuppliersAsync(string term)

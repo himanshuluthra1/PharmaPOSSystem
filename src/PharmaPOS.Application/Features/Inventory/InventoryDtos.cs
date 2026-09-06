@@ -1,3 +1,4 @@
+using PharmaPOS.Application.Common;
 using PharmaPOS.Domain.Enums;
 
 namespace PharmaPOS.Application.Features.Inventory;
@@ -43,6 +44,7 @@ public record StockBatchRowDto(
     decimal Mrp,
     decimal SellingPrice,
     string? RackNumber,
+    string? BinNumber,
     int ReorderLevel,
     decimal MedicineTotalQty,
     bool IsLowStock,
@@ -51,6 +53,7 @@ public record StockBatchRowDto(
 {
     public string ExpiryLabel => ExpiryDate?.ToString("dd/MM/yyyy") ?? "—";
     public decimal StockValue => PurchasePrice * QuantityAvailable;
+    public string? LocationLabel => StockLocation.Format(RackNumber, BinNumber);
 }
 
 /// <summary>One row in the stock movement ledger.</summary>

@@ -1,4 +1,7 @@
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using MySqlConnector;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Domain.Entities.System;
@@ -13,11 +16,15 @@ public interface IMySqlReportingPublisher
 
 public sealed class MySqlReportingPublisher : IMySqlReportingPublisher
 {
-    private readonly IMySqlSyncSettingsService _settings;
+    private static readonly HttpClient NotifyHttp = new() { Timeout = TimeSpan.FromSeconds(8) };
 
-    public MySqlReportingPublisher(IMySqlSyncSettingsService settings)
+    private readonly IMySqlSyncSettingsService _settings;
+    private readonly IConfiguration _config;
+
+    public MySqlReportingPublisher(IMySqlSyncSettingsService settings, IConfiguration config)
     {
         _settings = settings;
+        _config = config;
     }
 
     public async Task TestConnectionAsync(CancellationToken ct = default)
@@ -51,6 +58,9 @@ public sealed class MySqlReportingPublisher : IMySqlReportingPublisher
             case ReportingSyncEntityTypes.Customer:
                 await UpsertCustomerAsync(conn, tx, root, ct);
                 break;
+            case ReportingSyncEntityTypes.Supplier:
+                await UpsertSupplierAsync(conn, tx, root, ct);
+                break;
             case ReportingSyncEntityTypes.Sale:
                 await UpsertSaleAggregateAsync(conn, tx, root, ct);
                 break;
@@ -74,6 +84,46 @@ public sealed class MySqlReportingPublisher : IMySqlReportingPublisher
         }
 
         await tx.CommitAsync(ct);
+        await TryNotifyDashboardAsync(entry, ct);
+    }
+
+    private async Task TryNotifyDashboardAsync(SyncOutboxEntry entry, CancellationToken ct)
+    {
+        var s = _settings.Current;
+        var url = FirstNonEmpty(s.DashboardNotifyUrl, _config["ReportingSync:DashboardNotifyUrl"])
+                  ?? "https://mypos.cloudpharma.site/api/realtime/notify";
+        var secret = FirstNonEmpty(s.RealtimeSecret, _config["ReportingSync:RealtimeSecret"]);
+        if (string.IsNullOrWhiteSpace(secret))
+            return;
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, url);
+            req.Headers.TryAddWithoutValidation("x-realtime-secret", secret);
+            var payload = JsonSerializer.Serialize(new
+            {
+                store_id = entry.StoreCode,
+                entity_type = entry.EntityType,
+                local_id = entry.LocalId
+            });
+            req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var resp = await NotifyHttp.SendAsync(req, ct);
+            _ = resp.StatusCode; // best-effort; sync already committed
+        }
+        catch
+        {
+            // Live notify is best-effort; outbox publish already succeeded.
+        }
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var v in values)
+        {
+            if (!string.IsNullOrWhiteSpace(v))
+                return v.Trim();
+        }
+        return null;
     }
 
     private MySqlConnection CreateConnection()
@@ -227,6 +277,31 @@ public sealed class MySqlReportingPublisher : IMySqlReportingPublisher
         Add(cmd, "@credit_limit", Dec(r, "credit_limit"));
         Add(cmd, "@outstanding_balance", Dec(r, "outstanding_balance"));
         Add(cmd, "@reward_points", Int(r, "reward_points"));
+        Add(cmd, "@status", Int(r, "status"));
+        Add(cmd, "@is_deleted", Bool(r, "is_deleted"));
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static async Task UpsertSupplierAsync(MySqlConnection conn, MySqlTransaction tx, JsonElement r, CancellationToken ct)
+    {
+        const string sql = """
+            INSERT INTO suppliers (store_id, local_id, branch_local_id, name, phone, gst_number,
+              outstanding_balance, status, is_deleted, synced_at_utc)
+            VALUES (@store_id, @local_id, @branch_local_id, @name, @phone, @gst_number,
+              @outstanding_balance, @status, @is_deleted, UTC_TIMESTAMP(6))
+            ON DUPLICATE KEY UPDATE
+              branch_local_id=VALUES(branch_local_id), name=VALUES(name), phone=VALUES(phone),
+              gst_number=VALUES(gst_number), outstanding_balance=VALUES(outstanding_balance),
+              status=VALUES(status), is_deleted=VALUES(is_deleted), synced_at_utc=VALUES(synced_at_utc)
+            """;
+        await using var cmd = new MySqlCommand(sql, conn, tx);
+        Add(cmd, "@store_id", StoreKey(r));
+        Add(cmd, "@local_id", Int(r, "local_id"));
+        Add(cmd, "@branch_local_id", IntOrNull(r, "branch_local_id"));
+        Add(cmd, "@name", Str(r, "name"));
+        Add(cmd, "@phone", StrOrNull(r, "phone"));
+        Add(cmd, "@gst_number", StrOrNull(r, "gst_number"));
+        Add(cmd, "@outstanding_balance", Dec(r, "outstanding_balance"));
         Add(cmd, "@status", Int(r, "status"));
         Add(cmd, "@is_deleted", Bool(r, "is_deleted"));
         await cmd.ExecuteNonQueryAsync(ct);

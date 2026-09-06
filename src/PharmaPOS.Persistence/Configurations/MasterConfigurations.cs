@@ -13,6 +13,8 @@ public class MedicineConfiguration : IEntityTypeConfiguration<Medicine>
         b.Property(x => x.GenericName).HasMaxLength(200);
         b.Property(x => x.Barcode).HasMaxLength(64);
         b.Property(x => x.PackInfo).HasMaxLength(100);
+        b.Property(x => x.RackNumber).HasMaxLength(40);
+        b.Property(x => x.BinNumber).HasMaxLength(40);
         b.Property(x => x.NameSearchKey)
             .HasMaxLength(200)
             .HasComputedColumnSql("REPLACE([Name], N' ', N'')", stored: true);

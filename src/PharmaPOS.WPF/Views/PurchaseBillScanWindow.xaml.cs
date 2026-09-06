@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.WPF.Services;
+using PharmaPOS.WPF.ViewModels.Purchases;
 
 namespace PharmaPOS.WPF.Views;
 
@@ -144,7 +145,7 @@ public sealed class ScannedLineRow : INotifyPropertyChanged
         MatchedMedicineId = source.MatchedMedicineId;
         MatchedMedicineName = source.MatchedMedicineName;
         BatchNumber = source.BatchNumber;
-        ExpiryDate = source.ExpiryDate;
+        SetExpiryDate(source.ExpiryDate);
         Quantity = source.Quantity;
         FreeQuantity = source.FreeQuantity;
         PurchasePrice = source.PurchasePrice;
@@ -189,10 +190,94 @@ public sealed class ScannedLineRow : INotifyPropertyChanged
     }
 
     private DateTime? _expiryDate;
+    private string _expiryMonth = string.Empty;
+    private string _expiryYear = string.Empty;
+    private bool _syncingExpiry;
+
     public DateTime? ExpiryDate
     {
         get => _expiryDate;
-        set { if (_expiryDate != value) { _expiryDate = value; OnPropertyChanged(); } }
+        set => SetExpiryDate(value);
+    }
+
+    public string ExpiryMonth
+    {
+        get => _expiryMonth;
+        set
+        {
+            var next = PurchaseLineViewModel.SanitizeMonth(value, _expiryMonth);
+            if (_expiryMonth == next) return;
+            _expiryMonth = next;
+            OnPropertyChanged();
+            if (!_syncingExpiry)
+                RebuildExpiryDateFromParts();
+        }
+    }
+
+    public string ExpiryYear
+    {
+        get => _expiryYear;
+        set
+        {
+            var next = PurchaseLineViewModel.SanitizeYear(value, _expiryYear);
+            if (_expiryYear == next) return;
+            _expiryYear = next;
+            OnPropertyChanged();
+            if (!_syncingExpiry)
+                RebuildExpiryDateFromParts();
+        }
+    }
+
+    private void SetExpiryDate(DateTime? value)
+    {
+        if (_expiryDate == value) return;
+        _expiryDate = value;
+        OnPropertyChanged(nameof(ExpiryDate));
+        if (_syncingExpiry) return;
+        _syncingExpiry = true;
+        try
+        {
+            if (value is DateTime d)
+            {
+                _expiryMonth = d.Month.ToString("00");
+                _expiryYear = d.Year.ToString("0000");
+            }
+            else
+            {
+                _expiryMonth = string.Empty;
+                _expiryYear = string.Empty;
+            }
+            OnPropertyChanged(nameof(ExpiryMonth));
+            OnPropertyChanged(nameof(ExpiryYear));
+        }
+        finally
+        {
+            _syncingExpiry = false;
+        }
+    }
+
+    private void RebuildExpiryDateFromParts()
+    {
+        _syncingExpiry = true;
+        try
+        {
+            if (int.TryParse(_expiryMonth, out var m) && m is >= 1 and <= 12
+                && _expiryYear.Length == 4
+                && int.TryParse(_expiryYear, out var y) && y is >= 2000 and <= 2100)
+            {
+                // Keep typed text as-is (do not pad "1" → "01" while editing).
+                _expiryDate = new DateTime(y, m, DateTime.DaysInMonth(y, m));
+            }
+            else if (string.IsNullOrEmpty(_expiryMonth) && string.IsNullOrEmpty(_expiryYear))
+            {
+                _expiryDate = null;
+            }
+            OnPropertyChanged(nameof(ExpiryDate));
+        }
+        finally
+        {
+            _syncingExpiry = false;
+        }
     }
 
     private decimal _quantity;

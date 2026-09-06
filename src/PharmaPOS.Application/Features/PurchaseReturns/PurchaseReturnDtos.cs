@@ -31,6 +31,9 @@ public interface IPurchaseReturnService
         int purchaseReturnId, string receiptNumber, DateTime? receiptDate, string? userName, CancellationToken ct = default);
 
     Task<List<ReturnReasonOptionDto>> ListReturnReasonsAsync(CancellationToken ct = default);
+
+    /// <summary>Rewrites purchase GrandTotal from remaining goods (line totals minus returns).</summary>
+    Task ReconcileSourceBillAmountAsync(int purchaseId, CancellationToken ct = default);
 }
 
 public record PurchaseReturnSearchResultDto(
@@ -97,6 +100,7 @@ public class CreateDirectPurchaseReturnRequest
 {
     public int SupplierId { get; set; }
     public PurchaseReturnSettlementMode SettlementMode { get; set; } = PurchaseReturnSettlementMode.SupplierCredit;
+    public PurchaseReturnKind ReturnKind { get; set; } = PurchaseReturnKind.Standard;
     public string? Remarks { get; set; }
     public List<CreateDirectPurchaseReturnLineRequest> Lines { get; set; } = new();
 }
@@ -133,6 +137,12 @@ public class PurchaseReturnReceiptDto
     public string SupplierName { get; set; } = string.Empty;
     public DateTime ReturnDate { get; set; }
     public decimal GrandTotal { get; set; }
+    /// <summary>Amount applied to reduce the source purchase bill's balance due.</summary>
+    public decimal AppliedToPurchaseBill { get; set; }
+    /// <summary>Remaining due on the source purchase after this return (0 if fully settled / paid).</summary>
+    public decimal PurchaseBalanceDueAfter { get; set; }
+    /// <summary>Leftover supplier credit available for other bills (SupplierCredit mode).</summary>
+    public decimal RemainingSupplierCredit { get; set; }
     public bool IsFullReturn { get; set; }
     public bool IsDirectReturn { get; set; }
     public string? SupplierReturnReceiptNumber { get; set; }

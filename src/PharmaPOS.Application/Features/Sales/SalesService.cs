@@ -60,7 +60,8 @@ public class SalesService : ISalesService
             .Where(m => m.Status == EntityStatus.Active && m.BarcodeSearchKey == key)
             .Select(m => new MedicineSearchRow(
                 m.Id, m.Name, m.GenericName, m.Barcode,
-                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
+                m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
+                m.RackNumber, m.BinNumber))
             .FirstOrDefaultAsync(ct);
 
         if (medicine is null) return null;
@@ -90,7 +91,8 @@ public class SalesService : ISalesService
                 .Take(25)
                 .Select(m => new MedicineSearchRow(
                     m.Id, m.Name, m.GenericName, m.Barcode,
-                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
+                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
+                    m.RackNumber, m.BinNumber))
                 .ToListAsync(ct);
         }
         else
@@ -106,7 +108,8 @@ public class SalesService : ISalesService
                 .Take(25)
                 .Select(m => new MedicineSearchRow(
                     m.Id, m.Name, m.GenericName, m.Barcode,
-                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired, null, null))
+                    m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
+                    m.RackNumber, m.BinNumber))
                 .ToListAsync(ct);
         }
 
@@ -190,7 +193,8 @@ public class SalesService : ISalesService
         => medicines.Select(m => new MedicineLookupDto(
             m.Id, m.Name, m.GenericName, m.Barcode,
             m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
-            stockMap.TryGetValue(m.Id, out var stock) ? stock : 0m)).ToList();
+            stockMap.TryGetValue(m.Id, out var stock) ? stock : 0m,
+            m.RackNumber, m.BinNumber)).ToList();
 
     private async Task<Dictionary<int, decimal>> GetStockByMedicineIdsAsync(
         List<int> medicineIds, int? branchId, CancellationToken ct)
@@ -208,7 +212,7 @@ public class SalesService : ISalesService
     private sealed record MedicineSearchRow(
         int Id, string Name, string? GenericName, string? Barcode,
         decimal GstPercent, decimal DefaultDiscountPercent, bool PrescriptionRequired,
-        string? Strength, string? Composition);
+        string? RackNumber, string? BinNumber);
 
     private sealed record SubstituteMedicineRow(
         int Id, string Name, string? GenericName, string? Brand, decimal Mrp,
@@ -225,7 +229,9 @@ public class SalesService : ISalesService
             .OrderBy(b => b.ExpiryDate)
             .Select(b => new BatchLookupDto(
                 b.Id, b.BatchNumber, b.ExpiryDate, b.QuantityAvailable,
-                b.Mrp, b.SellingPrice, b.GstPercent))
+                b.Mrp, b.SellingPrice, b.GstPercent,
+                b.RackNumber ?? b.Medicine!.RackNumber,
+                b.Medicine!.BinNumber))
             .ToListAsync(ct);
 
         // Imported catalogue medicines often have no batches yet — provision an
@@ -250,7 +256,8 @@ public class SalesService : ISalesService
             return new List<BatchLookupDto>
             {
                 new(existing.Id, existing.BatchNumber, existing.ExpiryDate,
-                    existing.QuantityAvailable, existing.Mrp, existing.SellingPrice, existing.GstPercent)
+                    existing.QuantityAvailable, existing.Mrp, existing.SellingPrice, existing.GstPercent,
+                    existing.RackNumber ?? medicine.RackNumber, medicine.BinNumber)
             };
         }
 
@@ -264,7 +271,8 @@ public class SalesService : ISalesService
             PurchasePrice = medicine.PurchasePrice,
             Mrp = medicine.Mrp,
             SellingPrice = medicine.SellingPrice > 0 ? medicine.SellingPrice : medicine.Mrp,
-            GstPercent = medicine.GstPercent
+            GstPercent = medicine.GstPercent,
+            RackNumber = medicine.RackNumber
         };
         await _uow.Repository<MedicineBatch>().AddAsync(batch, ct);
         await _uow.SaveChangesAsync(ct);
@@ -272,7 +280,7 @@ public class SalesService : ISalesService
         return new List<BatchLookupDto>
         {
             new(batch.Id, batch.BatchNumber, batch.ExpiryDate, batch.QuantityAvailable,
-                batch.Mrp, batch.SellingPrice, batch.GstPercent)
+                batch.Mrp, batch.SellingPrice, batch.GstPercent, batch.RackNumber, medicine.BinNumber)
         };
     }
 
@@ -332,7 +340,7 @@ public class SalesService : ISalesService
             return Result.Failure<SaleReceiptDto>("Add at least one item to the bill.");
 
         var prefs = await _settings.GetPreferencesAsync(ct);
-        if (!prefs.AllowEditSalesBills)
+        if (!prefs.AllowEditSalesBills && !CanManageSales())
             return Result.Failure<SaleReceiptDto>(
                 "Editing sale bills is turned off. An admin can enable it under Settings → Preferences.");
 
@@ -362,7 +370,7 @@ public class SalesService : ISalesService
     public async Task<Result> UnlockSaleAsync(int saleId, int? branchId, CancellationToken ct = default)
     {
         var prefs = await _settings.GetPreferencesAsync(ct);
-        if (!prefs.AllowEditSalesBills)
+        if (!prefs.AllowEditSalesBills && !CanManageSales())
             return Result.Failure(
                 "Editing sale bills is turned off. An admin can enable it under Settings → Preferences.");
 
@@ -620,6 +628,7 @@ public class SalesService : ISalesService
             .Distinct()
             .ToList();
         var batches = await _uow.Repository<MedicineBatch>().Query()
+            .Include(b => b.Medicine)
             .Where(b => batchIds.Contains(b.Id))
             .ToDictionaryAsync(b => b.Id, ct);
         var expiryByMedicineBatch = await LoadBatchExpiryLookupAsync(sale.Items, ct);
@@ -671,7 +680,10 @@ public class SalesService : ISalesService
                     Mrp = mrp > 0 ? mrp : unitPrice,
                     GstPercent = item.GstPercent,
                     DiscountPercent = discountPercent,
-                    AvailableStock = batchQty + item.Quantity
+                    AvailableStock = batchQty + item.Quantity,
+                    LocationLabel = item.MedicineBatchId is int locBid && batches.TryGetValue(locBid, out var locBatch)
+                        ? StockLocation.Format(locBatch.RackNumber ?? locBatch.Medicine?.RackNumber, locBatch.Medicine?.BinNumber)
+                        : null
                 };
             }).ToList()
         };
@@ -1274,6 +1286,8 @@ public class SalesService : ISalesService
             CompanyGst = company?.GstNumber,
             CompanyDrugLicense = company?.DrugLicenseNumber,
             InvoiceFooter = company?.InvoiceFooter,
+            UpiVpa = company?.UpiVpa,
+            InvoicePaperSize = company?.InvoicePaperSize ?? InvoicePaperSize.A4,
             CustomerName = customerName,
             CustomerPhone = customerPhone,
             DoctorName = doctorName,
@@ -1470,7 +1484,7 @@ public class SalesService : ISalesService
         decimal qtyAvailable;
         var costPrice = medicine.PurchasePrice;
         var mrp = medicine.Mrp;
-        var location = medicine.RackNumber;
+        var location = StockLocation.Format(medicine.RackNumber, medicine.BinNumber);
 
         if (batchId is > 0)
         {
@@ -1484,7 +1498,7 @@ public class SalesService : ISalesService
                 qtyAvailable = batch.QuantityAvailable;
                 if (batch.PurchasePrice > 0) costPrice = batch.PurchasePrice;
                 if (batch.Mrp > 0) mrp = batch.Mrp;
-                location = batch.RackNumber ?? location;
+                location = StockLocation.Format(batch.RackNumber ?? medicine.RackNumber, medicine.BinNumber);
             }
             else
             {
@@ -1696,6 +1710,9 @@ public class SalesService : ISalesService
 
     private bool CanUnlockSales() =>
         _currentUser.HasAnyPermission(AppConstants.Permissions.SalesUnlock, AppConstants.Permissions.SalesManage);
+
+    private bool CanManageSales() =>
+        _currentUser.HasPermission(AppConstants.Permissions.SalesManage);
 
     private string CurrentActor()
     {

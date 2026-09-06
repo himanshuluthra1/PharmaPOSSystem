@@ -19,6 +19,7 @@ public class CompanyProfileDto
     public string? Pan { get; set; }
     public string? LogoPath { get; set; }
     public string? InvoiceFooter { get; set; }
+    public string? UpiVpa { get; set; }
     public string Currency { get; set; } = "INR";
     public string? CurrencySymbol { get; set; } = "\u20B9";
 }
@@ -31,6 +32,7 @@ public class AppPreferencesDto
     public string PurchaseInvoicePrefix { get; set; } = "PUR";
     public bool AllowEditSalesBills { get; set; }
     public bool AllowEditPurchaseBills { get; set; }
+    public InvoicePaperSize InvoicePaperSize { get; set; } = InvoicePaperSize.A4;
 }
 
 public record BranchListDto(int Id, string Code, string Name, string? City, bool IsHeadOffice, EntityStatus Status);

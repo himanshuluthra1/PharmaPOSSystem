@@ -31,6 +31,25 @@ public class PurchaseReturnService : IPurchaseReturnService
             .Select(r => new ReturnReasonOptionDto(r.Id, r.Code, r.Name, r.RequiresRemarks))
             .ToListAsync(ct);
 
+    public async Task ReconcileSourceBillAmountAsync(int purchaseId, CancellationToken ct = default)
+    {
+        var purchase = await _uow.Repository<Purchase>().Query()
+            .Include(p => p.Items)
+            .FirstOrDefaultAsync(p => p.Id == purchaseId, ct);
+        if (purchase is null) return;
+        if (purchase.Status is PurchaseStatus.Draft or PurchaseStatus.Cancelled or PurchaseStatus.Ordered)
+            return;
+
+        var before = purchase.GrandTotal;
+        var paidBefore = purchase.PaidAmount;
+        await NetPurchaseBillFromReturnsAsync(purchase, ct);
+        if (purchase.GrandTotal == before && purchase.PaidAmount == paidBefore)
+            return;
+
+        _uow.Repository<Purchase>().Update(purchase);
+        await _uow.SaveChangesAsync(ct);
+    }
+
     public async Task<List<PurchaseReturnSearchResultDto>> SearchPurchasesAsync(
         string term, int? branchId, CancellationToken ct = default)
     {
@@ -50,7 +69,13 @@ public class PurchaseReturnService : IPurchaseReturnService
             || (p.SupplierInvoiceNumber != null && p.SupplierInvoiceNumber.Contains(term))
             || (p.Supplier != null && p.Supplier.Name.Contains(term)));
 
-        return await q.OrderByDescending(p => p.InvoiceDate).Take(50)
+        var ids = await q.OrderByDescending(p => p.InvoiceDate).Select(p => p.Id).Take(50).ToListAsync(ct);
+        foreach (var id in ids)
+            await ReconcileSourceBillAmountAsync(id, ct);
+
+        return await _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .OrderByDescending(p => p.InvoiceDate)
             .Select(p => new PurchaseReturnSearchResultDto(
                 p.Id,
                 p.InvoiceNumber,
@@ -65,6 +90,8 @@ public class PurchaseReturnService : IPurchaseReturnService
     public async Task<Result<PurchaseForReturnDto>> GetPurchaseForReturnAsync(
         int purchaseId, int? branchId, CancellationToken ct = default)
     {
+        await ReconcileSourceBillAmountAsync(purchaseId, ct);
+
         var purchase = await _uow.Repository<Purchase>().Query().AsNoTracking()
             .Include(p => p.Items)
             .Include(p => p.Supplier)
@@ -186,7 +213,8 @@ public class PurchaseReturnService : IPurchaseReturnService
         bool pendingSupplierReceiptOnly, int? branchId, int take = 100, CancellationToken ct = default)
     {
         var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
-            .Where(r => r.Status == PurchaseReturnStatus.Completed);
+            .Where(r => r.Status == PurchaseReturnStatus.Completed
+                        && r.ReturnKind == PurchaseReturnKind.Standard);
         if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
         if (pendingSupplierReceiptOnly)
             q = q.Where(r => r.SupplierReturnReceiptNumber == null || r.SupplierReturnReceiptNumber == "");
@@ -320,13 +348,10 @@ public class PurchaseReturnService : IPurchaseReturnService
                 throw new PurchaseReturnException(
                     $"Return free qty exceeds available for batch {item.BatchNumber} (max {availFree:0.##}).");
 
-            // Value only on paid qty (same as purchase line costing).
-            var unitTaxable = item.Quantity > 0 ? item.TaxableAmount / item.Quantity : 0m;
-            var unitTax = item.Quantity > 0 ? item.TaxAmount / item.Quantity : 0m;
-            var unitTotal = item.Quantity > 0 ? item.LineTotal / item.Quantity : 0m;
-            var taxable = Math.Round(unitTaxable * line.ReturnQuantity, 2);
-            var tax = Math.Round(unitTax * line.ReturnQuantity, 2);
-            var lineTotal = Math.Round(unitTotal * line.ReturnQuantity, 2);
+            // Value on paid qty. MedWin lines sometimes have LineTotal=0 — fall back to price + GST.
+            var lineTotal = Math.Round(UnitReturnValue(item) * line.ReturnQuantity, 2);
+            var taxable = Math.Round(UnitTaxableValue(item) * line.ReturnQuantity, 2);
+            var tax = Math.Round(lineTotal - taxable, 2);
             resolved.Add((item, line, taxable, tax, lineTotal));
         }
 
@@ -425,9 +450,20 @@ public class PurchaseReturnService : IPurchaseReturnService
         supplier.OutstandingBalance -= grand;
         _uow.Repository<Supplier>().Update(supplier);
 
+        var unpaidBefore = Math.Max(0m, purchase.GrandTotal - purchase.PaidAmount);
         await UpdatePurchaseStatusAsync(purchase, returned, resolved, ct);
+        await NetPurchaseBillFromReturnsAsync(purchase, ct);
+
+        // Portion that reduced unpaid due is consumed on this bill.
+        var appliedToBill = Math.Min(grand, unpaidBefore);
+        purchaseReturn.CreditAppliedAmount += appliedToBill;
+        if (request.SettlementMode == PurchaseReturnSettlementMode.CashRefund)
+            purchaseReturn.CreditAppliedAmount = purchaseReturn.CreditAmount;
+        _uow.Repository<PurchaseReturn>().Update(purchaseReturn);
+        _uow.Repository<Purchase>().Update(purchase);
         await _uow.SaveChangesAsync(ct);
 
+        var balanceDue = Math.Max(0m, purchase.GrandTotal - purchase.PaidAmount);
         return new PurchaseReturnReceiptDto
         {
             PurchaseReturnId = purchaseReturn.Id,
@@ -436,10 +472,63 @@ public class PurchaseReturnService : IPurchaseReturnService
             SupplierName = supplier.Name,
             ReturnDate = purchaseReturn.ReturnDate,
             GrandTotal = purchaseReturn.GrandTotal,
+            AppliedToPurchaseBill = appliedToBill,
+            PurchaseBalanceDueAfter = balanceDue,
+            RemainingSupplierCredit = purchaseReturn.RemainingCredit,
             IsFullReturn = purchaseReturn.IsFullReturn,
             IsDirectReturn = false,
             SupplierReturnReceiptNumber = null
         };
+    }
+
+    /// <summary>
+    /// Sets purchase GrandTotal to remaining goods value (sum of lines minus completed returns).
+    /// Idempotent — also repairs MedWin bills returned earlier that still showed the original amount.
+    /// </summary>
+    private async Task NetPurchaseBillFromReturnsAsync(Purchase purchase, CancellationToken ct)
+    {
+        var returnedTotal = await _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+            .Where(r => r.PurchaseId == purchase.Id && r.Status == PurchaseReturnStatus.Completed)
+            .SumAsync(r => (decimal?)r.GrandTotal, ct) ?? 0m;
+        if (returnedTotal <= 0m)
+            return;
+
+        var linesTotal = purchase.Items.Sum(i => i.LineTotal > 0
+            ? i.LineTotal
+            : Math.Round(i.PurchasePrice * i.Quantity * (1 + i.GstPercent / 100m), 2));
+
+        // Header still looks like the original invoice (at/above line goods value).
+        // After we net once, GrandTotal falls below line totals so we do not subtract again.
+        if (linesTotal > 0.01m && purchase.GrandTotal + 1m < linesTotal)
+            return;
+
+        purchase.GrandTotal = Math.Max(0m, Math.Round(purchase.GrandTotal - returnedTotal, 2));
+        if (purchase.PaidAmount > purchase.GrandTotal)
+            purchase.PaidAmount = purchase.GrandTotal;
+
+        purchase.PaymentStatus = purchase.GrandTotal <= 0m || purchase.PaidAmount >= purchase.GrandTotal
+            ? PaymentStatus.Paid
+            : purchase.PaidAmount > 0m
+                ? PaymentStatus.PartiallyPaid
+                : PaymentStatus.Unpaid;
+    }
+
+    private static decimal UnitReturnValue(PurchaseItem item)
+    {
+        if (item.Quantity > 0 && item.LineTotal > 0)
+            return item.LineTotal / item.Quantity;
+        var taxable = UnitTaxableValue(item);
+        return Math.Round(taxable * (1 + item.GstPercent / 100m), 4);
+    }
+
+    private static decimal UnitTaxableValue(PurchaseItem item)
+    {
+        if (item.Quantity > 0 && item.TaxableAmount > 0)
+            return item.TaxableAmount / item.Quantity;
+        var gross = item.PurchasePrice;
+        return item.DiscountPercent > 0
+            ? Math.Round(gross * (1 - item.DiscountPercent / 100m), 4)
+            : gross;
     }
 
     private async Task<PurchaseReturnReceiptDto> PersistDirectReturnAsync(
@@ -519,6 +608,7 @@ public class PurchaseReturnService : IPurchaseReturnService
             GrandTotal = grand,
             CreditAmount = grand,
             SettlementMode = request.SettlementMode,
+            ReturnKind = request.ReturnKind,
             Status = PurchaseReturnStatus.Completed,
             Remarks = request.Remarks,
             IsFullReturn = false,
@@ -569,7 +659,9 @@ public class PurchaseReturnService : IPurchaseReturnService
                 ReferenceId = purchaseReturn.Id,
                 ReferenceNumber = purchaseReturn.ReturnNumber,
                 MovementDateUtc = _clock.UtcNow,
-                Remarks = $"Direct return to supplier — {supplier.Name}"
+                Remarks = request.ReturnKind == PurchaseReturnKind.ExpiryToCompany
+                    ? $"Expiry-to-company — {supplier.Name}"
+                    : $"Direct return to supplier — {supplier.Name}"
             }, ct);
         }
 

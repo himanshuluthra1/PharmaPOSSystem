@@ -303,6 +303,13 @@
                                              IsReadOnly="True" />
                                 </DockPanel>
 
+                                <TextBlock Text="UPI VPA (QR on bills)" Style="{StaticResource FieldCaption}" />
+                                <TextBox Style="{StaticResource FieldBox}"
+                                         Text="{Binding Editor.UpiVpa, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="e.g. shopname@okicici" />
+                                <TextBlock Text="Leave blank to hide the UPI QR. Amount and invoice number are added to the QR automatically."
+                                           Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" FontSize="12" />
+
                                 <TextBlock Text="Invoice footer message" Style="{StaticResource FieldCaption}" />
                                 <TextBox Style="{StaticResource FieldBox}"
                                          Text="{Binding Editor.InvoiceFooter, UpdateSourceTrigger=PropertyChanged}"
@@ -558,6 +565,16 @@
                                      Text="{Binding Editor.PurchaseInvoicePrefix, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Text="Invoice numbers use the format PREFIX-yyyyMMdd-#### (resets daily)." Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
 
+                            <TextBlock Text="Default bill paper" Style="{StaticResource FieldCaption}" />
+                            <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                      ItemsSource="{Binding PaperSizeOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedValuePath="Value"
+                                      SelectedValue="{Binding Editor.InvoicePaperSize}"
+                                      Margin="0,0,0,8" />
+                            <TextBlock Text="Preview still lets you switch A4, A5, 80 mm or 58 mm before printing."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
+
                             <TextBlock Text="Bill editing" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,8" />
                             <CheckBox Content="Allow editing existing sale bills"
                                       IsChecked="{Binding Editor.AllowEditSalesBills}"
@@ -565,7 +582,7 @@
                             <CheckBox Content="Allow editing existing purchase bills"
                                       IsChecked="{Binding Editor.AllowEditPurchaseBills}"
                                       Margin="0,0,0,4" />
-                            <TextBlock Text="Master switch for invoice edits. When on, users still need Edit / Unlock permissions under Roles. Saved invoices lock automatically; unlock is required before changes."
+                            <TextBlock Text="Master switch for cashier/staff edits. Users with Full Purchase/Sales Access (e.g. Super Admin) can still unlock and edit. Saved invoices lock automatically; click Unlock before changing a locked bill."
                                        Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
 
                             <TextBlock Text="AI bill scan (Gemini)" FontWeight="SemiBold" FontSize="14" Margin="0,8,0,4" />

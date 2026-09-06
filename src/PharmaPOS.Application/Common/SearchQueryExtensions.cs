@@ -45,7 +45,9 @@ public static class SearchQueryExtensions
                 query = query.Where(m =>
                     EF.Functions.Like(m.NameSearchKey, "%" + token + "%") ||
                     (m.GenericNameSearchKey != "" && EF.Functions.Like(m.GenericNameSearchKey, "%" + token + "%")) ||
-                    (m.BarcodeSearchKey != "" && m.BarcodeSearchKey == token));
+                    (m.BarcodeSearchKey != "" && m.BarcodeSearchKey == token) ||
+                    (m.RackNumber != null && EF.Functions.Like(m.RackNumber, "%" + token + "%")) ||
+                    (m.BinNumber != null && EF.Functions.Like(m.BinNumber, "%" + token + "%")));
             }
 
             return query;
@@ -56,12 +58,16 @@ public static class SearchQueryExtensions
             return query.Where(m =>
                 EF.Functions.Like(m.NameSearchKey, normalizedTerm + "%") ||
                 (m.BarcodeSearchKey != "" && m.BarcodeSearchKey == normalizedTerm) ||
-                (m.GenericNameSearchKey != "" && EF.Functions.Like(m.GenericNameSearchKey, normalizedTerm + "%")));
+                (m.GenericNameSearchKey != "" && EF.Functions.Like(m.GenericNameSearchKey, normalizedTerm + "%")) ||
+                (m.RackNumber != null && EF.Functions.Like(m.RackNumber, "%" + normalizedTerm + "%")) ||
+                (m.BinNumber != null && EF.Functions.Like(m.BinNumber, "%" + normalizedTerm + "%")));
         }
 
         return query.Where(m =>
             EF.Functions.Like(m.NameSearchKey, "%" + normalizedTerm + "%") ||
-            (m.GenericNameSearchKey != "" && EF.Functions.Like(m.GenericNameSearchKey, "%" + normalizedTerm + "%")));
+            (m.GenericNameSearchKey != "" && EF.Functions.Like(m.GenericNameSearchKey, "%" + normalizedTerm + "%")) ||
+            (m.RackNumber != null && EF.Functions.Like(m.RackNumber, "%" + normalizedTerm + "%")) ||
+            (m.BinNumber != null && EF.Functions.Like(m.BinNumber, "%" + normalizedTerm + "%")));
     }
 
     public static IQueryable<Supplier> WhereSupplierMatches(

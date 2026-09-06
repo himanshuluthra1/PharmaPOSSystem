@@ -11,6 +11,12 @@ architecture established here.
 
 ---
 
+## User guide (shop staff)
+
+A full, screen-by-screen operations manual is in **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** (sales, purchase, expiry-to-company, GST reports, printing, backup, shortcuts).
+
+---
+
 ## What works today (Phase 1)
 
 - ✅ Clean Architecture solution (Domain / Application / Infrastructure / Persistence / Shared / WPF / Tests)

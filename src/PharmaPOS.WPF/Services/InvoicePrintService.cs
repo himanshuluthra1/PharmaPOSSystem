@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Features.Accounting;
 using PharmaPOS.Application.Features.Counters;
 using PharmaPOS.Application.Features.Reports;
@@ -19,46 +20,243 @@ using PharmaPOS.WPF.Views;
 namespace PharmaPOS.WPF.Services;
 
 /// <summary>
-/// Renders a GST invoice as a WPF <see cref="FlowDocument"/> sized for A4, which can
-/// be previewed on screen and sent to any Windows printer (A4 or thermal).
+/// Renders a GST invoice as a WPF <see cref="FlowDocument"/> for A4, A5 or thermal rolls.
 /// </summary>
 public class InvoicePrintService : IInvoicePrintService
 {
     private static readonly CultureInfo Inr = CultureInfo.GetCultureInfo("en-IN");
-    private const double A4Width = 794;   // ~210mm at 96 DPI
-    private const double A4Height = 1123; // ~297mm at 96 DPI
+    private const double A4Width = 794;
+    private const double A4Height = 1123;
+    private readonly IBarcodeCodec _barcodes;
 
-    public FlowDocument BuildDocument(SaleReceiptDto r)
+    public InvoicePrintService(IBarcodeCodec barcodes)
+    {
+        _barcodes = barcodes;
+    }
+
+    public FlowDocument BuildDocument(SaleReceiptDto r, InvoicePaperSize? paperSize = null)
+    {
+        var layout = InvoicePageLayout.For(paperSize ?? r.InvoicePaperSize);
+        if (layout.IsThermal)
+            return BuildThermalDocument(r, layout);
+        return BuildGstDocument(r, layout);
+    }
+
+    private FlowDocument BuildGstDocument(SaleReceiptDto r, InvoicePageLayout layout)
     {
         var doc = new FlowDocument
         {
-            PageWidth = A4Width,
-            PageHeight = A4Height,
-            ColumnWidth = A4Width,
-            PagePadding = new Thickness(40),
+            PageWidth = layout.Width,
+            PageHeight = layout.Height,
+            ColumnWidth = layout.Width,
+            PagePadding = layout.Padding,
             FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 12,
+            FontSize = layout.FontSize,
             Background = Brushes.White,
             Foreground = Brushes.Black
         };
 
-        doc.Blocks.Add(BuildHeader(r));
+        doc.Blocks.Add(BuildHeader(r, layout));
         doc.Blocks.Add(BuildMeta(r));
-        doc.Blocks.Add(BuildItemsTable(r));
+        doc.Blocks.Add(BuildItemsTable(r, layout.CompactColumns));
         doc.Blocks.Add(BuildTotals(r));
+        var qr = TryBuildUpiQrBlock(r, layout.IsThermal ? 100 : 120);
+        if (qr is not null)
+            doc.Blocks.Add(qr);
 
         if (!string.IsNullOrWhiteSpace(r.InvoiceFooter))
         {
             doc.Blocks.Add(new Paragraph(new Run(r.InvoiceFooter))
             {
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 24, 0, 0),
+                Margin = new Thickness(0, 16, 0, 0),
                 FontStyle = FontStyles.Italic,
                 Foreground = Brushes.Gray
             });
         }
 
         return doc;
+    }
+
+    private FlowDocument BuildThermalDocument(SaleReceiptDto r, InvoicePageLayout layout)
+    {
+        var doc = new FlowDocument
+        {
+            PageWidth = layout.Width,
+            PageHeight = layout.Height,
+            ColumnWidth = layout.Width,
+            PagePadding = layout.Padding,
+            FontFamily = new FontFamily("Consolas, Segoe UI"),
+            FontSize = layout.FontSize,
+            Background = Brushes.White,
+            Foreground = Brushes.Black,
+            TextAlignment = TextAlignment.Left
+        };
+
+        doc.Blocks.Add(new Paragraph(new Run(r.CompanyName))
+        {
+            FontWeight = FontWeights.Bold,
+            FontSize = layout.FontSize + 2,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 2)
+        });
+        if (!string.IsNullOrWhiteSpace(r.CompanyAddress))
+            doc.Blocks.Add(CenterMuted(r.CompanyAddress, layout.FontSize - 1));
+        var gstLine = string.Join("  ", new[]
+        {
+            string.IsNullOrWhiteSpace(r.CompanyPhone) ? null : "Ph " + r.CompanyPhone,
+            string.IsNullOrWhiteSpace(r.CompanyGst) ? null : "GST " + r.CompanyGst
+        }.Where(s => s is not null));
+        if (gstLine.Length > 0)
+            doc.Blocks.Add(CenterMuted(gstLine, layout.FontSize - 1));
+
+        doc.Blocks.Add(new Paragraph(new Run("TAX INVOICE"))
+        {
+            FontWeight = FontWeights.Bold,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 6, 0, 4)
+        });
+        doc.Blocks.Add(new Paragraph(new Run($"{r.InvoiceNumber}  {r.InvoiceDate:dd-MM-yy hh:mm tt}"))
+        {
+            Margin = new Thickness(0, 0, 0, 2),
+            FontSize = layout.FontSize - 0.5
+        });
+        doc.Blocks.Add(new Paragraph(new Run(r.CustomerName + (string.IsNullOrWhiteSpace(r.CustomerPhone) ? "" : "  " + r.CustomerPhone)))
+        {
+            Margin = new Thickness(0, 0, 0, 6)
+        });
+        doc.Blocks.Add(DashedRule());
+
+        foreach (var l in r.Lines)
+        {
+            var name = l.IsReturnLine ? l.MedicineName : $"{l.SerialNo}. {l.MedicineName}";
+            doc.Blocks.Add(new Paragraph(new Run(name))
+            {
+                Margin = new Thickness(0, 4, 0, 0),
+                FontWeight = FontWeights.SemiBold
+            });
+            var detail = $"{l.Quantity:0.##} x {l.UnitPrice.ToString("0.00", Inr)}";
+            if (!string.IsNullOrWhiteSpace(l.BatchNumber))
+                detail = $"{l.BatchNumber} {l.ExpiryDate:MM/yy}  {detail}";
+            doc.Blocks.Add(new Paragraph
+            {
+                Margin = new Thickness(0, 0, 0, 0),
+                Inlines =
+                {
+                    new Run(detail) { FontSize = layout.FontSize - 0.5 },
+                    new Run("  " + l.Amount.ToString("N2", Inr)) { FontWeight = FontWeights.Bold }
+                }
+            });
+        }
+
+        doc.Blocks.Add(DashedRule());
+        if (r.DiscountAmount != 0)
+            doc.Blocks.Add(ThermalAmount("Discount", r.DiscountAmount, layout.FontSize));
+        if (r.CgstAmount != 0)
+            doc.Blocks.Add(ThermalAmount("CGST", r.CgstAmount, layout.FontSize));
+        if (r.SgstAmount != 0)
+            doc.Blocks.Add(ThermalAmount("SGST", r.SgstAmount, layout.FontSize));
+        doc.Blocks.Add(ThermalAmount("TOTAL", r.GrandTotal, layout.FontSize + 1, bold: true));
+        foreach (var payment in r.Payments.Where(p => p.Amount > 0))
+            doc.Blocks.Add(ThermalAmount(PaymentMethodLabel(payment.Method), payment.Amount, layout.FontSize));
+        var due = r.GrandTotal - Math.Min(r.PaidAmount, r.GrandTotal);
+        if (due > 0.009m)
+            doc.Blocks.Add(ThermalAmount("Due", due, layout.FontSize, bold: true));
+
+        var qr = TryBuildUpiQrBlock(r, layout.Size == InvoicePaperSize.Thermal58 ? 88 : 108);
+        if (qr is not null)
+            doc.Blocks.Add(qr);
+
+        if (!string.IsNullOrWhiteSpace(r.InvoiceFooter))
+        {
+            doc.Blocks.Add(new Paragraph(new Run(r.InvoiceFooter))
+            {
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 8, 0, 0),
+                FontSize = layout.FontSize - 1,
+                Foreground = Brushes.Gray
+            });
+        }
+
+        doc.Blocks.Add(new Paragraph(new Run("Thank you"))
+        {
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+
+        return doc;
+    }
+
+    private static Paragraph CenterMuted(string text, double fontSize) =>
+        new(new Run(text))
+        {
+            TextAlignment = TextAlignment.Center,
+            FontSize = fontSize,
+            Margin = new Thickness(0, 0, 0, 1),
+            Foreground = Brushes.DimGray
+        };
+
+    private static Paragraph DashedRule() =>
+        new(new Run("--------------------------------"))
+        {
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 2),
+            Foreground = Brushes.Gray
+        };
+
+    private static Paragraph ThermalAmount(string label, decimal value, double fontSize, bool bold = false) =>
+        new()
+        {
+            Margin = new Thickness(0, 1, 0, 1),
+            FontSize = fontSize,
+            FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+            Inlines =
+            {
+                new Run(label),
+                new Run("  ₹ " + value.ToString("N2", Inr)) { FontWeight = bold ? FontWeights.Bold : FontWeights.SemiBold }
+            },
+            TextAlignment = TextAlignment.Right
+        };
+
+    private Block? TryBuildUpiQrBlock(SaleReceiptDto r, int pixels)
+    {
+        var uri = UpiPayLink.TryCreate(r.UpiVpa, r.CompanyName, r.GrandTotal, r.InvoiceNumber);
+        if (uri is null) return null;
+
+        BitmapSource image;
+        try
+        {
+            image = _barcodes.GenerateQrImage(uri, pixels);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var section = new Section { TextAlignment = TextAlignment.Center };
+        section.Blocks.Add(new Paragraph(new Run("Scan to pay (UPI)"))
+        {
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 12, 0, 4),
+            TextAlignment = TextAlignment.Center
+        });
+        section.Blocks.Add(new BlockUIContainer(new Image
+        {
+            Source = image,
+            Width = pixels,
+            Height = pixels,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 4)
+        }));
+        section.Blocks.Add(new Paragraph(new Run(r.UpiVpa!.Trim()))
+        {
+            FontSize = 10,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 0),
+            Foreground = Brushes.DimGray
+        });
+        return section;
     }
 
     public void ShowPreview(SaleReceiptDto receipt)
@@ -70,19 +268,22 @@ public class InvoicePrintService : IInvoicePrintService
         window.ShowDialog();
     }
 
-    public void Print(SaleReceiptDto receipt)
+    public void Print(SaleReceiptDto receipt, InvoicePaperSize? paperSize = null)
     {
         var dialog = new PrintDialog();
         if (dialog.ShowDialog() != true) return;
 
-        var doc = BuildDocument(receipt);
-        doc.PageWidth = dialog.PrintableAreaWidth;
-        doc.ColumnWidth = dialog.PrintableAreaWidth;
+        var layout = InvoicePageLayout.For(paperSize ?? receipt.InvoicePaperSize);
+        var doc = BuildDocument(receipt, layout.Size);
+        doc.PageWidth = layout.IsThermal ? Math.Min(layout.Width, dialog.PrintableAreaWidth) : dialog.PrintableAreaWidth;
+        doc.ColumnWidth = doc.PageWidth;
+        if (!layout.IsThermal)
+            doc.PageHeight = layout.Height;
         IDocumentPaginatorSource source = doc;
         dialog.PrintDocument(source.DocumentPaginator, $"Invoice {receipt.InvoiceNumber}");
     }
 
-    public string ExportPrintablePdf(SaleReceiptDto receipt)
+    public string ExportPrintablePdf(SaleReceiptDto receipt, InvoicePaperSize? paperSize = null)
     {
         var dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -93,15 +294,15 @@ public class InvoicePrintService : IInvoicePrintService
         if (string.IsNullOrWhiteSpace(safeInvoice)) safeInvoice = "bill";
         var path = Path.Combine(dir, $"{safeInvoice}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
 
-        var doc = BuildDocument(receipt);
-        // Ensure layout is measured before pagination (required when not shown on screen).
-        doc.PageWidth = A4Width;
-        doc.PageHeight = A4Height;
-        doc.ColumnWidth = A4Width;
+        var layout = InvoicePageLayout.For(paperSize ?? receipt.InvoicePaperSize);
+        var doc = BuildDocument(receipt, layout.Size);
+        doc.PageWidth = layout.Width;
+        doc.PageHeight = layout.Height;
+        doc.ColumnWidth = layout.Width;
 
         IDocumentPaginatorSource source = doc;
         var paginator = source.DocumentPaginator;
-        paginator.PageSize = new Size(A4Width, A4Height);
+        paginator.PageSize = new Size(layout.Width, layout.Height);
         paginator.ComputePageCount();
 
         using var pdf = new PdfDocument();
@@ -114,8 +315,8 @@ public class InvoicePrintService : IInvoicePrintService
             var container = new ContainerVisual();
             container.Children.Add(page.Visual);
 
-            var width = (int)Math.Ceiling(A4Width);
-            var height = (int)Math.Ceiling(A4Height);
+            var width = (int)Math.Ceiling(layout.Width);
+            var height = (int)Math.Ceiling(layout.Height);
             var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
             rtb.Render(container);
             rtb.Freeze();
@@ -127,8 +328,8 @@ public class InvoicePrintService : IInvoicePrintService
             ms.Position = 0;
 
             var pdfPage = pdf.AddPage();
-            pdfPage.Width = XUnit.FromPoint(A4Width * 72.0 / 96.0);
-            pdfPage.Height = XUnit.FromPoint(A4Height * 72.0 / 96.0);
+            pdfPage.Width = XUnit.FromPoint(layout.Width * 72.0 / 96.0);
+            pdfPage.Height = XUnit.FromPoint(layout.Height * 72.0 / 96.0);
 
             using var gfx = XGraphics.FromPdfPage(pdfPage);
             using var image = XImage.FromStream(ms);
@@ -691,13 +892,13 @@ public class InvoicePrintService : IInvoicePrintService
         return cell;
     }
 
-    private static Block BuildHeader(SaleReceiptDto r)
+    private static Block BuildHeader(SaleReceiptDto r, InvoicePageLayout layout)
     {
         var section = new Section();
 
         section.Blocks.Add(new Paragraph(new Run(r.CompanyName))
         {
-            FontSize = 22,
+            FontSize = layout.CompactColumns ? 18 : 22,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x00, 0x69, 0x5C)),
             Margin = new Thickness(0)
@@ -821,25 +1022,39 @@ public class InvoicePrintService : IInvoicePrintService
         return table;
     }
 
-    private static Block BuildItemsTable(SaleReceiptDto r)
+    private static Block BuildItemsTable(SaleReceiptDto r, bool compact)
     {
         var table = new Table { CellSpacing = 0, Margin = new Thickness(0, 8, 0, 0), BorderBrush = Brushes.LightGray, BorderThickness = new Thickness(1) };
-        double[] widths = { 0.4, 2.8, 1.0, 0.7, 0.6, 0.8, 0.8, 0.8, 0.7, 1.0 };
-        foreach (var w in widths)
-            table.Columns.Add(new TableColumn { Width = new GridLength(w, GridUnitType.Star) });
+        if (compact)
+        {
+            double[] compactWidths = { 0.4, 3.2, 0.7, 0.9, 1.0 };
+            foreach (var w in compactWidths)
+                table.Columns.Add(new TableColumn { Width = new GridLength(w, GridUnitType.Star) });
+        }
+        else
+        {
+            double[] widths = { 0.4, 2.8, 1.0, 0.7, 0.6, 0.8, 0.8, 0.8, 0.7, 1.0 };
+            foreach (var w in widths)
+                table.Columns.Add(new TableColumn { Width = new GridLength(w, GridUnitType.Star) });
+        }
 
         var header = new TableRowGroup();
         var hr = new TableRow { Background = new SolidColorBrush(Color.FromRgb(0x26, 0xA6, 0x9A)) };
-        foreach (var (text, align) in new[]
-        {
-            ("#", TextAlignment.Center), ("Item", TextAlignment.Left), ("Batch", TextAlignment.Left),
-            ("Exp", TextAlignment.Center), ("Qty", TextAlignment.Right), ("MRP", TextAlignment.Right),
-            ("Sale", TextAlignment.Right), ("Disc", TextAlignment.Right), ("GST%", TextAlignment.Right),
-            ("Amount", TextAlignment.Right)
-        })
-        {
+        var headers = compact
+            ? new[]
+            {
+                ("#", TextAlignment.Center), ("Item", TextAlignment.Left),
+                ("Qty", TextAlignment.Right), ("Rate", TextAlignment.Right), ("Amount", TextAlignment.Right)
+            }
+            : new[]
+            {
+                ("#", TextAlignment.Center), ("Item", TextAlignment.Left), ("Batch", TextAlignment.Left),
+                ("Exp", TextAlignment.Center), ("Qty", TextAlignment.Right), ("MRP", TextAlignment.Right),
+                ("Sale", TextAlignment.Right), ("Disc", TextAlignment.Right), ("GST%", TextAlignment.Right),
+                ("Amount", TextAlignment.Right)
+            };
+        foreach (var (text, align) in headers)
             hr.Cells.Add(TextCell(text, align, bold: true, foreground: Brushes.White));
-        }
         header.Rows.Add(hr);
         table.RowGroups.Add(header);
 
@@ -847,16 +1062,30 @@ public class InvoicePrintService : IInvoicePrintService
         foreach (var l in r.Lines)
         {
             var row = new TableRow();
-            row.Cells.Add(TextCell(l.SerialNo.ToString(), TextAlignment.Center));
-            row.Cells.Add(TextCell(l.MedicineName, TextAlignment.Left));
-            row.Cells.Add(TextCell(l.BatchNumber, TextAlignment.Left));
-            row.Cells.Add(TextCell(l.ExpiryDate?.ToString("MM/yy") ?? "-", TextAlignment.Center));
-            row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
-            row.Cells.Add(TextCell(l.Mrp.ToString("N2", Inr), TextAlignment.Right));
-            row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
-            row.Cells.Add(TextCell(l.DiscountAmount != 0 ? l.DiscountAmount.ToString("N2", Inr) : "-", TextAlignment.Right));
-            row.Cells.Add(TextCell(l.GstPercent.ToString("0.##"), TextAlignment.Right));
-            row.Cells.Add(TextCell(l.Amount.ToString("N2", Inr), TextAlignment.Right));
+            if (compact)
+            {
+                var item = l.MedicineName;
+                if (!string.IsNullOrWhiteSpace(l.BatchNumber))
+                    item += $"\n{l.BatchNumber}  {l.ExpiryDate:MM/yy}";
+                row.Cells.Add(TextCell(l.SerialNo.ToString(), TextAlignment.Center));
+                row.Cells.Add(TextCell(item, TextAlignment.Left));
+                row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.Amount.ToString("N2", Inr), TextAlignment.Right));
+            }
+            else
+            {
+                row.Cells.Add(TextCell(l.SerialNo.ToString(), TextAlignment.Center));
+                row.Cells.Add(TextCell(l.MedicineName, TextAlignment.Left));
+                row.Cells.Add(TextCell(l.BatchNumber, TextAlignment.Left));
+                row.Cells.Add(TextCell(l.ExpiryDate?.ToString("MM/yy") ?? "-", TextAlignment.Center));
+                row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.Mrp.ToString("N2", Inr), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.DiscountAmount != 0 ? l.DiscountAmount.ToString("N2", Inr) : "-", TextAlignment.Right));
+                row.Cells.Add(TextCell(l.GstPercent.ToString("0.##"), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.Amount.ToString("N2", Inr), TextAlignment.Right));
+            }
             body.Rows.Add(row);
         }
         table.RowGroups.Add(body);

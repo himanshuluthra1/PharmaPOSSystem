@@ -187,3 +187,12 @@ public enum ShortageSource
     Refill = 2,
     Manual = 3
 }
+
+/// <summary>Invoice / receipt paper template used for preview, print and PDF.</summary>
+public enum InvoicePaperSize
+{
+    A4 = 0,
+    A5 = 1,
+    Thermal80 = 2,
+    Thermal58 = 3
+}

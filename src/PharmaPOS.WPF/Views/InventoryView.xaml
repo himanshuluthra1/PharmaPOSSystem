@@ -137,7 +137,7 @@
                                     <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
                                     <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
                                     <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="75" />
-                                    <DataGridTextColumn Header="Rack" Binding="{Binding RackNumber}" Width="55" />
+                                    <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" Width="80" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>

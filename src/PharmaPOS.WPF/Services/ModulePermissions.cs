@@ -20,6 +20,7 @@ public static class ModulePermissions
         [typeof(PurchaseViewModel)] = "purchase",
         [typeof(PurchaseOrderViewModel)] = "purchase",
         [typeof(PurchaseReturnViewModel)] = "purchase",
+        [typeof(ExpiryReturnViewModel)] = "purchase",
         [typeof(InventoryViewModel)] = "inventory",
         [typeof(MastersViewModel)] = "masters",
         [typeof(AccountingViewModel)] = "accounting",

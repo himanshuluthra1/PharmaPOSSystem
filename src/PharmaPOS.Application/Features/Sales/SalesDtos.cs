@@ -1,3 +1,4 @@
+using PharmaPOS.Application.Common;
 using PharmaPOS.Domain.Enums;
 
 namespace PharmaPOS.Application.Features.Sales;
@@ -11,7 +12,12 @@ public record MedicineLookupDto(
     decimal GstPercent,
     decimal DefaultDiscountPercent,
     bool PrescriptionRequired,
-    decimal TotalStock);
+    decimal TotalStock,
+    string? RackNumber = null,
+    string? BinNumber = null)
+{
+    public string? LocationLabel => StockLocation.Format(RackNumber, BinNumber);
+}
 
 /// <summary>Substitute medicine row for same-salt picker (F5).</summary>
 public record SubstituteMedicineDto(
@@ -33,7 +39,12 @@ public record BatchLookupDto(
     decimal QuantityAvailable,
     decimal Mrp,
     decimal SellingPrice,
-    decimal GstPercent);
+    decimal GstPercent,
+    string? RackNumber = null,
+    string? BinNumber = null)
+{
+    public string? LocationLabel => StockLocation.Format(RackNumber, BinNumber);
+}
 
 /// <summary>A customer match for the customer picker.</summary>
 public record CustomerLookupDto(
@@ -178,6 +189,7 @@ public class SaleEditLineDto
     public decimal GstPercent { get; set; }
     public decimal DiscountPercent { get; set; }
     public decimal AvailableStock { get; set; }
+    public string? LocationLabel { get; set; }
 
     /// <summary>True when this row is a sale-return deduction (negative quantity).</summary>
     public bool IsReturnLine { get; set; }
@@ -203,6 +215,8 @@ public class SaleReceiptDto
     public string? CompanyGst { get; set; }
     public string? CompanyDrugLicense { get; set; }
     public string? InvoiceFooter { get; set; }
+    public string? UpiVpa { get; set; }
+    public InvoicePaperSize InvoicePaperSize { get; set; } = InvoicePaperSize.A4;
 
     public string CustomerName { get; set; } = "Walk-in Customer";
     public string? CustomerPhone { get; set; }

@@ -1587,6 +1587,10 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasColumnType("nvarchar(64)")
                         .HasComputedColumnSql("REPLACE(ISNULL([Barcode], N''), N' ', N'')", true);
 
+                    b.Property<string>("BinNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("Brand")
                         .HasColumnType("nvarchar(max)");
 
@@ -1685,7 +1689,8 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("RackNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<int>("ReorderLevel")
                         .HasColumnType("int");
@@ -1948,6 +1953,172 @@ namespace PharmaPOS.Persistence.Migrations
                     b.HasIndex("NameSearchKey");
 
                     b.ToTable("Suppliers");
+                });
+
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.ExpirySupplierClaim", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ClaimDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ClaimNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("CreditNoteAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("CreditNoteDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreditNoteNumber")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("ExpectedCreditAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PurchaseReturnId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ClaimDate");
+
+                    b.HasIndex("ClaimNumber")
+                        .IsUnique();
+
+                    b.HasIndex("PurchaseReturnId");
+
+                    b.HasIndex("SupplierId", "Status");
+
+                    b.ToTable("ExpirySupplierClaims");
+                });
+
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.ExpirySupplierClaimItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("ClaimId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ClaimQuantity")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("GstPercent")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("MedicineBatchId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ModifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("PurchaseId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PurchasePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("StockQuantity")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClaimId");
+
+                    b.HasIndex("MedicineBatchId");
+
+                    b.HasIndex("MedicineId");
+
+                    b.HasIndex("PurchaseId");
+
+                    b.ToTable("ExpirySupplierClaimItems");
                 });
 
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.Purchase", b =>
@@ -2387,6 +2558,9 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<DateTime>("ReturnDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("ReturnKind")
+                        .HasColumnType("int");
+
                     b.Property<string>("ReturnNumber")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -2431,6 +2605,8 @@ namespace PharmaPOS.Persistence.Migrations
                     b.HasIndex("PurchaseId");
 
                     b.HasIndex("ReturnDate");
+
+                    b.HasIndex("ReturnKind");
 
                     b.HasIndex("ReturnNumber")
                         .IsUnique();
@@ -3545,6 +3721,9 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("InvoiceFooter")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("InvoicePaperSize")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -3609,6 +3788,10 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.Property<string>("State")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UpiVpa")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<string>("Website")
                         .HasColumnType("nvarchar(max)");
@@ -4077,6 +4260,65 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Navigation("Branch");
                 });
 
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.ExpirySupplierClaim", b =>
+                {
+                    b.HasOne("PharmaPOS.Domain.Entities.Identity.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId");
+
+                    b.HasOne("PharmaPOS.Domain.Entities.Purchases.PurchaseReturn", "PurchaseReturn")
+                        .WithMany()
+                        .HasForeignKey("PurchaseReturnId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PharmaPOS.Domain.Entities.Masters.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("PurchaseReturn");
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.ExpirySupplierClaimItem", b =>
+                {
+                    b.HasOne("PharmaPOS.Domain.Entities.Purchases.ExpirySupplierClaim", "Claim")
+                        .WithMany("Items")
+                        .HasForeignKey("ClaimId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PharmaPOS.Domain.Entities.Inventory.MedicineBatch", "MedicineBatch")
+                        .WithMany()
+                        .HasForeignKey("MedicineBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PharmaPOS.Domain.Entities.Masters.Medicine", "Medicine")
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PharmaPOS.Domain.Entities.Purchases.Purchase", "Purchase")
+                        .WithMany()
+                        .HasForeignKey("PurchaseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Claim");
+
+                    b.Navigation("Medicine");
+
+                    b.Navigation("MedicineBatch");
+
+                    b.Navigation("Purchase");
+                });
+
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.Purchase", b =>
                 {
                     b.HasOne("PharmaPOS.Domain.Entities.Identity.Branch", "Branch")
@@ -4490,6 +4732,11 @@ namespace PharmaPOS.Persistence.Migrations
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Masters.MedicineCategory", b =>
                 {
                     b.Navigation("Medicines");
+                });
+
+            modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.ExpirySupplierClaim", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Purchases.Purchase", b =>

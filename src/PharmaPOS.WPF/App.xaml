@@ -234,6 +234,9 @@
             <DataTemplate DataType="{x:Type purchaseVm:PurchaseReturnViewModel}">
                 <views:PurchaseReturnView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type purchaseVm:ExpiryReturnViewModel}">
+                <views:ExpiryReturnView />
+            </DataTemplate>
             <DataTemplate DataType="{x:Type invVm:InventoryViewModel}">
                 <views:InventoryView />
             </DataTemplate>

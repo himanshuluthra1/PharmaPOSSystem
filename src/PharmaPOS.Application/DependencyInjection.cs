@@ -9,6 +9,7 @@ using PharmaPOS.Application.Features.Reports;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.ExpiryReturns;
 using PharmaPOS.Application.Features.PurchaseReturns;
 using PharmaPOS.Application.Features.SaleReturns;
 using PharmaPOS.Application.Features.ReportingSync;
@@ -28,6 +29,7 @@ public static class DependencyInjection
         services.AddTransient<ISalesService, SalesService>();
         services.AddTransient<ISaleReturnService, SaleReturnService>();
         services.AddTransient<IPurchaseReturnService, PurchaseReturnService>();
+        services.AddTransient<IExpiryReturnService, ExpiryReturnService>();
         services.AddTransient<IPurchaseOrderService, PurchaseOrderService>();
         services.AddTransient<IPurchaseService, PurchaseService>();
         services.AddTransient<IBillingCounterService, BillingCounterService>();

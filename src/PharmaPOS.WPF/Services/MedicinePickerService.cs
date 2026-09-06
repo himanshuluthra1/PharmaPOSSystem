@@ -65,7 +65,7 @@ public class MedicinePickerService : IMedicinePickerService
                 b.Mrp, b.Mrp, 0m))
             .ToList();
 
-        return PickBatchFromList(medicine.Id, medicine.Name, medicine.DefaultDiscountPercent, batches);
+        return PickBatchFromList(medicine.Id, medicine.Name, medicine.DefaultDiscountPercent, batches, medicine.LocationLabel);
     }
 
     public async Task<MedicineBatchSelection?> PickSubstituteAsync(
@@ -92,7 +92,8 @@ public class MedicinePickerService : IMedicinePickerService
             medicine.Id,
             medicine.Name,
             medicine.DefaultDiscountPercent,
-            branchId);
+            branchId,
+            locationLabel: null);
     }
 
     public Task<MedicineLookupDto?> PickMedicineLookupAsync()
@@ -163,21 +164,23 @@ public class MedicinePickerService : IMedicinePickerService
             medicine.Id,
             medicine.Name,
             medicine.DefaultDiscountPercent,
-            branchId);
+            branchId,
+            medicine.LocationLabel);
 
     private static async Task<MedicineBatchSelection?> PickBatchForSaleAsync(
-        ISalesService salesService, int medicineId, string medicineName, decimal defaultDiscountPercent, int? branchId)
+        ISalesService salesService, int medicineId, string medicineName, decimal defaultDiscountPercent, int? branchId, string? locationLabel)
     {
         var batches = await salesService.GetBatchesAsync(medicineId, branchId);
         if (batches.Count == 0) return null;
-        return PickBatchFromList(medicineId, medicineName, defaultDiscountPercent, batches);
+        return PickBatchFromList(medicineId, medicineName, defaultDiscountPercent, batches, locationLabel);
     }
 
     private static MedicineBatchSelection? PickBatchFromList(
         int medicineId,
         string medicineName,
         decimal defaultDiscountPercent,
-        IReadOnlyList<BatchLookupDto> batches)
+        IReadOnlyList<BatchLookupDto> batches,
+        string? locationFallback = null)
     {
         BatchLookupDto batch;
         if (batches.Count == 1)
@@ -206,6 +209,7 @@ public class MedicinePickerService : IMedicinePickerService
             batch.GstPercent,
             batch.SellingPrice > 0 ? batch.SellingPrice : batch.Mrp,
             batch.QuantityAvailable,
-            defaultDiscountPercent);
+            defaultDiscountPercent,
+            batch.LocationLabel ?? locationFallback);
     }
 }

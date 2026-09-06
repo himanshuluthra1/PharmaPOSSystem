@@ -280,6 +280,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" IsReadOnly="True" Width="100" />
+                        <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" IsReadOnly="True" Width="90" />
                         <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="80" />
                         <DataGridTextColumn Header="Quantity" Width="70"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"

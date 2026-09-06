@@ -192,6 +192,14 @@ public class ReportsService : IReportsService
         return (summary, rows);
     }
 
+    public Task<GstReturnExportDto> GetGstr1ExportAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct = default)
+        => GstReturnBuilder.BuildGstr1Async(_uow, _settings, SalesQuery(branchId), from, to, ct);
+
+    public Task<GstReturnExportDto> GetGstr2BExportAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct = default)
+        => GstReturnBuilder.BuildGstr2BAsync(_uow, _settings, PurchasesQuery(branchId), from, to, branchId, ct);
+
     public async Task<(ReportSummaryDto Summary, List<ProfitReportRowDto> Rows)> GetProfitReportAsync(
         DateTime from, DateTime to, int? branchId, CancellationToken ct = default)
     {
@@ -622,7 +630,9 @@ public class ReportsService : IReportsService
     private IQueryable<Purchase> PurchasesQuery(int? branchId)
     {
         var q = _uow.Repository<Purchase>().Query()
-            .Where(p => p.Status == PurchaseStatus.Received);
+            .Where(p => p.Status == PurchaseStatus.Received
+                        || p.Status == PurchaseStatus.PartiallyReturned
+                        || p.Status == PurchaseStatus.Returned);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
         return q;
     }

@@ -72,7 +72,8 @@ public class SettingsService : ISettingsService
                 SalesInvoicePrefix = c.SalesInvoicePrefix,
                 PurchaseInvoicePrefix = c.PurchaseInvoicePrefix,
                 AllowEditSalesBills = c.AllowEditSalesBills,
-                AllowEditPurchaseBills = c.AllowEditPurchaseBills
+                AllowEditPurchaseBills = c.AllowEditPurchaseBills,
+                InvoicePaperSize = c.InvoicePaperSize
             })
             .FirstOrDefaultAsync(ct);
 
@@ -110,6 +111,7 @@ public class SettingsService : ISettingsService
         entity.PurchaseInvoicePrefix = dto.PurchaseInvoicePrefix.Trim().ToUpperInvariant();
         entity.AllowEditSalesBills = dto.AllowEditSalesBills;
         entity.AllowEditPurchaseBills = dto.AllowEditPurchaseBills;
+        entity.InvoicePaperSize = dto.InvoicePaperSize;
         _uow.Repository<CompanyProfile>().Update(entity);
         await _uow.SaveChangesAsync(ct);
         return Result.Success();
@@ -387,6 +389,7 @@ public class SettingsService : ISettingsService
         Pan = c.Pan,
         LogoPath = c.LogoPath,
         InvoiceFooter = c.InvoiceFooter,
+        UpiVpa = c.UpiVpa,
         Currency = c.Currency,
         CurrencySymbol = c.CurrencySymbol
     };
@@ -407,6 +410,7 @@ public class SettingsService : ISettingsService
         c.Pan = dto.Pan;
         c.LogoPath = dto.LogoPath;
         c.InvoiceFooter = dto.InvoiceFooter;
+        c.UpiVpa = string.IsNullOrWhiteSpace(dto.UpiVpa) ? null : dto.UpiVpa.Trim();
         c.Currency = string.IsNullOrWhiteSpace(dto.Currency) ? "INR" : dto.Currency.Trim();
         c.CurrencySymbol = dto.CurrencySymbol;
     }

@@ -84,6 +84,7 @@ internal sealed class ParkedCartLine
     public decimal Mrp { get; init; }
     public decimal GstPercent { get; init; }
     public decimal AvailableStock { get; init; }
+    public string? LocationLabel { get; init; }
     public decimal Quantity { get; init; }
     public decimal UnitPrice { get; init; }
     public decimal DiscountPercent { get; init; }

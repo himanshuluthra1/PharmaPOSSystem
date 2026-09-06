@@ -24,6 +24,8 @@ public class CartLineViewModel : ObservableObject
     private bool _isReturnLine;
     private string? _returnNumber;
 
+    private string? _locationLabel;
+
     /// <summary>Raised whenever a value that affects totals changes.</summary>
     public event Action? Changed;
 
@@ -63,6 +65,12 @@ public class CartLineViewModel : ObservableObject
             if (SetProperty(ref _expiryDate, value))
                 OnPropertyChanged(nameof(ExpiryDisplay));
         }
+    }
+
+    public string? LocationLabel
+    {
+        get => _locationLabel;
+        private set => SetProperty(ref _locationLabel, value);
     }
 
     public decimal Mrp
@@ -157,6 +165,7 @@ public class CartLineViewModel : ObservableObject
         ExpiryDate = selection.ExpiryDate;
         GstPercent = selection.GstPercent;
         AvailableStock = selection.AvailableStock;
+        LocationLabel = selection.LocationLabel;
         _mrp = selection.Mrp;
         _unitPrice = selection.UnitPrice;
         OnPropertyChanged(nameof(Mrp));
@@ -181,6 +190,7 @@ public class CartLineViewModel : ObservableObject
         ExpiryDate = line.ExpiryDate;
         GstPercent = line.GstPercent;
         AvailableStock = line.AvailableStock;
+        LocationLabel = line.LocationLabel;
         _isReturnLine = line.IsReturnLine;
         _returnNumber = line.ReturnNumber;
         OnPropertyChanged(nameof(IsReturnLine));
@@ -206,6 +216,7 @@ public class CartLineViewModel : ObservableObject
         Mrp = 0;
         GstPercent = 0;
         AvailableStock = 0;
+        LocationLabel = null;
         UnitPrice = 0;
         DiscountPercent = 0;
         OriginalQuantity = 0;
@@ -228,6 +239,7 @@ public class CartLineViewModel : ObservableObject
         Mrp = Mrp,
         GstPercent = GstPercent,
         AvailableStock = AvailableStock,
+        LocationLabel = LocationLabel,
         Quantity = Quantity,
         UnitPrice = UnitPrice,
         DiscountPercent = DiscountPercent,
@@ -245,6 +257,7 @@ public class CartLineViewModel : ObservableObject
         ExpiryDate = line.ExpiryDate;
         GstPercent = line.GstPercent;
         AvailableStock = line.AvailableStock;
+        LocationLabel = line.LocationLabel;
         _isReturnLine = line.IsReturnLine;
         _returnNumber = line.ReturnNumber;
         OnPropertyChanged(nameof(IsReturnLine));

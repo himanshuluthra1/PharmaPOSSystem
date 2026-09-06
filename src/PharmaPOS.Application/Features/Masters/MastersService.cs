@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.ReportingSync;
@@ -56,6 +57,7 @@ public class MastersService : IMastersService
             ApplySupplier(entity, dto);
             _uow.Repository<Supplier>().Update(entity);
             await _uow.SaveChangesAsync(ct);
+            await _reportingSync.EnqueueSupplierAsync(entity.Id, ct);
             return Result.Success(entity.Id);
         }
 
@@ -63,6 +65,7 @@ public class MastersService : IMastersService
         ApplySupplier(created, dto);
         await _uow.Repository<Supplier>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueSupplierAsync(created.Id, ct);
         return Result.Success(created.Id);
     }
 
@@ -375,7 +378,7 @@ public class MastersService : IMastersService
             results = await baseQuery
                 .WhereMedicineMatches(normalized, prefixOnly: true, tokens)
                 .OrderBy(m => m.Name).Take(DefaultTake)
-                .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
+                .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status, m.RackNumber, m.BinNumber))
                 .ToListAsync(ct);
         }
         else
@@ -388,7 +391,7 @@ public class MastersService : IMastersService
             results = await baseQuery
                 .WhereMedicineMatches(normalized, prefixOnly: false, tokens)
                 .OrderBy(m => m.Name).Take(DefaultTake)
-                .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status))
+                .Select(m => new MedicineListDto(m.Id, m.Name, m.GenericName, m.Mrp, m.PurchasePrice, m.Status, m.RackNumber, m.BinNumber))
                 .ToListAsync(ct);
         }
 
@@ -409,6 +412,7 @@ public class MastersService : IMastersService
             Mrp = m.Mrp, PurchasePrice = m.PurchasePrice, SellingPrice = m.SellingPrice,
             DefaultDiscountPercent = m.DefaultDiscountPercent,
             ReorderLevel = m.ReorderLevel, ReorderQuantity = m.ReorderQuantity,
+            RackNumber = m.RackNumber, BinNumber = m.BinNumber,
             ScheduleType = m.ScheduleType,
             PrescriptionRequired = m.PrescriptionRequired, Status = m.Status,
             ManufacturerId = m.ManufacturerId,
@@ -438,6 +442,7 @@ public class MastersService : IMastersService
             if (entity is null) return Result.Failure<int>("Medicine not found.");
             ApplyMedicine(entity, dto);
             _uow.Repository<Medicine>().Update(entity);
+            await SyncEmptyBatchRacksAsync(entity.Id, entity.RackNumber, ct);
             await _uow.SaveChangesAsync(ct);
             await _reportingSync.EnqueueMedicineAsync(entity.Id, ct);
             return Result.Success(entity.Id);
@@ -449,6 +454,17 @@ public class MastersService : IMastersService
         await _uow.SaveChangesAsync(ct);
         await _reportingSync.EnqueueMedicineAsync(created.Id, ct);
         return Result.Success(created.Id);
+    }
+
+    private async Task SyncEmptyBatchRacksAsync(int medicineId, string? rackNumber, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(rackNumber)) return;
+
+        var batches = await _uow.Repository<MedicineBatch>().Query()
+            .Where(b => b.MedicineId == medicineId && (b.RackNumber == null || b.RackNumber == ""))
+            .ToListAsync(ct);
+        foreach (var batch in batches)
+            batch.RackNumber = rackNumber;
     }
 
     private static void ApplyMedicine(Medicine entity, MedicineDetailDto dto)
@@ -466,6 +482,8 @@ public class MastersService : IMastersService
         entity.DefaultDiscountPercent = dto.DefaultDiscountPercent;
         entity.ReorderLevel = dto.ReorderLevel;
         entity.ReorderQuantity = dto.ReorderQuantity;
+        entity.RackNumber = string.IsNullOrWhiteSpace(dto.RackNumber) ? null : dto.RackNumber.Trim();
+        entity.BinNumber = string.IsNullOrWhiteSpace(dto.BinNumber) ? null : dto.BinNumber.Trim();
         entity.ScheduleType = dto.ScheduleType;
         entity.PrescriptionRequired = dto.PrescriptionRequired;
         entity.Status = dto.Status;

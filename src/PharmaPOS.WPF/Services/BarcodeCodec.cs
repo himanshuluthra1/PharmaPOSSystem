@@ -5,6 +5,8 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using ZXing;
 using ZXing.Common;
+using ZXing.QrCode;
+using ZXing.QrCode.Internal;
 using ZXing.Windows.Compatibility;
 
 namespace PharmaPOS.WPF.Services;
@@ -13,6 +15,7 @@ public interface IBarcodeCodec
 {
     string CreateUniqueValue();
     BitmapSource GenerateImage(string value, int width = 360, int height = 120);
+    BitmapSource GenerateQrImage(string value, int pixels = 180);
     byte[] GeneratePngBytes(string value, int width = 360, int height = 120);
     string? Decode(Bitmap bitmap);
     string? DecodeFromFile(string path);
@@ -21,6 +24,12 @@ public interface IBarcodeCodec
 public sealed class BarcodeCodec : IBarcodeCodec
 {
     public string CreateUniqueValue() => BarcodeValueGenerator.CreateUnique();
+
+    public BitmapSource GenerateQrImage(string value, int pixels = 180)
+    {
+        using var bmp = RenderQrBitmap(value, pixels);
+        return ToBitmapSource(bmp);
+    }
 
     public BitmapSource GenerateImage(string value, int width = 360, int height = 120)
     {
@@ -63,6 +72,28 @@ public sealed class BarcodeCodec : IBarcodeCodec
     {
         using var bmp = new Bitmap(path);
         return Decode(bmp);
+    }
+
+    private static Bitmap RenderQrBitmap(string value, int pixels)
+    {
+        value = (value ?? string.Empty).Trim();
+        if (value.Length == 0)
+            throw new ArgumentException("QR value is required.", nameof(value));
+
+        var size = Math.Max(80, pixels);
+        var writer = new BarcodeWriter
+        {
+            Format = BarcodeFormat.QR_CODE,
+            Options = new QrCodeEncodingOptions
+            {
+                Width = size,
+                Height = size,
+                Margin = 1,
+                CharacterSet = "UTF-8",
+                ErrorCorrection = ErrorCorrectionLevel.M
+            }
+        };
+        return writer.Write(value);
     }
 
     private static Bitmap RenderBitmap(string value, int width, int height)

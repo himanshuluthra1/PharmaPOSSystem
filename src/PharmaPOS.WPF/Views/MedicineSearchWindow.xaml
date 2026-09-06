@@ -46,6 +46,8 @@
                         <StackPanel>
                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding GenericName}" FontSize="11" Opacity="0.6" />
+                            <TextBlock Text="{Binding LocationLabel}" FontSize="11" Opacity="0.7"
+                                       Visibility="{Binding LocationLabel, Converter={StaticResource StringToVisibility}}" />
                         </StackPanel>
                     </DockPanel>
                 </DataTemplate>

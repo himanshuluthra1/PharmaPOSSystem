@@ -11,6 +11,12 @@ public interface IReportsService
     Task<(GstSummaryDto Summary, List<GstDetailRowDto> Rows)> GetGstReportAsync(
         DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
 
+    Task<GstReturnExportDto> GetGstr1ExportAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
+
+    Task<GstReturnExportDto> GetGstr2BExportAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
+
     Task<(ReportSummaryDto Summary, List<ProfitReportRowDto> Rows)> GetProfitReportAsync(
         DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
 

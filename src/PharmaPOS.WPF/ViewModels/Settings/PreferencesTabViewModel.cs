@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Domain.Enums;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
 
@@ -75,6 +76,14 @@ public class PreferencesTabViewModel : ObservableObject
         get => _editor;
         private set => SetProperty(ref _editor, value);
     }
+
+    public IReadOnlyList<InvoicePaperSizeOption> PaperSizeOptions { get; } =
+    [
+        new(InvoicePaperSize.A4, InvoicePageLayout.Label(InvoicePaperSize.A4)),
+        new(InvoicePaperSize.A5, InvoicePageLayout.Label(InvoicePaperSize.A5)),
+        new(InvoicePaperSize.Thermal80, InvoicePageLayout.Label(InvoicePaperSize.Thermal80)),
+        new(InvoicePaperSize.Thermal58, InvoicePageLayout.Label(InvoicePaperSize.Thermal58))
+    ];
 
     public double SalesSidePanelWidth
     {
@@ -420,6 +429,8 @@ public class PreferencesTabViewModel : ObservableObject
         Password = MySqlPassword,
         UseSsl = MySqlUseSsl,
         StoreCodeOverride = null,
+        DashboardNotifyUrl = _mySqlSyncSettings.Current.DashboardNotifyUrl,
+        RealtimeSecret = _mySqlSyncSettings.Current.RealtimeSecret,
         LastSuccessAtUtc = _mySqlSyncSettings.Current.LastSuccessAtUtc,
         LastError = _mySqlSyncSettings.Current.LastError
     };

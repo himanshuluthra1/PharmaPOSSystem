@@ -43,6 +43,7 @@ public class Medicine : BaseEntity
     public decimal DefaultDiscountPercent { get; set; }
 
     public string? RackNumber { get; set; }
+    public string? BinNumber { get; set; }
     public string? StorageCondition { get; set; }
     public ScheduleDrugType ScheduleType { get; set; } = ScheduleDrugType.None;
     public bool PrescriptionRequired { get; set; }

@@ -7,6 +7,8 @@ public enum ReportKind
     Sales,
     Purchases,
     GstSummary,
+    Gstr1,
+    Gstr2B,
     Profit,
     SalesByMedicine,
     StockValuation,

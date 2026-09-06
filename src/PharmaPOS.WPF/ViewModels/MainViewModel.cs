@@ -226,6 +226,7 @@ public class MainViewModel : ObservableObject
             new NavigationItem("Purchase", "TruckDelivery", typeof(PurchaseViewModel), "purchase"),
             new NavigationItem("Purchase Order", "ClipboardText", typeof(PurchaseOrderViewModel), "purchase"),
             new NavigationItem("Purchase Return", "AssignmentReturn", typeof(PurchaseReturnViewModel), "purchase"),
+            new NavigationItem("Expiry to company", "CalendarRemove", typeof(ExpiryReturnViewModel), "purchase"),
             new NavigationItem("Inventory", "PackageVariantClosed", typeof(InventoryViewModel), "inventory"),
             new NavigationItem("Masters", "DatabaseCog", typeof(MastersViewModel), "masters"),
             new NavigationItem("Accounting", "Calculator", typeof(AccountingViewModel), "accounting"),

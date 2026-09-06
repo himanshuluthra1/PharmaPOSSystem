@@ -153,6 +153,35 @@ public sealed class ReportingSyncService : IReportingSyncService
             }, ct);
         });
 
+    public Task EnqueueSupplierAsync(int supplierId, CancellationToken ct = default)
+        => SafeAsync(async () =>
+        {
+            var e = await _uow.Repository<Supplier>().Query().AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == supplierId, ct);
+            if (e is null) return;
+            var store = await ResolveStoreIdAsync(e.BranchId, ct);
+            if (store is null) return;
+            await EnqueueAsync(ReportingSyncEntityTypes.Supplier, store, e.Id, new
+            {
+                store_id = store,
+                local_id = e.Id,
+                branch_local_id = e.BranchId,
+                name = e.Name,
+                gst_number = e.GstNumber,
+                drug_license_number = e.DrugLicenseNumber,
+                contact_person = e.ContactPerson,
+                phone = e.Phone,
+                email = e.Email,
+                address = e.Address,
+                city = e.City,
+                state = e.State,
+                pincode = e.Pincode,
+                payment_terms_days = e.PaymentTermsDays,
+                status = (int)e.Status,
+                is_deleted = e.IsDeleted
+            }, ct);
+        });
+
     public Task EnqueueSaleAsync(int saleId, CancellationToken ct = default)
         => SafeAsync(async () =>
         {

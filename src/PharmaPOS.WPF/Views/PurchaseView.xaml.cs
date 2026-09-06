@@ -18,7 +18,7 @@ public partial class PurchaseView : UserControl
 {
     private static readonly HashSet<string> EditableColumns = new(StringComparer.Ordinal)
     {
-        "Batch", "Qty", "Free", "Cost", "MRP", "Sale", "Disc%", "GST%"
+        "Batch", "Exp M", "Exp Y", "Quantity", "Free", "Cost", "MRP", "Sale price", "Discount %", "GST %"
     };
 
     private bool _purchaseListSelectionFromCode;

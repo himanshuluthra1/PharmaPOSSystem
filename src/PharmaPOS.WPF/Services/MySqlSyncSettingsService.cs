@@ -146,6 +146,12 @@ public sealed class MySqlSyncSettingsService : IMySqlSyncSettingsService, IRepor
         StoreCodeOverride = string.IsNullOrWhiteSpace(s.StoreCodeOverride)
             ? null
             : s.StoreCodeOverride.Trim().ToUpperInvariant(),
+        DashboardNotifyUrl = string.IsNullOrWhiteSpace(s.DashboardNotifyUrl)
+            ? null
+            : s.DashboardNotifyUrl.Trim(),
+        RealtimeSecret = string.IsNullOrWhiteSpace(s.RealtimeSecret)
+            ? null
+            : s.RealtimeSecret.Trim(),
         LastSuccessAtUtc = s.LastSuccessAtUtc,
         LastError = s.LastError
     };

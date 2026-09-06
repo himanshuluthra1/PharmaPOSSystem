@@ -116,7 +116,9 @@ public partial class MedicineFromUrlWindow : Window
                 saved?.GstPercent ?? gst,
                 saved?.DefaultDiscountPercent ?? 0,
                 saved?.PrescriptionRequired ?? false,
-                0m);
+                0m,
+                saved?.RackNumber,
+                saved?.BinNumber);
 
             DialogResult = true;
             Close();

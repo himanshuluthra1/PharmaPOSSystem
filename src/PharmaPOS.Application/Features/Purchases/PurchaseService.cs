@@ -6,6 +6,7 @@ using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Application.Features.PurchaseReturns;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.Shared.Results;
@@ -24,19 +25,22 @@ public class PurchaseService : IPurchaseService
     private readonly ISettingsService _settings;
     private readonly IReportingSyncService _reportingSync;
     private readonly ICurrentUserService _currentUser;
+    private readonly IPurchaseReturnService _purchaseReturns;
 
     public PurchaseService(
         IUnitOfWork uow,
         IDateTimeProvider clock,
         ISettingsService settings,
         IReportingSyncService reportingSync,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IPurchaseReturnService purchaseReturns)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
         _reportingSync = reportingSync;
         _currentUser = currentUser;
+        _purchaseReturns = purchaseReturns;
     }
 
     public async Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
@@ -120,7 +124,8 @@ public class PurchaseService : IPurchaseService
     public Task<List<PurchaseListItemDto>> ListPurchasesAsync(int? branchId, CancellationToken ct = default)
     {
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
-            .Where(p => p.Status == PurchaseStatus.Received);
+            .Where(p => p.Status == PurchaseStatus.Received
+                        || p.Status == PurchaseStatus.PartiallyReturned);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
         return q.OrderByDescending(p => p.InvoiceDate)
@@ -139,11 +144,14 @@ public class PurchaseService : IPurchaseService
 
     public async Task<Result<PurchaseLoadDto>> GetPurchaseForLoadAsync(int purchaseId, int? branchId, CancellationToken ct = default)
     {
+        await _purchaseReturns.ReconcileSourceBillAmountAsync(purchaseId, ct);
+
         var purchase = await _uow.Repository<Purchase>().Query().AsNoTracking()
             .Include(p => p.Items)
             .Include(p => p.Supplier)
             .Include(p => p.LinkedPurchaseReturn)
-            .FirstOrDefaultAsync(p => p.Id == purchaseId && p.Status == PurchaseStatus.Received, ct);
+            .FirstOrDefaultAsync(p => p.Id == purchaseId
+                && (p.Status == PurchaseStatus.Received || p.Status == PurchaseStatus.PartiallyReturned), ct);
 
         if (purchase is null)
             return Result.Failure<PurchaseLoadDto>("Purchase invoice not found.");
@@ -205,7 +213,8 @@ public class PurchaseService : IPurchaseService
     public async Task<List<PurchaseSupplierBillDto>> ListPurchasesBySupplierAsync(int? supplierId, int? branchId, CancellationToken ct = default)
     {
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
-            .Where(p => p.Status == PurchaseStatus.Received);
+            .Where(p => p.Status == PurchaseStatus.Received
+                        || p.Status == PurchaseStatus.PartiallyReturned);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
         if (supplierId.HasValue) q = q.Where(p => p.SupplierId == supplierId.Value);
 
@@ -310,6 +319,7 @@ public class PurchaseService : IPurchaseService
             var purchase = await _uow.ExecuteInTransactionAsync(
                 token => BuildAndPersistPurchaseAsync(request, branchId, token), ct);
 
+            await _reportingSync.EnqueueSupplierAsync(request.SupplierId, ct);
             await _reportingSync.EnqueuePurchaseAsync(purchase.Id, ct);
 
             return await BuildReceiptAsync(purchase, ct);
@@ -332,7 +342,7 @@ public class PurchaseService : IPurchaseService
             return Result.Failure<PurchaseReceiptDto>("Add at least one item to the purchase.");
 
         var prefs = await _settings.GetPreferencesAsync(ct);
-        if (!prefs.AllowEditPurchaseBills)
+        if (!prefs.AllowEditPurchaseBills && !CanManagePurchases())
             return Result.Failure<PurchaseReceiptDto>(
                 "Editing purchase bills is turned off. An admin can enable it under Settings → Preferences.");
 
@@ -345,6 +355,7 @@ public class PurchaseService : IPurchaseService
             var purchase = await _uow.ExecuteInTransactionAsync(
                 token => UpdateAndPersistPurchaseAsync(request, branchId, token), ct);
 
+            await _reportingSync.EnqueueSupplierAsync(request.SupplierId, ct);
             await _reportingSync.EnqueuePurchaseAsync(purchase.Id, ct);
 
             return await BuildReceiptAsync(purchase, ct);
@@ -362,7 +373,7 @@ public class PurchaseService : IPurchaseService
     public async Task<Result> UnlockPurchaseAsync(int purchaseId, int? branchId, CancellationToken ct = default)
     {
         var prefs = await _settings.GetPreferencesAsync(ct);
-        if (!prefs.AllowEditPurchaseBills)
+        if (!prefs.AllowEditPurchaseBills && !CanManagePurchases())
             return Result.Failure(
                 "Editing purchase bills is turned off. An admin can enable it under Settings → Preferences.");
 
@@ -619,7 +630,8 @@ public class PurchaseService : IPurchaseService
                     PurchasePrice = line.PurchasePrice,
                     Mrp = line.Mrp,
                     SellingPrice = line.SellingPrice > 0 ? line.SellingPrice : line.Mrp,
-                    GstPercent = line.GstPercent
+                    GstPercent = line.GstPercent,
+                    RackNumber = medicine.RackNumber
                 };
                 await _uow.Repository<MedicineBatch>().AddAsync(batch, ct);
                 await _uow.SaveChangesAsync(ct);
@@ -871,6 +883,9 @@ public class PurchaseService : IPurchaseService
 
     private bool CanUnlockPurchases() =>
         _currentUser.HasAnyPermission(AppConstants.Permissions.PurchaseUnlock, AppConstants.Permissions.PurchaseManage);
+
+    private bool CanManagePurchases() =>
+        _currentUser.HasPermission(AppConstants.Permissions.PurchaseManage);
 
     private string CurrentActor()
     {

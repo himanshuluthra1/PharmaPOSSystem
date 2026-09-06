@@ -117,6 +117,7 @@ public partial class App : System.Windows.Application
         services.AddTransient<PurchaseViewModel>();
         services.AddTransient<PurchaseOrderViewModel>();
         services.AddTransient<PurchaseReturnViewModel>();
+        services.AddTransient<ExpiryReturnViewModel>();
         services.AddTransient<InventoryViewModel>();
         services.AddTransient<MastersViewModel>();
         services.AddTransient<AccountingViewModel>();

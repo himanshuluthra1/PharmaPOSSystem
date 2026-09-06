@@ -13,7 +13,8 @@ public record MedicineBatchSelection(
     decimal GstPercent,
     decimal UnitPrice,
     decimal AvailableStock,
-    decimal DefaultDiscountPercent);
+    decimal DefaultDiscountPercent,
+    string? LocationLabel = null);
 
 /// <summary>
 /// Shows medicine search and optional batch-variant picker dialogs used by the

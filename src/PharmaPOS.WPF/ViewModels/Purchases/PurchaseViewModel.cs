@@ -84,6 +84,7 @@ public class PurchaseViewModel : ObservableObject
             AppConstants.Permissions.PurchaseEdit, AppConstants.Permissions.PurchaseManage);
         CanUnlockInvoices = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseUnlock, AppConstants.Permissions.PurchaseManage);
+        HasPurchaseManage = currentUser.HasPermission(AppConstants.Permissions.PurchaseManage);
 
         Lines.CollectionChanged += (_, _) => RecalculateTotals();
 
@@ -147,6 +148,11 @@ public class PurchaseViewModel : ObservableObject
     public bool CanSearch { get; }
     public bool CanEditInvoices { get; }
     public bool CanUnlockInvoices { get; }
+    /// <summary>Full purchase access (Super Admin / purchase.manage) bypasses the Preferences master switch.</summary>
+    public bool HasPurchaseManage { get; }
+
+    /// <summary>Company preference OR purchase.manage may edit/unlock invoices.</summary>
+    public bool InvoiceEditEnabled => AllowEditPurchaseBills || HasPurchaseManage;
 
     public bool AllowEditPurchaseBills
     {
@@ -185,25 +191,26 @@ public class PurchaseViewModel : ObservableObject
 
     public bool CanModifyBill =>
         CanCreate
-        && (!IsEditing || (AllowEditPurchaseBills && CanEditInvoices && !IsInvoiceLocked))
+        && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked))
         && !IsBusy;
 
     public bool IsBillReadOnly =>
-        IsEditing && !(AllowEditPurchaseBills && CanEditInvoices && !IsInvoiceLocked);
+        IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked);
 
     public bool ShowSaveButton =>
-        CanCreate && (!IsEditing || (AllowEditPurchaseBills && CanEditInvoices && !IsInvoiceLocked));
+        CanCreate && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
 
     public bool CanUnlockBill =>
-        IsEditing && IsInvoiceLocked && AllowEditPurchaseBills && CanUnlockInvoices && !IsBusy;
+        IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices && !IsBusy;
 
-    public bool ShowLockBanner => IsEditing && IsInvoiceLocked && AllowEditPurchaseBills;
+    public bool ShowLockBanner => IsEditing && IsInvoiceLocked && InvoiceEditEnabled;
 
     public bool IsEditing => _editingPurchaseId.HasValue;
 
     private void NotifyBillEditStateChanged()
     {
         OnPropertyChanged(nameof(IsEditing));
+        OnPropertyChanged(nameof(InvoiceEditEnabled));
         OnPropertyChanged(nameof(CanModifyBill));
         OnPropertyChanged(nameof(IsBillReadOnly));
         OnPropertyChanged(nameof(ShowSaveButton));
@@ -515,12 +522,12 @@ public class PurchaseViewModel : ObservableObject
 
     private string BuildEditStatusMessage(string invoiceNumber)
     {
-        if (!AllowEditPurchaseBills)
+        if (!InvoiceEditEnabled)
             return $"Viewing purchase {invoiceNumber} (edit is off in Settings → Preferences).";
         if (!CanEditInvoices)
             return $"Viewing purchase {invoiceNumber} (your role cannot edit purchase invoices).";
         if (IsInvoiceLocked)
-            return $"Purchase {invoiceNumber} is locked. Unlock to edit.";
+            return $"Purchase {invoiceNumber} is locked. Click Unlock to edit.";
         return $"Editing purchase {invoiceNumber}. Save to update (re-locks on save).";
     }
 
@@ -807,7 +814,10 @@ public class PurchaseViewModel : ObservableObject
         var net = TaxableTotal + tax;
         var rounded = Math.Round(net, 0, MidpointRounding.AwayFromZero);
         RoundOff = rounded - net;
-        GrandTotal = rounded;
+        // Loaded bills keep the stored total (already net of purchase returns).
+        GrandTotal = _editingPurchaseId.HasValue && _headerGrandTotal > 0
+            ? _headerGrandTotal
+            : rounded;
 
         OnPropertyChanged(nameof(BalanceDue));
         OnPropertyChanged(nameof(ItemCount));

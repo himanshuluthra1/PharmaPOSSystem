@@ -4,18 +4,19 @@ using PharmaPOS.Application.Features.Counters;
 using PharmaPOS.Application.Features.Reports;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Application.Features.SaleReturns;
+using PharmaPOS.Domain.Enums;
 
 namespace PharmaPOS.WPF.Services;
 
-/// <summary>Builds, previews and prints A4 GST invoices from a sale receipt.</summary>
+/// <summary>Builds, previews and prints GST invoices (A4, A5, 80 mm, 58 mm).</summary>
 public interface IInvoicePrintService
 {
-    FlowDocument BuildDocument(SaleReceiptDto receipt);
+    FlowDocument BuildDocument(SaleReceiptDto receipt, InvoicePaperSize? paperSize = null);
     void ShowPreview(SaleReceiptDto receipt);
-    void Print(SaleReceiptDto receipt);
+    void Print(SaleReceiptDto receipt, InvoicePaperSize? paperSize = null);
 
-    /// <summary>Renders the printable A4 invoice to a PDF file and returns its path.</summary>
-    string ExportPrintablePdf(SaleReceiptDto receipt);
+    /// <summary>Renders the printable invoice to a PDF file and returns its path.</summary>
+    string ExportPrintablePdf(SaleReceiptDto receipt, InvoicePaperSize? paperSize = null);
 
     FlowDocument BuildDayCloseDocument(CounterDayCloseDto report);
     void ShowDayClosePreview(CounterDayCloseDto report);

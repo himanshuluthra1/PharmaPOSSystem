@@ -10,6 +10,10 @@ public sealed class MySqlSyncSettings
     public string Password { get; set; } = string.Empty;
     public bool UseSsl { get; set; }
     public string? StoreCodeOverride { get; set; }
+    /// <summary>Dashboard notify URL, e.g. https://mypos.cloudpharma.site/api/realtime/notify</summary>
+    public string? DashboardNotifyUrl { get; set; }
+    /// <summary>Shared secret sent as x-realtime-secret header.</summary>
+    public string? RealtimeSecret { get; set; }
     public DateTime? LastSuccessAtUtc { get; set; }
     public string? LastError { get; set; }
 }

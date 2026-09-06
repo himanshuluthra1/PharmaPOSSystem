@@ -56,6 +56,9 @@
                         <TextBlock Text="Double-click a row to open the sale invoice. Print / PDF for inspector copy."
                                    FontSize="11" Opacity="0.5" Margin="0,0,0,8"
                                    Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="{Binding GstReturnDisclaimer}"
+                                   FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}" />
 
                         <Grid Margin="0,0,0,8"
                               Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}">
@@ -107,6 +110,22 @@
                                 <StackPanel Orientation="Horizontal">
                                     <materialDesign:PackIcon Kind="Download" VerticalAlignment="Center" />
                                     <TextBlock Text="Export CSV" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding ExportGstExcelCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8,0,0,0"
+                                    Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="FileExcel" VerticalAlignment="Center" />
+                                    <TextBlock Text="Export Excel" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button Command="{Binding ExportGstJsonCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8,0,0,0"
+                                    Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="CodeJson" VerticalAlignment="Center" />
+                                    <TextBlock Text="Export JSON" Margin="6,0,0,0" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>
@@ -229,6 +248,30 @@
                         </materialDesign:Card>
                     </UniformGrid>
 
+                    <UniformGrid DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
+                                 Visibility="{Binding ShowGstReturnKpis, Converter={StaticResource BoolToVisibility}}">
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="GST lines" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Taxable" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                        <materialDesign:Card Style="{StaticResource KpiCard}">
+                            <StackPanel>
+                                <TextBlock Text="Tax" Opacity="0.6" FontSize="11" />
+                                <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
+                                           FontSize="20" FontWeight="Bold" />
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </UniformGrid>
+
                     <UniformGrid x:Name="GstKpiGrid" DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
                                  Visibility="{Binding ShowGstSummary, Converter={StaticResource BoolToVisibility}}">
                         <materialDesign:Card Style="{StaticResource KpiCard}">
@@ -305,6 +348,25 @@
                                 <DataGridTextColumn Header="SGST" Binding="{Binding SgstAmount, StringFormat=N2}" Width="70" />
                                 <DataGridTextColumn Header="IGST" Binding="{Binding IgstAmount, StringFormat=N2}" Width="70" />
                                 <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <DataGrid ItemsSource="{Binding GstReturnRows}" Visibility="{Binding ShowGstReturnGrid, Converter={StaticResource BoolToVisibility}}"
+                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="90" />
+                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="120" />
+                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="100" />
+                                <DataGridTextColumn Header="Party" Binding="{Binding PartyName}" Width="*" MinWidth="120" />
+                                <DataGridTextColumn Header="GSTIN" Binding="{Binding Gstin}" Width="130" />
+                                <DataGridTextColumn Header="POS" Binding="{Binding PlaceOfSupply}" Width="50" />
+                                <DataGridTextColumn Header="Rate" Binding="{Binding GstRate, StringFormat=N0}" Width="50" />
+                                <DataGridTextColumn Header="Taxable" Binding="{Binding TaxableAmount, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="CGST" Binding="{Binding CgstAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="SGST" Binding="{Binding SgstAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="IGST" Binding="{Binding IgstAmount, StringFormat=N2}" Width="70" />
+                                <DataGridTextColumn Header="Value" Binding="{Binding InvoiceValue, StringFormat=N2}" Width="80" />
+                                <DataGridTextColumn Header="HSN" Binding="{Binding HsnCode}" Width="80" />
                             </DataGrid.Columns>
                         </DataGrid>
 
