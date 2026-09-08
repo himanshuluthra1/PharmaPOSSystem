@@ -29,23 +29,18 @@ public class AccountingService : IAccountingService
 
     public async Task<AccountingSummaryDto> GetSummaryAsync(int? branchId, CancellationToken ct = default)
     {
-        var suppliers = _uow.Repository<Supplier>().Query()
-            .Where(s => s.Status == EntityStatus.Active);
-        if (branchId.HasValue) suppliers = suppliers.Where(s => s.BranchId == branchId);
-
-        var customers = _uow.Repository<Customer>().Query()
-            .Where(c => c.Status == EntityStatus.Active);
-        if (branchId.HasValue) customers = customers.Where(c => c.BranchId == branchId);
+        var supplierDues = await ComputeAllSupplierOpenDuesAsync(branchId, ct);
+        var customerDues = await ComputeAllCustomerOpenDuesAsync(branchId, ct);
 
         var cash = await GetAccountByCodeAsync(CashAccountCode, ct);
         var bank = await GetAccountByCodeAsync(BankAccountCode, ct);
 
         return new AccountingSummaryDto
         {
-            TotalPayables = await suppliers.SumAsync(s => (decimal?)s.OutstandingBalance, ct) ?? 0m,
-            TotalReceivables = await customers.SumAsync(c => (decimal?)c.OutstandingBalance, ct) ?? 0m,
-            PayableParties = await suppliers.CountAsync(s => s.OutstandingBalance > 0, ct),
-            ReceivableParties = await customers.CountAsync(c => c.OutstandingBalance > 0, ct),
+            TotalPayables = supplierDues.Values.Sum(),
+            TotalReceivables = customerDues.Values.Sum(),
+            PayableParties = supplierDues.Count(kv => kv.Value > 0.009m),
+            ReceivableParties = customerDues.Count(kv => kv.Value > 0.009m),
             CashInHand = cash?.CurrentBalance ?? 0m,
             BankBalance = bank?.CurrentBalance ?? 0m
         };
@@ -61,7 +56,9 @@ public class AccountingService : IAccountingService
 
         if (kind == PartyLedgerKind.Supplier)
         {
-            var q = _uow.Repository<Supplier>().Query()
+            var dueBySupplier = await ComputeAllSupplierOpenDuesAsync(branchId, ct);
+
+            var q = _uow.Repository<Supplier>().Query().AsNoTracking()
                 .Where(s => s.Status == EntityStatus.Active);
             if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
             if (!string.IsNullOrWhiteSpace(term))
@@ -69,27 +66,289 @@ public class AccountingService : IAccountingService
                 var normalized = SearchQueryExtensions.NormalizeTerm(term);
                 q = q.WhereSupplierMatches(normalized);
             }
+            else
+            {
+                // No search: prefer parties that actually have open dues (avoids Take-before-dues bug).
+                var owedIds = dueBySupplier
+                    .Where(kv => kv.Value > 0.009m)
+                    .Select(kv => kv.Key)
+                    .ToList();
+                if (owedIds.Count == 0) return [];
+                q = FilterSupplierByIdChunks(q, owedIds);
+            }
 
-            return await q
+            var suppliers = await q
+                .Select(s => new { s.Id, s.Name, s.Phone })
+                .ToListAsync(ct);
+
+            return suppliers
+                .Select(s => new PartyLedgerRowDto(
+                    s.Id,
+                    s.Name,
+                    s.Phone,
+                    dueBySupplier.GetValueOrDefault(s.Id)))
                 .OrderByDescending(s => s.OutstandingBalance)
                 .ThenBy(s => s.Name)
-                .Select(s => new PartyLedgerRowDto(s.Id, s.Name, s.Phone, s.OutstandingBalance))
                 .Take(500)
-                .ToListAsync(ct);
+                .ToList();
         }
 
-        var cq = _uow.Repository<Customer>().Query()
+        var dueByCustomer = await ComputeAllCustomerOpenDuesAsync(branchId, ct);
+
+        var cq = _uow.Repository<Customer>().Query().AsNoTracking()
             .Where(c => c.Status == EntityStatus.Active);
         if (branchId.HasValue) cq = cq.Where(c => c.BranchId == branchId);
         if (!string.IsNullOrWhiteSpace(term))
+        {
             cq = cq.Where(c => c.Name.Contains(term) || (c.Phone != null && c.Phone.Contains(term)));
+        }
+        else
+        {
+            var owedIds = dueByCustomer
+                .Where(kv => kv.Value > 0.009m)
+                .Select(kv => kv.Key)
+                .ToList();
+            if (owedIds.Count == 0) return [];
+            cq = FilterByIdChunks(cq, owedIds);
+        }
 
-        return await cq
+        var customers = await cq
+            .Select(c => new { c.Id, c.Name, c.Phone })
+            .ToListAsync(ct);
+
+        return customers
+            .Select(c => new PartyLedgerRowDto(
+                c.Id,
+                c.Name,
+                c.Phone,
+                dueByCustomer.GetValueOrDefault(c.Id)))
             .OrderByDescending(c => c.OutstandingBalance)
             .ThenBy(c => c.Name)
-            .Select(c => new PartyLedgerRowDto(c.Id, c.Name, c.Phone, c.OutstandingBalance))
             .Take(500)
+            .ToList();
+    }
+
+    /// <summary>SQL Server has ~2100 parameter limit; chunk large id filters.</summary>
+    private static IQueryable<Customer> FilterByIdChunks(IQueryable<Customer> query, List<int> ids)
+    {
+        if (ids.Count == 0) return query.Where(_ => false);
+        if (ids.Count <= 2000) return query.Where(c => ids.Contains(c.Id));
+
+        // Build OR of chunked Contains — evaluated client-side via Union after materializing chunks.
+        // Caller will ToListAsync; for large sets we Union queries.
+        IQueryable<Customer>? combined = null;
+        foreach (var chunk in ids.Chunk(1500))
+        {
+            var local = chunk.ToList();
+            var part = query.Where(c => local.Contains(c.Id));
+            combined = combined is null ? part : combined.Union(part);
+        }
+
+        return combined ?? query.Where(_ => false);
+    }
+
+    private static IQueryable<Supplier> FilterSupplierByIdChunks(IQueryable<Supplier> query, List<int> ids)
+    {
+        if (ids.Count == 0) return query.Where(_ => false);
+        if (ids.Count <= 2000) return query.Where(s => ids.Contains(s.Id));
+
+        IQueryable<Supplier>? combined = null;
+        foreach (var chunk in ids.Chunk(1500))
+        {
+            var local = chunk.ToList();
+            var part = query.Where(s => local.Contains(s.Id));
+            combined = combined is null ? part : combined.Union(part);
+        }
+
+        return combined ?? query.Where(_ => false);
+    }
+
+    /// <summary>
+    /// Open purchase dues for all suppliers — same formula as <see cref="ListPartyBillsAsync"/>.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> ComputeAllSupplierOpenDuesAsync(
+        int? branchId,
+        CancellationToken ct)
+    {
+        var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.Status != PurchaseStatus.Cancelled
+                        && p.Status != PurchaseStatus.Draft
+                        && p.GrandTotal > p.PaidAmount);
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        return await q
+            .GroupBy(p => p.SupplierId)
+            .Select(g => new { SupplierId = g.Key, Due = g.Sum(p => p.GrandTotal - p.PaidAmount) })
+            .ToDictionaryAsync(x => x.SupplierId, x => x.Due, ct);
+    }
+
+    /// <summary>
+    /// Open purchase dues by supplier — same formula as <see cref="ListPartyBillsAsync"/> for suppliers.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> ComputeSupplierOpenDuesAsync(
+        IReadOnlyList<int> supplierIds,
+        int? branchId,
+        CancellationToken ct)
+    {
+        if (supplierIds.Count == 0) return new Dictionary<int, decimal>();
+
+        // Prefer targeted query for small sets (e.g. single-party voucher validation).
+        if (supplierIds.Count <= 50)
+        {
+            var ids = supplierIds.ToList();
+            var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+                .Where(p => ids.Contains(p.SupplierId)
+                            && p.Status != PurchaseStatus.Cancelled
+                            && p.Status != PurchaseStatus.Draft
+                            && p.GrandTotal > p.PaidAmount);
+            if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+            return await q
+                .GroupBy(p => p.SupplierId)
+                .Select(g => new { SupplierId = g.Key, Due = g.Sum(p => p.GrandTotal - p.PaidAmount) })
+                .ToDictionaryAsync(x => x.SupplierId, x => x.Due, ct);
+        }
+
+        var all = await ComputeAllSupplierOpenDuesAsync(branchId, ct);
+        return supplierIds
+            .Where(all.ContainsKey)
+            .ToDictionary(id => id, id => all[id]);
+    }
+
+    /// <summary>
+    /// Open sale dues for all customers — same formula as <see cref="ListPartyBillsAsync"/>
+    /// (CustomerId match, plus walk-in name/phone match). Aggregates from sales first
+    /// so parties with dues are never dropped by a premature Take(500).
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> ComputeAllCustomerOpenDuesAsync(
+        int? branchId,
+        CancellationToken ct)
+    {
+        var openStatuses = new[] { SaleStatus.Completed, SaleStatus.PartiallyReturned };
+        var sq = _uow.Repository<Sale>().Query().AsNoTracking()
+            .Where(s => openStatuses.Contains(s.Status));
+        if (branchId.HasValue) sq = sq.Where(s => s.BranchId == branchId);
+
+        var sales = await sq
+            .Select(s => new
+            {
+                s.Id,
+                s.CustomerId,
+                s.BillingCustomerName,
+                s.BillingCustomerPhone,
+                s.GrandTotal,
+                s.PaidAmount
+            })
             .ToListAsync(ct);
+
+        var result = new Dictionary<int, decimal>();
+        if (sales.Count == 0) return result;
+
+        var saleIds = sales.Select(s => s.Id).ToList();
+        var returnedBySale = new Dictionary<int, decimal>();
+        foreach (var chunk in saleIds.Chunk(1500))
+        {
+            var local = chunk.ToList();
+            var part = await _uow.Repository<SaleReturn>().Query().AsNoTracking()
+                .Where(r => local.Contains(r.SaleId))
+                .GroupBy(r => r.SaleId)
+                .Select(g => new { SaleId = g.Key, Returned = g.Sum(x => x.GrandTotal) })
+                .ToListAsync(ct);
+            foreach (var row in part)
+                returnedBySale[row.SaleId] = row.Returned;
+        }
+
+        foreach (var sale in sales)
+        {
+            if (sale.CustomerId is not int cid) continue;
+            returnedBySale.TryGetValue(sale.Id, out var returned);
+            var due = sale.GrandTotal - sale.PaidAmount - returned;
+            if (due <= 0) continue;
+            result[cid] = result.GetValueOrDefault(cid) + due;
+        }
+
+        var walkIns = sales
+            .Where(s => s.CustomerId is null && !string.IsNullOrWhiteSpace(s.BillingCustomerName))
+            .ToList();
+        if (walkIns.Count == 0) return result;
+
+        var names = walkIns.Select(s => s.BillingCustomerName!).Distinct().ToList();
+        var customers = new List<(int Id, string Name, string? Phone)>();
+        var cq = _uow.Repository<Customer>().Query().AsNoTracking()
+            .Where(c => c.Status == EntityStatus.Active);
+        if (branchId.HasValue) cq = cq.Where(c => c.BranchId == branchId);
+
+        foreach (var chunk in names.Chunk(500))
+        {
+            var local = chunk.ToList();
+            var rows = await cq
+                .Where(c => local.Contains(c.Name))
+                .Select(c => new { c.Id, c.Name, c.Phone })
+                .ToListAsync(ct);
+            customers.AddRange(rows.Select(c => (c.Id, c.Name, c.Phone)));
+        }
+
+        if (customers.Count == 0) return result;
+
+        foreach (var sale in walkIns)
+        {
+            returnedBySale.TryGetValue(sale.Id, out var returned);
+            var due = sale.GrandTotal - sale.PaidAmount - returned;
+            if (due <= 0) continue;
+
+            foreach (var c in customers)
+            {
+                if (!string.Equals(c.Name, sale.BillingCustomerName, StringComparison.Ordinal))
+                    continue;
+                if (string.IsNullOrWhiteSpace(c.Phone)
+                    || string.Equals(c.Phone, sale.BillingCustomerPhone, StringComparison.Ordinal))
+                {
+                    result[c.Id] = result.GetValueOrDefault(c.Id) + due;
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Open sale dues by customer — same formula as <see cref="ListPartyBillsAsync"/> for customers.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> ComputeCustomerOpenDuesAsync(
+        IReadOnlyList<(int Id, string Name, string? Phone)> customers,
+        int? branchId,
+        CancellationToken ct)
+    {
+        var result = customers.ToDictionary(c => c.Id, _ => 0m);
+        if (customers.Count == 0) return result;
+
+        var all = await ComputeAllCustomerOpenDuesAsync(branchId, ct);
+        foreach (var c in customers)
+        {
+            if (all.TryGetValue(c.Id, out var due))
+                result[c.Id] = due;
+        }
+
+        return result;
+    }
+
+    private async Task<decimal> ComputePartyOutstandingAsync(
+        PartyLedgerKind kind,
+        int partyId,
+        int? branchId,
+        CancellationToken ct)
+    {
+        // Party-scoped only — never load all sales/purchases inside a voucher transaction
+        // (avoids long locks and concurrent DbContext use with UI refresh).
+        if (kind == PartyLedgerKind.Supplier)
+        {
+            var map = await ComputeSupplierOpenDuesAsync([partyId], branchId, ct);
+            return map.GetValueOrDefault(partyId);
+        }
+
+        var bills = await ListPartyBillsAsync(PartyLedgerKind.Customer, partyId, branchId, ct);
+        return bills.Sum(b => b.BalanceDue);
     }
 
     public async Task<List<PartyBillRowDto>> ListPartyBillsAsync(
@@ -417,33 +676,44 @@ public class AccountingService : IAccountingService
                 {
                     var supplier = await _uow.Repository<Supplier>().GetByIdAsync(partyId, token);
                     if (supplier is null) throw new AccountingException("Supplier not found.");
-                    if (amount > supplier.OutstandingBalance)
+
+                    var outstanding = await ComputePartyOutstandingAsync(
+                        PartyLedgerKind.Supplier, partyId, branchId, token);
+                    if (amount > outstanding)
                         throw new AccountingException(
-                            $"Payment amount exceeds outstanding balance ({supplier.OutstandingBalance:N2}).");
+                            $"Payment amount exceeds outstanding balance ({outstanding:N2}).");
 
                     partyAccount = await RequireAccountByCodeAsync(PayableAccountCode, token);
                     partyName = supplier.Name;
-                    supplier.OutstandingBalance -= amount;
-                    _uow.Repository<Supplier>().Update(supplier);
 
                     if (allocationMode == PaymentAllocationMode.BillWise)
                         await AllocateSupplierPaymentToBillsAsync(partyId, amount, billAllocations, branchId, token);
                     else
                         await AllocateSupplierPaymentAsync(partyId, amount, branchId, token);
+
+                    // Keep master balance aligned with open bills after allocation.
+                    supplier.OutstandingBalance = await ComputePartyOutstandingAsync(
+                        PartyLedgerKind.Supplier, partyId, branchId, token);
+                    _uow.Repository<Supplier>().Update(supplier);
                 }
                 else
                 {
                     var customer = await _uow.Repository<Customer>().GetByIdAsync(partyId, token);
                     if (customer is null) throw new AccountingException("Customer not found.");
-                    if (amount > customer.OutstandingBalance)
+
+                    var outstanding = await ComputePartyOutstandingAsync(
+                        PartyLedgerKind.Customer, partyId, branchId, token);
+                    if (amount > outstanding)
                         throw new AccountingException(
-                            $"Receipt amount exceeds outstanding balance ({customer.OutstandingBalance:N2}).");
+                            $"Receipt amount exceeds outstanding balance ({outstanding:N2}).");
 
                     partyAccount = await RequireAccountByCodeAsync(ReceivableAccountCode, token);
                     partyName = customer.Name;
-                    customer.OutstandingBalance -= amount;
-                    _uow.Repository<Customer>().Update(customer);
                     await AllocateCustomerReceiptAsync(partyId, amount, branchId, token);
+
+                    customer.OutstandingBalance = await ComputePartyOutstandingAsync(
+                        PartyLedgerKind.Customer, partyId, branchId, token);
+                    _uow.Repository<Customer>().Update(customer);
                 }
 
                 var cashAccount = await _uow.Repository<Account>().GetByIdAsync(cashOrBankAccountId, token);

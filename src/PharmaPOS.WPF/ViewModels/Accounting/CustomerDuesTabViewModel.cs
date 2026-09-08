@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Accounting;
 using PharmaPOS.Application.Features.Settings;
@@ -13,6 +14,7 @@ namespace PharmaPOS.WPF.ViewModels.Accounting;
 public sealed class CustomerDuesTabViewModel : ObservableObject
 {
     private readonly IAccountingService _accounting;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISettingsService _settings;
     private readonly IBillShareService _billShare;
     private readonly IInvoicePrintService _print;
@@ -27,6 +29,7 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
 
     public CustomerDuesTabViewModel(
         IAccountingService accounting,
+        IServiceScopeFactory scopeFactory,
         ISettingsService settings,
         IBillShareService billShare,
         IInvoicePrintService print,
@@ -34,6 +37,7 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
         IDialogService dialog)
     {
         _accounting = accounting;
+        _scopeFactory = scopeFactory;
         _settings = settings;
         _billShare = billShare;
         _print = print;
@@ -70,7 +74,7 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
         {
             if (!SetProperty(ref _selected, value)) return;
             CommandManager.InvalidateRequerySuggested();
-            _ = LoadBillsAsync();
+            _ = LoadBillsSafeAsync();
         }
     }
 
@@ -113,10 +117,16 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
 
             OnPropertyChanged(nameof(TotalOutstanding));
 
-            var keepId = SelectedDue?.PartyId;
-            SelectedDue = keepId is int id
+            var keepId = _selected?.PartyId;
+            var next = keepId is int id
                 ? Dues.FirstOrDefault(d => d.PartyId == id) ?? Dues.FirstOrDefault()
                 : Dues.FirstOrDefault();
+
+            // Set without fire-and-forget LoadBills — await it so callers can safely continue.
+            _selected = next;
+            OnPropertyChanged(nameof(SelectedDue));
+            CommandManager.InvalidateRequerySuggested();
+            await LoadBillsAsync();
 
             StatusMessage = owed.Count == 0
                 ? "No customer dues right now."
@@ -132,21 +142,27 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
         }
     }
 
-    private async Task LoadBillsAsync()
+    private async Task LoadBillsSafeAsync()
     {
-        OpenBills.Clear();
-        if (SelectedDue is null) return;
         try
         {
-            var bills = await _accounting.ListPartyBillsAsync(
-                PartyLedgerKind.Customer, SelectedDue.PartyId, _branchId);
-            foreach (var bill in bills)
-                OpenBills.Add(bill);
+            await LoadBillsAsync();
         }
         catch (Exception ex)
         {
             StatusMessage = $"Could not load bills: {ex.Message}";
         }
+    }
+
+    private async Task LoadBillsAsync()
+    {
+        OpenBills.Clear();
+        if (_selected is null) return;
+
+        var bills = await _accounting.ListPartyBillsAsync(
+            PartyLedgerKind.Customer, _selected.PartyId, _branchId);
+        foreach (var bill in bills)
+            OpenBills.Add(bill);
     }
 
     private async Task RemindAsync()
@@ -176,26 +192,39 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
     {
         if (SelectedDue is null || !CanCollect) return;
 
-        var vm = new CollectDueViewModel(_accounting, _dialog, _branchId, SelectedDue);
-        var window = new CollectDueWindow { DataContext = vm };
-        var owner = System.Windows.Application.Current?.MainWindow;
-        if (owner is not null && owner.IsLoaded && owner.IsVisible)
+        try
         {
-            try { window.Owner = owner; } catch { /* ignore */ }
+            // Fresh DI scope so collect does not share DbContext with Accounting tab refresh.
+            using var scope = _scopeFactory.CreateScope();
+            var accounting = scope.ServiceProvider.GetRequiredService<IAccountingService>();
+
+            var vm = new CollectDueViewModel(accounting, _dialog, _branchId, SelectedDue);
+            var window = new CollectDueWindow { DataContext = vm };
+            var owner = System.Windows.Application.Current?.MainWindow;
+            if (owner is not null && owner.IsLoaded && owner.IsVisible)
+            {
+                try { window.Owner = owner; } catch { /* ignore */ }
+            }
+
+            if (window.ShowDialog() != true || window.ResultReceipt is null)
+                return;
+
+            var receipt = window.ResultReceipt;
+            _print.ShowCollectionPreview(receipt);
+
+            if (_dialog.Confirm("Send this receipt to the customer on WhatsApp / SMS?", "Collect now"))
+                _billShare.OfferCollectionShare(receipt);
+
+            await RefreshAsync();
+            // Refresh already loaded bills; refresh summary/parties after dues list is idle.
+            if (DuesChanged is not null)
+                await DuesChanged.Invoke();
         }
-
-        if (window.ShowDialog() != true || window.ResultReceipt is null)
-            return;
-
-        var receipt = window.ResultReceipt;
-        _print.ShowCollectionPreview(receipt);
-
-        if (_dialog.Confirm("Send this receipt to the customer on WhatsApp / SMS?", "Collect now"))
-            _billShare.OfferCollectionShare(receipt);
-
-        await RefreshAsync();
-        if (DuesChanged is not null)
-            await DuesChanged.Invoke();
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+            _dialog.ShowError(ex.Message, "Collect now");
+        }
     }
 
     private async Task DebouncedSearchAsync()

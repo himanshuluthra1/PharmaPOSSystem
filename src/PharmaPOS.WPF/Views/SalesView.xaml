@@ -167,25 +167,6 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="Fast Billing" FontSize="20" FontWeight="Bold"
                                    VerticalAlignment="Center" />
-                        <materialDesign:PackIcon Kind="CashRegister" Width="18" Height="18"
-                                                   VerticalAlignment="Center" Margin="10,0,6,0" />
-                        <TextBlock Text="{Binding CounterDisplay}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="140" />
-                        <TextBlock Text="{Binding CounterCashSummary}" Margin="10,0,0,0" Opacity="0.75"
-                                   VerticalAlignment="Center" FontSize="12"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="160" />
-                        <Button Command="{Binding ChangeCounterCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Content="Change" Margin="4,0,0,0" Padding="8,2"
-                                ToolTip="Switch to a different billing counter" />
-                        <Button Command="{Binding ShowCounterCashSummaryCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Content="All counters" Margin="4,0,0,0" Padding="8,2"
-                                ToolTip="Today's cash by counter" />
-                        <Button Command="{Binding DayCloseCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Content="Day close" Margin="4,0,0,0" Padding="8,2"
-                                ToolTip="Count drawer cash, close this counter, print or save PDF" />
                     </StackPanel>
                 </DockPanel>
                 <TextBlock Text="Press Enter on Item to search medicine. F3 customer. Ctrl+T new customer. Ctrl+1–4 switch. Ctrl+W close."
@@ -251,10 +232,11 @@
                           PreviewKeyDown="CartGrid_PreviewKeyDown"
                           MouseDoubleClick="CartGrid_MouseDoubleClick"
                           BeginningEdit="CartGrid_BeginningEdit"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                           IsReadOnly="{Binding IsBillReadOnly}">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Item" Width="2*" MinWidth="140">
+                        <DataGridTemplateColumn Header="Item" Width="*" MinWidth="100">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock VerticalAlignment="Center" Padding="2,0"
@@ -279,26 +261,26 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" IsReadOnly="True" Width="100" />
-                        <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" IsReadOnly="True" Width="90" />
-                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="80" />
-                        <DataGridTextColumn Header="Quantity" Width="70"
+                        <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" IsReadOnly="True" Width="0.7*" MinWidth="64" />
+                        <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" IsReadOnly="True" Width="0.65*" MinWidth="56" />
+                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="0.55*" MinWidth="56" />
+                        <DataGridTextColumn Header="Qty" Width="0.45*" MinWidth="44"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="MRP" Width="80"
+                        <DataGridTextColumn Header="MRP" Width="0.55*" MinWidth="52"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Sale price" Width="80"
+                        <DataGridTextColumn Header="Sale" Width="0.55*" MinWidth="52"
                                             IsReadOnly="True"
                                             Binding="{Binding UnitPrice, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Discount %" Width="65"
+                        <DataGridTextColumn Header="Disc %" Width="0.45*" MinWidth="44"
                                             IsReadOnly="{Binding DataContext.CanApplyDiscount, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="GST %" IsReadOnly="True" Width="65"
+                        <DataGridTextColumn Header="GST %" IsReadOnly="True" Width="0.45*" MinWidth="44"
                                             Binding="{Binding GstPercent, StringFormat=N2}" />
-                        <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="90"
+                        <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="0.6*" MinWidth="56"
                                             Binding="{Binding LineTotal, StringFormat=N2}" />
-                        <DataGridTemplateColumn Width="48">
+                        <DataGridTemplateColumn Width="40" MinWidth="40" MaxWidth="44">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Height="28" Width="28"

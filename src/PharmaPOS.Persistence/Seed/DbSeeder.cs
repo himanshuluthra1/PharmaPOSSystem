@@ -145,18 +145,17 @@ public class DbSeeder
 
         foreach (var role in roles)
         {
-            var hasAny = await _context.RolePermissions.AnyAsync(rp => rp.RoleId == role.Id, ct);
+            // Ignore soft-delete: a role with only deleted grants still "has" rows in the unique index.
+            var hasAny = await _context.RolePermissions
+                .IgnoreQueryFilters()
+                .AnyAsync(rp => rp.RoleId == role.Id && !rp.IsDeleted, ct);
             if (hasAny) continue;
 
-            foreach (var key in RolePermissionDefaults.ForRole(role.Name))
-            {
-                if (!permissionByKey.TryGetValue(key, out var permissionId)) continue;
-                _context.RolePermissions.Add(new RolePermission
-                {
-                    RoleId = role.Id,
-                    PermissionId = permissionId
-                });
-            }
+            var keys = RolePermissionDefaults.ForRole(role.Name).Distinct();
+            var permissionIds = keys
+                .Where(permissionByKey.ContainsKey)
+                .Select(k => permissionByKey[k]);
+            await EnsureRoleHasPermissionsAsync(role.Id, permissionIds, ct);
         }
 
         await _context.SaveChangesAsync(ct);
@@ -168,24 +167,14 @@ public class DbSeeder
         var permissions = await _context.Permissions.ToListAsync(ct);
         var permissionByKey = permissions.ToDictionary(p => p.Key, p => p.Id);
         var roles = await _context.Roles.ToListAsync(ct);
-        var existing = await _context.RolePermissions
-            .Include(rp => rp.Permission)
-            .Select(rp => new { rp.RoleId, rp.Permission!.Key })
-            .ToListAsync(ct);
 
         foreach (var role in roles)
         {
-            var granted = existing.Where(e => e.RoleId == role.Id).Select(e => e.Key).ToHashSet();
-            foreach (var key in RolePermissionDefaults.ForRole(role.Name))
-            {
-                if (granted.Contains(key)) continue;
-                if (!permissionByKey.TryGetValue(key, out var permissionId)) continue;
-                _context.RolePermissions.Add(new RolePermission
-                {
-                    RoleId = role.Id,
-                    PermissionId = permissionId
-                });
-            }
+            var keys = RolePermissionDefaults.ForRole(role.Name).Distinct();
+            var permissionIds = keys
+                .Where(permissionByKey.ContainsKey)
+                .Select(k => permissionByKey[k]);
+            await EnsureRoleHasPermissionsAsync(role.Id, permissionIds, ct);
         }
 
         await _context.SaveChangesAsync(ct);
@@ -198,21 +187,46 @@ public class DbSeeder
         if (superAdmin is null) return;
 
         var allPermissionIds = await _context.Permissions.Select(p => p.Id).ToListAsync(ct);
-        var grantedIds = await _context.RolePermissions
-            .Where(rp => rp.RoleId == superAdmin.Id)
-            .Select(rp => rp.PermissionId)
+        await EnsureRoleHasPermissionsAsync(superAdmin.Id, allPermissionIds, ct);
+        await _context.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Grants missing permissions to a role. Soft-deleted join rows are revived
+    /// instead of re-inserted (unique index on RoleId+PermissionId includes deleted rows).
+    /// </summary>
+    private async Task EnsureRoleHasPermissionsAsync(
+        int roleId,
+        IEnumerable<int> permissionIds,
+        CancellationToken ct)
+    {
+        var needed = permissionIds.Distinct().ToHashSet();
+        if (needed.Count == 0) return;
+
+        var existing = await _context.RolePermissions
+            .IgnoreQueryFilters()
+            .Where(rp => rp.RoleId == roleId && needed.Contains(rp.PermissionId))
             .ToListAsync(ct);
 
-        foreach (var permissionId in allPermissionIds.Except(grantedIds))
+        foreach (var permissionId in needed)
         {
-            _context.RolePermissions.Add(new RolePermission
+            var row = existing.FirstOrDefault(rp => rp.PermissionId == permissionId);
+            if (row is null)
             {
-                RoleId = superAdmin.Id,
-                PermissionId = permissionId
-            });
-        }
+                _context.RolePermissions.Add(new RolePermission
+                {
+                    RoleId = roleId,
+                    PermissionId = permissionId
+                });
+                continue;
+            }
 
-        await _context.SaveChangesAsync(ct);
+            if (!row.IsDeleted) continue;
+
+            row.IsDeleted = false;
+            row.DeletedAtUtc = null;
+            row.DeletedBy = null;
+        }
     }
 
     private async Task SeedCompanyProfileAsync(CancellationToken ct)

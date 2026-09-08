@@ -620,13 +620,27 @@ public class SalesViewModel : ObservableObject
         var shortfall = Math.Max(0, requestedQty - availableQty);
         if (medicineId <= 0 || shortfall <= 0) return;
 
+        string? customerName = string.IsNullOrWhiteSpace(CustomerName) ? null : CustomerName.Trim();
+        var qty = requestedQty;
+
         if (confirm)
         {
-            var label = string.IsNullOrWhiteSpace(medicineName) ? "this medicine" : $"\"{medicineName}\"";
-            if (!_dialog.Confirm(
-                    $"{label} is short by {shortfall:0.##}. Add to shortage book for purchase ordering?",
-                    "Shortage book"))
+            var label = string.IsNullOrWhiteSpace(medicineName) ? "this medicine" : medicineName!;
+            var prompt = _dialog.PromptShortageDetails(
+                label,
+                defaultWantedQuantity: requestedQty,
+                defaultCustomerName: customerName,
+                detailLine: $"Short by {shortfall:0.##} (available {availableQty:0.##}). Wanted quantity and customer name are optional.");
+            if (prompt is null) return;
+
+            qty = prompt.WantedQuantity;
+            customerName = prompt.CustomerName;
+            shortfall = Math.Max(0, qty - availableQty);
+            if (shortfall <= 0)
+            {
+                _dialog.ShowInfo("Wanted quantity is not more than available stock, so nothing was recorded.", "Shortage book");
                 return;
+            }
         }
 
         try
@@ -634,10 +648,10 @@ public class SalesViewModel : ObservableObject
             var result = await _shortageBook.RecordAsync(
                 new RecordShortageRequest(
                     medicineId,
-                    requestedQty,
+                    qty,
                     availableQty,
                     source,
-                    string.IsNullOrWhiteSpace(CustomerName) ? null : CustomerName.Trim(),
+                    customerName,
                     string.IsNullOrWhiteSpace(CustomerMobile) ? null : CustomerMobile.Trim()),
                 _currentUser.CurrentUser?.BranchId,
                 _currentUser.CurrentUser?.FullName ?? _currentUser.CurrentUser?.Username);
@@ -1652,8 +1666,10 @@ public class SalesViewModel : ObservableObject
 
         try
         {
+            // Header shows today's totals for this counter (all sessions), not only the
+            // current session — otherwise switch-away/switch-back looked like a reset to 0.
             var row = await _counters.GetActiveCounterCashAsync(
-                counterId, _counterContext.ActiveSessionId, DateTime.Today);
+                counterId, sessionId: null, DateTime.Today);
             if (row is null)
             {
                 CounterCashSummary = null;

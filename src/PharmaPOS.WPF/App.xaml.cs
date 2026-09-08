@@ -230,9 +230,13 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
+            var detail = ex.Message;
+            for (var inner = ex.InnerException; inner is not null; inner = inner.InnerException)
+                detail = inner.Message;
+
             MessageBox.Show(
                 "The application could not connect to or initialize the database.\n\n" +
-                $"{ex.Message}\n\n" +
+                $"{detail}\n\n" +
                 "Fix:\n" +
                 "1. Install SQL Server Express LocalDB (free) if missing.\n" +
                 "2. Or open PowerShell and run:  sqllocaldb start MSSQLLocalDB\n" +

@@ -153,18 +153,24 @@ public sealed class ShortageBookTabViewModel : ObservableObject
         if (medicine is null) return;
 
         var onHand = await _shortageBook.GetOnHandQuantityAsync(medicine.Id, _branchId);
-        var requested = Math.Max(1m, onHand > 0 ? onHand + 1 : 1m);
+        var defaultRequested = Math.Max(1m, onHand > 0 ? onHand + 1 : 1m);
 
-        if (!_dialog.Confirm(
-                $"Record shortage for \"{medicine.Name}\"?\n\nOn hand: {onHand:0.##}\nRequested (lost sale): {requested:0.##}",
-                "Shortage book"))
-            return;
+        var prompt = _dialog.PromptShortageDetails(
+            medicine.Name,
+            defaultRequested,
+            detailLine: $"On hand: {onHand:0.##}. Wanted quantity and customer name are optional.");
+        if (prompt is null) return;
 
         IsBusy = true;
         try
         {
             var result = await _shortageBook.RecordAsync(
-                new RecordShortageRequest(medicine.Id, requested, onHand, ShortageSource.Manual),
+                new RecordShortageRequest(
+                    medicine.Id,
+                    prompt.WantedQuantity,
+                    onHand,
+                    ShortageSource.Manual,
+                    prompt.CustomerName),
                 _branchId,
                 _recordedBy);
 

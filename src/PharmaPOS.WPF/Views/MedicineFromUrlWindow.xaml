@@ -43,7 +43,7 @@
                 <TextBlock Text="Generic / salt" FontSize="11" Opacity="0.7" />
                 <TextBox x:Name="GenericBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
 
-                <TextBlock Text="Brand" FontSize="11" Opacity="0.7" />
+                <TextBlock Text="Brand (company)" FontSize="11" Opacity="0.7" />
                 <TextBox x:Name="BrandBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
 
                 <Grid Margin="0,0,0,8">

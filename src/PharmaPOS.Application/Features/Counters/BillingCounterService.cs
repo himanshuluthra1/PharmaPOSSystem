@@ -220,6 +220,37 @@ public sealed class BillingCounterService : IBillingCounterService
                 _uow.Repository<CounterSession>().Update(old);
             }
 
+            // Switch-back: reopen today's auto-closed session on this counter so sales totals stay intact.
+            var todayLocal = _clock.UtcNow.ToLocalTime().Date;
+            var resumable = await _uow.Repository<CounterSession>().Query()
+                .Include(s => s.Counter)
+                .Include(s => s.User)
+                .Where(s => !s.IsDeleted
+                            && s.Status == CounterSessionStatus.Closed
+                            && s.CounterId == counterId
+                            && s.UserId == userId
+                            && s.DeclaredClosingCash == null
+                            && s.Remarks != null
+                            && s.Remarks.StartsWith("Auto-closed when opening another counter"))
+                .OrderByDescending(s => s.ClosedAtUtc)
+                .FirstOrDefaultAsync(ct);
+
+            if (resumable is not null
+                && resumable.ClosedAtUtc is DateTime closedAt
+                && closedAt.ToLocalTime().Date == todayLocal)
+            {
+                resumable.Status = CounterSessionStatus.Open;
+                resumable.ClosedAtUtc = null;
+                resumable.Remarks = null;
+                if (openingFloat > 0)
+                    resumable.OpeningFloat = openingFloat;
+                _uow.Repository<CounterSession>().Update(resumable);
+                await _uow.SaveChangesAsync(ct);
+                resumable.Counter ??= counter;
+                resumable.User ??= user;
+                return Result.Success(MapSession(resumable));
+            }
+
             var session = new CounterSession
             {
                 CounterId = counterId,
@@ -436,13 +467,47 @@ public sealed class BillingCounterService : IBillingCounterService
         var company = await _uow.Repository<CompanyProfile>().Query().AsNoTracking()
             .FirstOrDefaultAsync(ct);
 
+        // Use the business day of this session (local), and include all sales for this
+        // counter that day — not only CounterSessionId. Switching counters auto-closes and
+        // can reopen a new session; earlier bills stay on the prior session id.
+        var dayStart = session.OpenedAtUtc.ToLocalTime().Date;
+        var dayEnd = dayStart.AddDays(1);
+        var dayStartUtc = dayStart.ToUniversalTime();
+        var dayEndUtc = dayEnd.ToUniversalTime();
+
+        var todaysSessionIds = await _uow.Repository<CounterSession>().Query().AsNoTracking()
+            .Where(s => !s.IsDeleted
+                        && s.CounterId == session.CounterId
+                        && s.OpenedAtUtc >= dayStartUtc && s.OpenedAtUtc < dayEndUtc)
+            .Select(s => s.Id)
+            .ToListAsync(ct);
+
+        if (!todaysSessionIds.Contains(session.Id))
+            todaysSessionIds.Add(session.Id);
+
         var sales = await _uow.Repository<Sale>().Query().AsNoTracking()
             .Include(s => s.Payments)
             .Where(s => !s.IsDeleted
-                        && s.CounterSessionId == sessionId
                         && s.Status != SaleStatus.Cancelled
-                        && s.Status != SaleStatus.Draft)
+                        && s.Status != SaleStatus.Draft
+                        && (
+                            (s.CounterId == session.CounterId
+                             && s.InvoiceDate >= dayStart && s.InvoiceDate < dayEnd)
+                            || (s.CounterSessionId != null
+                                && todaysSessionIds.Contains(s.CounterSessionId.Value))
+                        ))
             .ToListAsync(ct);
+
+        // Opening float: prefer earliest session opened that day for this user+counter
+        // (switch-back may reopen a later empty session with a different float).
+        var firstSessionToday = await _uow.Repository<CounterSession>().Query().AsNoTracking()
+            .Where(s => !s.IsDeleted
+                        && s.CounterId == session.CounterId
+                        && s.UserId == session.UserId
+                        && s.OpenedAtUtc >= dayStartUtc && s.OpenedAtUtc < dayEndUtc)
+            .OrderBy(s => s.OpenedAtUtc)
+            .FirstOrDefaultAsync(ct);
+        var openingFloat = firstSessionToday?.OpeningFloat ?? session.OpeningFloat;
 
         decimal cash = 0, card = 0, upi = 0, other = 0, credit = 0;
         foreach (var sale in sales)
@@ -460,7 +525,7 @@ public sealed class BillingCounterService : IBillingCounterService
             }
         }
 
-        var expected = Math.Round(session.OpeningFloat + cash, 2);
+        var expected = Math.Round(openingFloat + cash, 2);
         var counted = countedOverride
                       ?? session.DeclaredClosingCash
                       ?? expected;
@@ -472,9 +537,9 @@ public sealed class BillingCounterService : IBillingCounterService
             CounterCode = session.Counter?.Code ?? $"#{session.CounterId}",
             CounterName = session.Counter?.Name ?? $"Counter {session.CounterId}",
             OperatorName = session.User?.FullName ?? $"User {session.UserId}",
-            OpenedAtLocal = session.OpenedAtUtc.ToLocalTime(),
+            OpenedAtLocal = (firstSessionToday ?? session).OpenedAtUtc.ToLocalTime(),
             ClosedAtLocal = session.ClosedAtUtc?.ToLocalTime(),
-            OpeningFloat = session.OpeningFloat,
+            OpeningFloat = openingFloat,
             BillCount = sales.Count,
             CashCollected = cash,
             CardCollected = card,

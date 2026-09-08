@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Accounting;
 using PharmaPOS.Application.Features.Settings;
@@ -19,6 +20,7 @@ public class AccountingViewModel : ObservableObject
 
     public AccountingViewModel(
         IAccountingService accounting,
+        IServiceScopeFactory scopeFactory,
         ISettingsService settings,
         IBillShareService billShare,
         IInvoicePrintService print,
@@ -36,7 +38,13 @@ public class AccountingViewModel : ObservableObject
 
         PartyLedger = new PartyLedgerTabViewModel(accounting, currentUser, OnPartySelected);
         CustomerDues = new CustomerDuesTabViewModel(
-            accounting, settings, billShare, print, currentUser, dialog);
+            accounting,
+            scopeFactory,
+            settings,
+            billShare,
+            print,
+            currentUser,
+            dialog);
         CustomerDues.DuesChanged += OnDuesChangedAsync;
         Vouchers = new VoucherTabViewModel(accounting, currentUser, dialog);
         Vouchers.VoucherSaved += OnVoucherSavedAsync;
@@ -115,17 +123,31 @@ public class AccountingViewModel : ObservableObject
 
     private async Task OnDuesChangedAsync()
     {
-        Summary = await _accounting.GetSummaryAsync(_branchId);
-        await PartyLedger.RefreshAsync();
-        if (SelectedTab == 3) await CashBook.RefreshAsync();
+        try
+        {
+            Summary = await _accounting.GetSummaryAsync(_branchId);
+            await PartyLedger.RefreshAsync();
+            if (SelectedTab == 3) await CashBook.RefreshAsync();
+        }
+        catch
+        {
+            // Avoid unhandled async exceptions after collect.
+        }
     }
 
     private async Task RefreshAllAsync()
     {
-        Summary = await _accounting.GetSummaryAsync(_branchId);
-        await PartyLedger.RefreshAsync();
-        await CustomerDues.RefreshAsync();
-        if (SelectedTab == 3) await CashBook.RefreshAsync();
-        if (SelectedTab == 4) await Journal.RefreshAsync();
+        try
+        {
+            Summary = await _accounting.GetSummaryAsync(_branchId);
+            await PartyLedger.RefreshAsync();
+            await CustomerDues.RefreshAsync();
+            if (SelectedTab == 3) await CashBook.RefreshAsync();
+            if (SelectedTab == 4) await Journal.RefreshAsync();
+        }
+        catch
+        {
+            // Startup/background refresh must not crash the UI thread.
+        }
     }
 }

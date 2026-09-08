@@ -140,14 +140,21 @@ public class MedicinePickerService : IMedicinePickerService
         int? branchId)
     {
         if (medicine.TotalStock > 0) return;
-        if (!_dialog.Confirm(
-                $"\"{medicine.Name}\" has no stock (lost sale). Add to shortage book?",
-                "Shortage book"))
-            return;
 
         var onHand = await shortageBook.GetOnHandQuantityAsync(medicine.Id, branchId);
+        var prompt = _dialog.PromptShortageDetails(
+            medicine.Name,
+            defaultWantedQuantity: 1m,
+            detailLine: "No stock (lost sale). Wanted quantity and customer name are optional.");
+        if (prompt is null) return;
+
         var result = await shortageBook.RecordAsync(
-            new RecordShortageRequest(medicine.Id, 1m, onHand, source),
+            new RecordShortageRequest(
+                medicine.Id,
+                prompt.WantedQuantity,
+                onHand,
+                source,
+                prompt.CustomerName),
             branchId,
             _currentUser.CurrentUser?.FullName ?? _currentUser.CurrentUser?.Username);
 

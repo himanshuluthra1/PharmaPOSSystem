@@ -51,7 +51,9 @@ public partial class MedicineFromUrlWindow : Window
             _downloaded = await _import.DownloadAsync(SelectedSource, UrlBox.Text);
             NameBox.Text = _downloaded.Name;
             GenericBox.Text = _downloaded.GenericName ?? string.Empty;
-            BrandBox.Text = _downloaded.Brand ?? string.Empty;
+            BrandBox.Text = !string.IsNullOrWhiteSpace(_downloaded.Brand)
+                ? _downloaded.Brand
+                : (_downloaded.ManufacturerName ?? string.Empty);
             MrpBox.Text = _downloaded.Mrp > 0 ? _downloaded.Mrp.ToString("0.##") : string.Empty;
             GstBox.Text = _downloaded.GstPercent > 0 ? _downloaded.GstPercent.ToString("0.##") : "12";
             StatusText.Text = $"Downloaded from {_downloaded.SourceLabel}. Review fields, then Save to medicine master.";

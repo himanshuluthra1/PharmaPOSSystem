@@ -11,6 +11,7 @@ public sealed class CollectDueViewModel : ObservableObject
     private readonly IAccountingService _accounting;
     private readonly IDialogService _dialog;
     private readonly int? _branchId;
+    private readonly Task _accountsLoaded;
 
     private decimal _amount;
     private AccountLookupDto? _selectedAccount;
@@ -31,7 +32,8 @@ public sealed class CollectDueViewModel : ObservableObject
         _amount = customer.OutstandingBalance;
 
         CollectCommand = new AsyncRelayCommand(CollectAsync, () => CanCollect);
-        _ = LoadAccountsAsync();
+        _isBusy = true;
+        _accountsLoaded = LoadAccountsAsync();
     }
 
     public PartyLedgerRowDto Customer { get; }
@@ -91,6 +93,7 @@ public sealed class CollectDueViewModel : ObservableObject
 
     private async Task LoadAccountsAsync()
     {
+        IsBusy = true;
         try
         {
             var accounts = await _accounting.ListCashAndBankAccountsAsync();
@@ -103,10 +106,15 @@ public sealed class CollectDueViewModel : ObservableObject
         {
             ErrorMessage = ex.Message;
         }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     private async Task CollectAsync()
     {
+        await _accountsLoaded;
         if (SelectedAccount is null) return;
         if (Amount <= 0)
         {

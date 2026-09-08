@@ -264,25 +264,32 @@ public sealed class LastSaleRefillViewModel : ObservableObject
     private async void OnLogShortageRequested(LastSaleRefillLineViewModel line)
     {
         if (line.Line.HasStock) return;
-        var qty = line.RefillQty > 0 ? line.RefillQty : line.Line.LastQuantity;
-        if (qty <= 0) return;
+        var defaultQty = line.RefillQty > 0 ? line.RefillQty : line.Line.LastQuantity;
+        if (defaultQty <= 0) return;
+
+        var prompt = _dialog.PromptShortageDetails(
+            line.Line.MedicineName,
+            defaultWantedQuantity: defaultQty,
+            defaultCustomerName: Refill?.PatientName,
+            detailLine: $"Available: {line.Line.AvailableStock:0.##}. Wanted quantity and customer name are optional.");
+        if (prompt is null) return;
 
         try
         {
             var result = await _shortageBook.RecordAsync(
                 new RecordShortageRequest(
                     line.Line.MedicineId,
-                    qty,
+                    prompt.WantedQuantity,
                     line.Line.AvailableStock,
                     ShortageSource.Refill,
-                    Refill?.PatientName,
+                    prompt.CustomerName,
                     Refill?.Mobile),
                 _branchId,
                 _recordedBy);
 
             StatusMessage = result.IsFailure
                 ? (result.Error ?? "Could not record shortage.")
-                : $"Shortage recorded for {line.Line.MedicineName} × {qty:0.##}.";
+                : $"Shortage recorded for {line.Line.MedicineName} × {prompt.WantedQuantity:0.##}.";
         }
         catch (Exception ex)
         {
