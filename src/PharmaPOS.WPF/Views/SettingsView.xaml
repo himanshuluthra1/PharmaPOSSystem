@@ -3,16 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:settingsVm="clr-namespace:PharmaPOS.WPF.ViewModels.Settings"
+             xmlns:behaviors="clr-namespace:PharmaPOS.WPF.Behaviors"
              d:DataContext="{d:DesignInstance Type=settingsVm:SettingsViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
     <UserControl.Resources>
-        <Style x:Key="FieldCaption" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Opacity" Value="0.72" />
-            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+        <Style x:Key="FieldCaption" TargetType="TextBlock" BasedOn="{StaticResource PharmaFieldCaption}">
             <Setter Property="Margin" Value="0,0,0,3" />
         </Style>
         <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
@@ -157,69 +154,25 @@
                              VerticalAlignment="Stretch"
                              HorizontalAlignment="Stretch">
             <DockPanel LastChildFill="True">
-                <TextBlock DockPanel.Dock="Top" Text="Settings" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
-
-                <!-- Side nav: always lists MedWin Import when permitted (top tabs were clipping it on first layout). -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="160" MinWidth="120" />
-                        <ColumnDefinition Width="*" MinWidth="240" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0" Margin="0,0,12,0"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="0,0,1,0"
-                            Padding="0,0,8,0">
-                        <ListBox ItemsSource="{Binding Sections}"
-                                 SelectedItem="{Binding SelectedSection}"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate DataType="{x:Type settingsVm:SettingsSection}">
-                                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" Margin="4,8" FontSize="13" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Border>
-
-                    <!-- Headerless TabControl — selection driven by side list SelectedTab index -->
-                    <TabControl Grid.Column="1"
-                                SelectedIndex="{Binding SelectedTab, Mode=OneWay}"
-                                VerticalAlignment="Stretch"
-                                HorizontalAlignment="Stretch"
-                                VerticalContentAlignment="Stretch"
-                                HorizontalContentAlignment="Stretch"
-                                BorderThickness="0"
-                                Padding="0"
-                                Background="Transparent">
-                        <TabControl.Template>
-                            <ControlTemplate TargetType="TabControl">
-                                <ContentPresenter ContentSource="SelectedContent"
-                                                  VerticalAlignment="Stretch"
-                                                  HorizontalAlignment="Stretch" />
-                            </ControlTemplate>
-                        </TabControl.Template>
-                        <TabControl.ItemContainerStyle>
-                            <Style TargetType="TabItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="VerticalContentAlignment" Value="Stretch" />
-                            </Style>
-                        </TabControl.ItemContainerStyle>
+                <!-- Headerless TabControl — section chosen from top submenu / green app bar -->
+                <TabControl Style="{StaticResource HeaderlessTabControl}"
+                            SelectedIndex="{Binding SelectedTab, Mode=OneWay}"
+                            VerticalAlignment="Stretch"
+                            HorizontalAlignment="Stretch"
+                            VerticalContentAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch">
                     <!-- COMPANY -->
                     <TabItem Header="Company">
                         <ScrollViewer DataContext="{Binding Company}" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto">
                             <StackPanel MaxWidth="720" HorizontalAlignment="Left">
-                                <TextBlock Text="Company &amp; Store Details" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-
                                 <TextBlock Text="Company Name *" Style="{StaticResource FieldCaption}" />
-                                <TextBox Style="{StaticResource FieldBox}"
+                                <TextBox Style="{StaticResource FieldBox}" MaxLength="50"
                                          Text="{Binding Editor.CompanyName, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Legal Name" Style="{StaticResource FieldCaption}" />
-                                <TextBox Style="{StaticResource FieldBox}"
+                                <TextBox Style="{StaticResource FieldBox}" MaxLength="50"
                                          Text="{Binding Editor.LegalName, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
-                                <TextBox Style="{StaticResource FieldBox}"
+                                <TextBox Style="{StaticResource FieldBox}" MaxLength="200"
                                          Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
 
                                 <Grid Margin="0,0,0,0">
@@ -230,17 +183,18 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                         <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="50"
                                                  Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Margin="4,0">
                                         <TextBlock Text="State" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="50"
                                                  Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Margin="4,0,0,0">
                                         <TextBlock Text="Pincode" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="6"
+                                                 behaviors:TextBoxLimits.DigitsOnly="True"
                                                  Text="{Binding Editor.Pincode, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
@@ -252,18 +206,19 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                         <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="12"
+                                                 behaviors:TextBoxLimits.DigitsOnly="True"
                                                  Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                         <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="100"
                                                  Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
 
                                 <TextBlock Text="Website" Style="{StaticResource FieldCaption}" />
-                                <TextBox Style="{StaticResource FieldBox}"
+                                <TextBox Style="{StaticResource FieldBox}" MaxLength="100"
                                          Text="{Binding Editor.Website, UpdateSourceTrigger=PropertyChanged}" />
 
                                 <Grid>
@@ -274,17 +229,17 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                         <TextBlock Text="GSTIN" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="15"
                                                  Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Margin="4,0">
                                         <TextBlock Text="Drug License" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="30"
                                                  Text="{Binding Editor.DrugLicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" Margin="4,0,0,0">
                                         <TextBlock Text="PAN" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource FieldBox}"
+                                        <TextBox Style="{StaticResource FieldBox}" MaxLength="10"
                                                  Text="{Binding Editor.Pan, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
@@ -387,17 +342,17 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Code *" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="20" Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="50" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                     </Grid>
                                     <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
                                     <TextBox Style="{StaticResource FieldBox}"
-                                             Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
+                                             MaxLength="200" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -407,17 +362,17 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="50" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0">
                                             <TextBlock Text="State" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="50" Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Margin="4,0,0,0">
                                             <TextBlock Text="Pincode" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Pincode, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="6" behaviors:TextBoxLimits.DigitsOnly="True" Text="{Binding Editor.Pincode, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                     </Grid>
                                     <Grid>
@@ -428,12 +383,12 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="12" behaviors:TextBoxLimits.DigitsOnly="True" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="100" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                     </Grid>
                                     <Grid>
@@ -444,12 +399,12 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="GSTIN" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="15" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Drug License" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.DrugLicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="30" Text="{Binding Editor.DrugLicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                     </Grid>
                                     <CheckBox Content="Head Office" IsChecked="{Binding Editor.IsHeadOffice}" Margin="0,0,0,8" />
@@ -515,12 +470,12 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Code *" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="20" Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                                     MaxLength="50" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
                                         </StackPanel>
                                     </Grid>
                                     <CheckBox Content="Default counter" Margin="0,8,0,8"
@@ -1050,7 +1005,7 @@
                                     <StackPanel>
                                         <TextBlock Text="Search users" Style="{StaticResource FieldCaption}" />
                                         <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                                 MaxLength="50" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </DockPanel>
                                 <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
@@ -1068,11 +1023,11 @@
                                     <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
                                     <TextBlock Text="Username *" Style="{StaticResource FieldCaption}" />
                                     <TextBox Style="{StaticResource FieldBox}"
-                                             Text="{Binding Editor.Username, UpdateSourceTrigger=PropertyChanged}"
+                                             MaxLength="30" Text="{Binding Editor.Username, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding CanManageUsers}" />
                                     <TextBlock Text="Full Name *" Style="{StaticResource FieldCaption}" />
                                     <TextBox Style="{StaticResource FieldBox}"
-                                             Text="{Binding Editor.FullName, UpdateSourceTrigger=PropertyChanged}"
+                                             MaxLength="50" Text="{Binding Editor.FullName, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding CanManageUsers}" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1082,13 +1037,13 @@
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}"
+                                                     MaxLength="100" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}"
                                                      IsEnabled="{Binding CanManageUsers}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
                                             <TextBox Style="{StaticResource FieldBox}"
-                                                     Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}"
+                                                     MaxLength="12" behaviors:TextBoxLimits.DigitsOnly="True" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}"
                                                      IsEnabled="{Binding CanManageUsers}" />
                                         </StackPanel>
                                     </Grid>
@@ -1335,7 +1290,6 @@
                         </DockPanel>
                     </TabItem>
                     </TabControl>
-                </Grid>
             </DockPanel>
         </materialDesign:Card>
     </Grid>

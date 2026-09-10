@@ -147,11 +147,11 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Taxable" Opacity="0.7" />
+                        <TextBlock Grid.Row="0" Text="Taxable" Style="{StaticResource FieldCaption}" />
                         <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RefundSubTotal, StringFormat=N2}" />
-                        <TextBlock Grid.Row="1" Text="Discount" Opacity="0.7" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="1" Text="Discount" Style="{StaticResource FieldCaption}" Margin="0,4,0,0" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Text="{Binding RefundDiscount, StringFormat=N2}" />
-                        <TextBlock Grid.Row="2" Text="GST" Opacity="0.7" Margin="0,4,0,0" />
+                        <TextBlock Grid.Row="2" Text="GST" Style="{StaticResource FieldCaption}" Margin="0,4,0,0" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,4,0,0" Text="{Binding RefundTax, StringFormat=N2}" />
                         <Separator Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8" />
                         <TextBlock Grid.Row="4" Text="Refund Total" FontWeight="Bold" FontSize="16" />
@@ -159,13 +159,13 @@
                                    Text="{Binding RefundGrandTotal, StringFormat=N2}" />
                     </Grid>
 
-                    <TextBlock Text="Refund method" FontSize="11" Foreground="#616161" Margin="0,0,0,2" />
+                    <TextBlock Text="Refund method" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                     <ComboBox ItemsSource="{Binding RefundModes}"
                               SelectedItem="{Binding RefundMode}"
                               Style="{StaticResource MaterialDesignOutlinedComboBox}"
                               Margin="0,0,0,12" />
 
-                    <TextBlock Text="Remarks (optional)" FontSize="11" Foreground="#616161" Margin="0,0,0,2" />
+                    <TextBlock Text="Remarks (optional)" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                     <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,12" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44"

@@ -156,7 +156,7 @@ public class StockTransferTabViewModel : ObservableObject
         }
     }
 
-    private async Task RefreshHistoryAsync()
+    public async Task RefreshHistoryAsync()
     {
         try
         {

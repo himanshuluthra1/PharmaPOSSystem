@@ -230,11 +230,11 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Text="Taxable" Opacity="0.7" />
+                            <TextBlock Grid.Row="0" Text="Taxable" Style="{StaticResource FieldCaption}" />
                             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RefundSubTotal, StringFormat=N2}" />
-                            <TextBlock Grid.Row="1" Text="Discount reversal" Opacity="0.7" Margin="0,4,0,0" />
+                            <TextBlock Grid.Row="1" Text="Discount reversal" Style="{StaticResource FieldCaption}" Margin="0,4,0,0" />
                             <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,4,0,0" Text="{Binding RefundDiscount, StringFormat=N2}" />
-                            <TextBlock Grid.Row="2" Text="GST reversal" Opacity="0.7" Margin="0,4,0,0" />
+                            <TextBlock Grid.Row="2" Text="GST reversal" Style="{StaticResource FieldCaption}" Margin="0,4,0,0" />
                             <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,4,0,0" Text="{Binding RefundTax, StringFormat=N2}" />
                             <Separator Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8" />
                             <TextBlock Grid.Row="4" Text="Refund Total" FontWeight="Bold" FontSize="16" />

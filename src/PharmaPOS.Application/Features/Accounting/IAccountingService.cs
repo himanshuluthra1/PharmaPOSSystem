@@ -7,10 +7,15 @@ public interface IAccountingService
 {
     Task<AccountingSummaryDto> GetSummaryAsync(int? branchId, CancellationToken ct = default);
 
+    /// <param name="owedOnly">
+    /// When true, only parties with open dues are returned. With an empty
+    /// <paramref name="term"/>, every owed party is included (not a name-sorted slice).
+    /// </param>
     Task<List<PartyLedgerRowDto>> ListPartyLedgersAsync(
         PartyLedgerKind kind,
         string term,
         int? branchId,
+        bool owedOnly = false,
         CancellationToken ct = default);
 
     Task<List<PartyBillRowDto>> ListPartyBillsAsync(

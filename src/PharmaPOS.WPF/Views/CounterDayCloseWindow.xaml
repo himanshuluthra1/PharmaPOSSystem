@@ -34,19 +34,19 @@
                 <Run Text="{Binding SystemReport.OperatorName, Mode=OneWay}" />
             </TextBlock>
 
-            <DockPanel Margin="0,2"><TextBlock Text="Opened" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="Opened" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.OpenedAtLocal, StringFormat=dd-MMM HH:mm}" HorizontalAlignment="Right" /></DockPanel>
-            <DockPanel Margin="0,2"><TextBlock Text="Bills" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="Bills" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.BillCount}" HorizontalAlignment="Right" /></DockPanel>
-            <DockPanel Margin="0,2"><TextBlock Text="Opening float" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="Opening float" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.OpeningFloat, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-            <DockPanel Margin="0,2"><TextBlock Text="Cash collected" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="Cash collected" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.CashCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-            <DockPanel Margin="0,2"><TextBlock Text="Card" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="Card" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.CardCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-            <DockPanel Margin="0,2"><TextBlock Text="UPI" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="UPI" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.UpiCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
-            <DockPanel Margin="0,2"><TextBlock Text="Credit / unpaid" Opacity="0.7" />
+            <DockPanel Margin="0,2"><TextBlock Text="Credit / unpaid" Style="{StaticResource FieldCaption}" />
                 <TextBlock Text="{Binding SystemReport.CreditCollected, Converter={StaticResource Currency}}" HorizontalAlignment="Right" /></DockPanel>
 
             <Separator Margin="0,10" />
@@ -56,7 +56,7 @@
                            HorizontalAlignment="Right" FontWeight="SemiBold" />
             </DockPanel>
 
-            <TextBlock Text="Cash counted" FontSize="11" Opacity="0.7" Margin="0,10,0,2" />
+            <TextBlock Text="Cash counted" Style="{StaticResource FieldCaption}" Margin="0,10,0,2" />
             <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                      Text="{Binding CountedCash, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -66,7 +66,7 @@
                            FontSize="16" />
             </DockPanel>
 
-            <TextBlock Text="Notes (optional)" FontSize="11" Opacity="0.7" Margin="0,10,0,2" />
+            <TextBlock Text="Notes (optional)" Style="{StaticResource FieldCaption}" Margin="0,10,0,2" />
             <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
                      AcceptsReturn="True" Height="56" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Disabled"

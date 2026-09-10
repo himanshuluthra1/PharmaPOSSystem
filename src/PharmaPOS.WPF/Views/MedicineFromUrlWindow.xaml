@@ -21,11 +21,11 @@
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Text="Website" FontSize="11" Opacity="0.7" />
+                <TextBlock Text="Website" Style="{StaticResource FieldCaption}" />
                 <ComboBox x:Name="SourceCombo" Margin="0,2,0,10"
                           Style="{StaticResource MaterialDesignOutlinedComboBox}" />
 
-                <TextBlock Text="Medicine page URL" FontSize="11" Opacity="0.7" />
+                <TextBlock Text="Medicine page URL" Style="{StaticResource FieldCaption}" />
                 <TextBox x:Name="UrlBox" Margin="0,2,0,8"
                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
                          materialDesign:HintAssist.Hint="Paste product URL here"
@@ -37,13 +37,13 @@
 
                 <TextBlock Text="Review / edit before save" FontWeight="SemiBold" Margin="0,4,0,8" />
 
-                <TextBlock Text="Name *" FontSize="11" Opacity="0.7" />
+                <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
                 <TextBox x:Name="NameBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
 
-                <TextBlock Text="Generic / salt" FontSize="11" Opacity="0.7" />
+                <TextBlock Text="Generic / salt" Style="{StaticResource FieldCaption}" />
                 <TextBox x:Name="GenericBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
 
-                <TextBlock Text="Brand (company)" FontSize="11" Opacity="0.7" />
+                <TextBlock Text="Brand (company)" Style="{StaticResource FieldCaption}" />
                 <TextBox x:Name="BrandBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
 
                 <Grid Margin="0,0,0,8">
@@ -53,11 +53,11 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="MRP" FontSize="11" Opacity="0.7" />
+                        <TextBlock Text="MRP" Style="{StaticResource FieldCaption}" />
                         <TextBox x:Name="MrpBox" Margin="0,2,0,0" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="GST %" FontSize="11" Opacity="0.7" />
+                        <TextBlock Text="GST %" Style="{StaticResource FieldCaption}" />
                         <TextBox x:Name="GstBox" Text="12" Margin="0,2,0,0" Style="{StaticResource MaterialDesignOutlinedTextBox}" />
                     </StackPanel>
                 </Grid>

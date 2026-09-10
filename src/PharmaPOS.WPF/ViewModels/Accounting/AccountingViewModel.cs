@@ -12,7 +12,7 @@ namespace PharmaPOS.WPF.ViewModels.Accounting;
 /// <summary>Shell view model for the Accounting module.</summary>
 public class AccountingViewModel : ObservableObject
 {
-    private readonly IAccountingService _accounting;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly int? _branchId;
 
     private int _selectedTab;
@@ -27,7 +27,7 @@ public class AccountingViewModel : ObservableObject
         ICurrentUserService currentUser,
         IDialogService dialog)
     {
-        _accounting = accounting;
+        _scopeFactory = scopeFactory;
         _branchId = currentUser.CurrentUser?.BranchId;
 
         CanCreateVouchers = currentUser.HasAnyPermission(
@@ -36,7 +36,9 @@ public class AccountingViewModel : ObservableObject
             AppConstants.Permissions.AccountingJournal, AppConstants.Permissions.AccountingView,
             AppConstants.Permissions.AccountingManage);
 
-        PartyLedger = new PartyLedgerTabViewModel(accounting, currentUser, OnPartySelected);
+        PartyLedger = new PartyLedgerTabViewModel(
+            scopeFactory, currentUser, dialog, CanCreateVouchers, OnPartySelected);
+        PartyLedger.BillPaid += OnBillPaidAsync;
         CustomerDues = new CustomerDuesTabViewModel(
             accounting,
             scopeFactory,
@@ -98,6 +100,7 @@ public class AccountingViewModel : ObservableObject
             if (!SetProperty(ref _selectedTab, value)) return;
             _ = value switch
             {
+                0 => PartyLedger.RefreshAsync(),
                 1 => CustomerDues.RefreshAsync(),
                 3 => CashBook.RefreshAsync(),
                 4 => Journal.RefreshAsync(),
@@ -115,19 +118,21 @@ public class AccountingViewModel : ObservableObject
 
     private async Task OnVoucherSavedAsync()
     {
-        Summary = await _accounting.GetSummaryAsync(_branchId);
-        await PartyLedger.RefreshAsync();
-        await CustomerDues.RefreshAsync();
-        if (SelectedTab == 3) await CashBook.RefreshAsync();
+        await RefreshSummaryAsync().ConfigureAwait(true);
+        await PartyLedger.RefreshAsync().ConfigureAwait(true);
+        await CustomerDues.RefreshAsync().ConfigureAwait(true);
+        if (SelectedTab == 3) await CashBook.RefreshAsync().ConfigureAwait(true);
     }
+
+    private Task OnBillPaidAsync() => OnVoucherSavedAsync();
 
     private async Task OnDuesChangedAsync()
     {
         try
         {
-            Summary = await _accounting.GetSummaryAsync(_branchId);
-            await PartyLedger.RefreshAsync();
-            if (SelectedTab == 3) await CashBook.RefreshAsync();
+            await RefreshSummaryAsync().ConfigureAwait(true);
+            await PartyLedger.RefreshAsync().ConfigureAwait(true);
+            if (SelectedTab == 3) await CashBook.RefreshAsync().ConfigureAwait(true);
         }
         catch
         {
@@ -139,15 +144,30 @@ public class AccountingViewModel : ObservableObject
     {
         try
         {
-            Summary = await _accounting.GetSummaryAsync(_branchId);
-            await PartyLedger.RefreshAsync();
-            await CustomerDues.RefreshAsync();
-            if (SelectedTab == 3) await CashBook.RefreshAsync();
-            if (SelectedTab == 4) await Journal.RefreshAsync();
+            // Parties first so the default tab is never left empty while summary/dues load.
+            await PartyLedger.RefreshAsync().ConfigureAwait(true);
+            await RefreshSummaryAsync().ConfigureAwait(true);
+            await CustomerDues.RefreshAsync().ConfigureAwait(true);
+            if (SelectedTab == 3) await CashBook.RefreshAsync().ConfigureAwait(true);
+            if (SelectedTab == 4) await Journal.RefreshAsync().ConfigureAwait(true);
         }
         catch
         {
             // Startup/background refresh must not crash the UI thread.
+        }
+    }
+
+    private async Task RefreshSummaryAsync()
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var accounting = scope.ServiceProvider.GetRequiredService<IAccountingService>();
+            Summary = await accounting.GetSummaryAsync(_branchId).ConfigureAwait(true);
+        }
+        catch
+        {
+            // KPI strip is secondary to the party grid.
         }
     }
 }

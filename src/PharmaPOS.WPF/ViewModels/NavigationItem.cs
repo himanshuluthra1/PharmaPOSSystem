@@ -1,23 +1,38 @@
 using System.Collections.ObjectModel;
+using PharmaPOS.Application.Features.Reports;
 using PharmaPOS.WPF.Mvvm;
 
 namespace PharmaPOS.WPF.ViewModels;
 
-/// <summary>A single entry in the shell's navigation rail.</summary>
+/// <summary>A single entry in the shell's navigation rail / top menu.</summary>
 public class NavigationItem : ObservableObject
 {
-    public NavigationItem(string label, string iconKind, Type targetViewModel, string module)
+    public NavigationItem(
+        string label,
+        string iconKind,
+        Type targetViewModel,
+        string module,
+        int? tabIndex = null,
+        ReportKind? reportKind = null)
     {
         Label = label;
         IconKind = iconKind;
         TargetViewModel = targetViewModel;
         Module = module;
+        TabIndex = tabIndex;
+        ReportKind = reportKind;
     }
 
     public string Label { get; }
     public string IconKind { get; }
     public Type TargetViewModel { get; }
     public string Module { get; }
+
+    /// <summary>Optional tab index within a multi-tab module (Inventory, Masters, Accounting, Settings).</summary>
+    public int? TabIndex { get; }
+
+    /// <summary>Optional report kind when targeting the Reports module.</summary>
+    public ReportKind? ReportKind { get; }
 }
 
 /// <summary>

@@ -172,6 +172,16 @@ public class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Select a settings section by its TabControl index (used by top-menu submenus).</summary>
+    public void SelectTab(int tabIndex)
+    {
+        var section = Sections.FirstOrDefault(s => s.TabIndex == tabIndex);
+        if (section is not null)
+            SelectedSection = section;
+        else
+            SelectedTab = tabIndex;
+    }
+
     private async Task LoadSelectedTabAsync()
     {
         switch (SelectedTab)

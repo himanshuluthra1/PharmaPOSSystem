@@ -8,554 +8,275 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
     <UserControl.Resources>
-        <Style x:Key="FieldCaption" TargetType="TextBlock">
+        <Style x:Key="FormLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="#99000000" />
-            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
         </Style>
-        <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
-            <Setter Property="Margin" Value="0,0,0,8" />
+        <Style x:Key="SearchBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+            <Setter Property="Width" Value="280" />
+            <Setter Property="MinWidth" Value="200" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="materialDesign:TextFieldAssist.TextBoxViewMargin" Value="0" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
         </Style>
-        <Style x:Key="FieldCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
-            <Setter Property="Margin" Value="0,0,0,8" />
+        <Style x:Key="MasterListGrid" TargetType="DataGrid" BasedOn="{StaticResource PharmaDataGrid}">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="RowHeight" Value="28" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="4,1" />
         </Style>
+        <Style x:Key="GridActionButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="MinWidth" Value="52" />
+        </Style>
+        <DataTemplate x:Key="MasterActionsTemplate">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="Edit" Style="{StaticResource GridActionButton}"
+                        Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                        CommandParameter="{Binding}"
+                        IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                <Button Content="Delete" Style="{StaticResource GridActionButton}" Margin="0"
+                        Command="{Binding DataContext.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                        CommandParameter="{Binding}"
+                        IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
-    <Grid Margin="8">
-        <materialDesign:Card UniformCornerRadius="12" Padding="16"
-                             materialDesign:ElevationAssist.Elevation="Dp2">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Master Data" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
 
-                <TabControl SelectedIndex="{Binding SelectedTab}">
-                    <!-- SUPPLIERS -->
-                    <TabItem Header="Suppliers">
-                        <Grid DataContext="{Binding Suppliers}" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1.8*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
-                                            Style="{StaticResource MaterialDesignIconButton}" ToolTip="Refresh" Margin="4,0,0,0">
-                                        <materialDesign:PackIcon Kind="Refresh" />
-                                    </Button>
-                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                            <TextBlock Text="New" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <StackPanel>
-                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
-                                          MaxHeight="520" HeadersVisibility="Column">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120" />
-                                        <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="Auto" />
-                                        <DataGridTextColumn Header="GST number" Binding="{Binding GstNumber}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="GST Number" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Drug License" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.DrugLicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Contact Person" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ContactPerson, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
-                                    <Grid Margin="0,0,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="4,0">
-                                            <TextBlock Text="State" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Pincode" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Pincode, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </Grid>
-                                    <TextBlock Text="Payment Terms (days)" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.PaymentTermsDays, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
-                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                            <TextBlock Text="Save Supplier" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
-                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+    <Grid Margin="6">
+        <materialDesign:Card UniformCornerRadius="8" Padding="10"
+                             materialDesign:ElevationAssist.Elevation="Dp1">
+            <TabControl SelectedIndex="{Binding SelectedTab}" Style="{StaticResource HeaderlessTabControl}">
+
+                <TabItem Header="Suppliers">
+                    <DockPanel DataContext="{Binding Suppliers}" Margin="0,4,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="28" Padding="10,0" FontSize="11">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="New" Margin="4,0,0,0" VerticalAlignment="Center" />
                                 </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </TabItem>
+                            </Button>
+                            <TextBlock Text="Search :" Style="{StaticResource FormLabel}" VerticalAlignment="Center" />
+                            <TextBox Style="{StaticResource SearchBox}" MaxLength="50"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" FontSize="11"
+                                       Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </DockPanel>
+                        <DataGrid Style="{StaticResource MasterListGrid}"
+                                  ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="*" MinWidth="90" />
+                                <DataGridTextColumn Header="GST" Binding="{Binding GstNumber}" Width="*" MinWidth="110" />
+                                <DataGridTextColumn Header="City" Binding="{Binding City}" Width="*" MinWidth="80" />
+                                <DataGridTemplateColumn Header="Actions" Width="130" MinWidth="120"
+                                                        CellTemplate="{StaticResource MasterActionsTemplate}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
 
-                    <!-- CUSTOMERS -->
-                    <TabItem Header="Customers">
-                        <Grid DataContext="{Binding Customers}" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1.8*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}" Margin="4,0,0,0">
-                                        <materialDesign:PackIcon Kind="Refresh" />
-                                    </Button>
-                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                            <TextBlock Text="New" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <StackPanel>
-                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120" />
-                                        <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="Auto" />
-                                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Type" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}"
-                                              ItemsSource="{Binding CustomerTypes}" SelectedItem="{Binding Editor.Type}" />
-                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="GST Number" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Credit Limit" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.CreditLimit, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
-                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                            <TextBlock Text="Save Customer" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
-                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                <TabItem Header="Customers">
+                    <DockPanel DataContext="{Binding Customers}" Margin="0,4,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="28" Padding="10,0" FontSize="11">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="New" Margin="4,0,0,0" VerticalAlignment="Center" />
                                 </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </TabItem>
+                            </Button>
+                            <TextBlock Text="Search :" Style="{StaticResource FormLabel}" VerticalAlignment="Center" />
+                            <TextBox Style="{StaticResource SearchBox}" MaxLength="50"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" FontSize="11"
+                                       Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </DockPanel>
+                        <DataGrid Style="{StaticResource MasterListGrid}"
+                                  ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="*" MinWidth="90" />
+                                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="*" MinWidth="80" />
+                                <DataGridTextColumn Header="City" Binding="{Binding City}" Width="*" MinWidth="80" />
+                                <DataGridTemplateColumn Header="Actions" Width="130" MinWidth="120"
+                                                        CellTemplate="{StaticResource MasterActionsTemplate}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
 
-                    <!-- DOCTORS -->
-                    <TabItem Header="Doctors">
-                        <Grid DataContext="{Binding Doctors}" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1.8*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}" Margin="4,0,0,0">
-                                        <materialDesign:PackIcon Kind="Refresh" />
-                                    </Button>
-                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                            <TextBlock Text="New" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <StackPanel>
-                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120" />
-                                        <DataGridTextColumn Header="Specialization" Binding="{Binding Specialization}" Width="Auto" />
-                                        <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Qualification" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Qualification, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Specialization" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Specialization, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Registration No." Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.RegistrationNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Hospital" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Hospital, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
-                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                            <TextBlock Text="Save Doctor" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
-                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                <TabItem Header="Doctors">
+                    <DockPanel DataContext="{Binding Doctors}" Margin="0,4,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="28" Padding="10,0" FontSize="11">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="New" Margin="4,0,0,0" VerticalAlignment="Center" />
                                 </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </TabItem>
+                            </Button>
+                            <TextBlock Text="Search :" Style="{StaticResource FormLabel}" VerticalAlignment="Center" />
+                            <TextBox Style="{StaticResource SearchBox}" MaxLength="50"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" FontSize="11"
+                                       Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </DockPanel>
+                        <DataGrid Style="{StaticResource MasterListGrid}"
+                                  ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="Specialization" Binding="{Binding Specialization}" Width="*" MinWidth="110" />
+                                <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="*" MinWidth="90" />
+                                <DataGridTextColumn Header="Hospital" Binding="{Binding Hospital}" Width="*" MinWidth="100" />
+                                <DataGridTemplateColumn Header="Actions" Width="130" MinWidth="120"
+                                                        CellTemplate="{StaticResource MasterActionsTemplate}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
 
-                    <!-- MANUFACTURERS -->
-                    <TabItem Header="Manufacturers">
-                        <Grid DataContext="{Binding Manufacturers}" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1.8*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}" Margin="4,0,0,0">
-                                        <materialDesign:PackIcon Kind="Refresh" />
-                                    </Button>
-                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                            <TextBlock Text="New" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <StackPanel>
-                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120" />
-                                        <DataGridTextColumn Header="City" Binding="{Binding City}" Width="Auto" />
-                                        <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="GST Number" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="License Number" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.LicenseNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Contact Person" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ContactPerson, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Address, UpdateSourceTrigger=PropertyChanged}" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="City" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.City, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
-                                            <TextBlock Text="State" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.State, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </Grid>
-                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
-                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                            <TextBlock Text="Save Manufacturer" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
-                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                <TabItem Header="Manufacturers">
+                    <DockPanel DataContext="{Binding Manufacturers}" Margin="0,4,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="28" Padding="10,0" FontSize="11">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="New" Margin="4,0,0,0" VerticalAlignment="Center" />
                                 </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </TabItem>
+                            </Button>
+                            <TextBlock Text="Search :" Style="{StaticResource FormLabel}" VerticalAlignment="Center" />
+                            <TextBox Style="{StaticResource SearchBox}" MaxLength="50"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" FontSize="11"
+                                       Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </DockPanel>
+                        <DataGrid Style="{StaticResource MasterListGrid}"
+                                  ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="City" Binding="{Binding City}" Width="*" MinWidth="80" />
+                                <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="*" MinWidth="90" />
+                                <DataGridTextColumn Header="GST" Binding="{Binding GstNumber}" Width="*" MinWidth="110" />
+                                <DataGridTemplateColumn Header="Actions" Width="130" MinWidth="120"
+                                                        CellTemplate="{StaticResource MasterActionsTemplate}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
 
-                    <!-- EMPLOYEES -->
-                    <TabItem Header="Employees">
-                        <Grid DataContext="{Binding Employees}" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1.8*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}" Margin="4,0,0,0">
-                                        <materialDesign:PackIcon Kind="Refresh" />
-                                    </Button>
-                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                            <TextBlock Text="New" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <StackPanel>
-                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="520">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="Auto" />
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="120" />
-                                        <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBlock Text="Employee Code *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Code, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Designation" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Designation, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Phone, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Email" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Email, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Shift" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Shift, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Salary" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Salary, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Commission %" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.CommissionPercent, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
-                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                            <TextBlock Text="Save Employee" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
-                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                <TabItem Header="Employees">
+                    <DockPanel DataContext="{Binding Employees}" Margin="0,4,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="28" Padding="10,0" FontSize="11">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="New" Margin="4,0,0,0" VerticalAlignment="Center" />
                                 </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </TabItem>
+                            </Button>
+                            <TextBlock Text="Search :" Style="{StaticResource FormLabel}" VerticalAlignment="Center" />
+                            <TextBox Style="{StaticResource SearchBox}" MaxLength="50"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" FontSize="11"
+                                       Margin="12,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </DockPanel>
+                        <DataGrid Style="{StaticResource MasterListGrid}"
+                                  ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Code" Binding="{Binding Code}" Width="*" MinWidth="70" />
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="*" MinWidth="100" />
+                                <DataGridTextColumn Header="Phone" Binding="{Binding Phone}" Width="*" MinWidth="90" />
+                                <DataGridTemplateColumn Header="Actions" Width="130" MinWidth="120"
+                                                        CellTemplate="{StaticResource MasterActionsTemplate}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
 
-                    <!-- MEDICINES -->
-                    <TabItem Header="Medicines">
-                        <Grid DataContext="{Binding Medicines}" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="1.2*" />
-                                <ColumnDefinition Width="1.8*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <DockPanel Margin="0,0,0,8">
-                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}" Style="{StaticResource MaterialDesignIconButton}" Margin="4,0,0,0">
-                                        <materialDesign:PackIcon Kind="Refresh" />
-                                    </Button>
-                                    <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
-                                            <TextBlock Text="New" Margin="4,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <StackPanel>
-                                        <TextBlock Text="Search" Style="{StaticResource FieldCaption}" />
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </DockPanel>
-                                <TextBlock Text="{Binding SearchHint}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,6"
+                <TabItem Header="Medicines">
+                    <DockPanel DataContext="{Binding Medicines}" Margin="0,4,0,0">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                            <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="28" Padding="10,0" FontSize="11">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="New" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Search :" Style="{StaticResource FormLabel}" VerticalAlignment="Center" />
+                                <TextBox Style="{StaticResource SearchBox}" MaxLength="50"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="{Binding SearchHint}" FontSize="11" Opacity="0.65" Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
                                            Visibility="{Binding SearchHint, Converter={StaticResource StringToVisibility}}" />
-                                <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
-                                          AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" MaxHeight="500">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="150" />
-                                        <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="Auto" />
-                                        <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" Width="Auto" />
-                                        <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="Auto" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" FontSize="11"
+                                           Margin="12,0,0,0" VerticalAlignment="Center"
+                                           Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
                             </StackPanel>
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                                <StackPanel Visibility="{Binding ShowEditor, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="{Binding EditorTitle}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
-                                    <TextBlock Text="Name *" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Name, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Generic / Salt" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GenericName, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Brand" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Brand, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="Manufacturer" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}"
-                                              ItemsSource="{Binding Manufacturers}"
-                                              SelectedItem="{Binding SelectedManufacturer}"
-                                              DisplayMemberPath="Name" />
-                                    <TextBlock Text="Barcode" Style="{StaticResource FieldCaption}" />
-                                    <DockPanel Margin="0,0,0,8">
-                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
-                                            <Button Command="{Binding GenerateBarcodeCommand}"
-                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                                    ToolTip="Generate barcode" Padding="8,4" Margin="0,0,4,0">
-                                                <materialDesign:PackIcon Kind="Barcode" Width="18" Height="18" />
-                                            </Button>
-                                            <Button Command="{Binding PreviewBarcodeCommand}"
-                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                                    ToolTip="Preview / print label" Padding="8,4" Margin="0,0,4,0">
-                                                <materialDesign:PackIcon Kind="Printer" Width="18" Height="18" />
-                                            </Button>
-                                            <Button Command="{Binding ScanBarcodeCameraCommand}"
-                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                                    ToolTip="Scan with camera" Padding="8,4" Margin="0,0,4,0">
-                                                <materialDesign:PackIcon Kind="Camera" Width="18" Height="18" />
-                                            </Button>
-                                            <Button Command="{Binding ScanBarcodeImageCommand}"
-                                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                                    ToolTip="Decode from image file" Padding="8,4">
-                                                <materialDesign:PackIcon Kind="Image" Width="18" Height="18" />
-                                            </Button>
-                                        </StackPanel>
-                                        <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                                 Text="{Binding Editor.Barcode, UpdateSourceTrigger=PropertyChanged}" />
-                                    </DockPanel>
-                                    <TextBlock Text="HSN Code" Style="{StaticResource FieldCaption}" />
-                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.HsnCode, UpdateSourceTrigger=PropertyChanged}" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Purchase Price" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.PurchasePrice, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="4,0">
-                                            <TextBlock Text="MRP" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.Mrp, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Selling Price" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.SellingPrice, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="GST %" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.GstPercent, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="4,0">
-                                            <TextBlock Text="Default Disc %" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.DefaultDiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="4,0,0,0">
-                                            <TextBlock Text="Reorder Level" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.ReorderLevel, UpdateSourceTrigger=PropertyChanged}" />
-                                        </StackPanel>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,4,0">
-                                            <TextBlock Text="Rack" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.RackNumber, UpdateSourceTrigger=PropertyChanged}"
-                                                     materialDesign:HintAssist.Hint="e.g. A3" />
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="4,0,0,0">
-                                            <TextBlock Text="Bin" Style="{StaticResource FieldCaption}" />
-                                            <TextBox Style="{StaticResource FieldBox}" Text="{Binding Editor.BinNumber, UpdateSourceTrigger=PropertyChanged}"
-                                                     materialDesign:HintAssist.Hint="e.g. 12" />
-                                        </StackPanel>
-                                    </Grid>
-                                    <CheckBox Content="Prescription Required" IsChecked="{Binding Editor.PrescriptionRequired}" Margin="0,0,0,8" />
-                                    <TextBlock Text="Schedule" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,8"
-                                              ItemsSource="{Binding ScheduleDrugTypes}"
-                                              SelectedItem="{Binding Editor.ScheduleType}" />
-                                    <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}" Margin="0,0,0,12"
-                                              ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}" />
-                                    <Button Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" HorizontalAlignment="Left">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
-                                            <TextBlock Text="Save Medicine" Margin="6,0,0,0" />
-                                        </StackPanel>
-                                    </Button>
-                                    <TextBlock Text="{Binding StatusMessage}" Foreground="#2E7D32" Margin="0,8,0,0"
-                                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Grid>
-                    </TabItem>
-                </TabControl>
-            </DockPanel>
+                        </DockPanel>
+                        <DataGrid Style="{StaticResource MasterListGrid}"
+                                  ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" MinWidth="140" />
+                                <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="100" />
+                                <DataGridTextColumn Header="Rack/Bin" Binding="{Binding LocationLabel}" Width="*" MinWidth="70" />
+                                <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
+                                <DataGridTemplateColumn Header="Actions" Width="130" MinWidth="120"
+                                                        CellTemplate="{StaticResource MasterActionsTemplate}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+            </TabControl>
         </materialDesign:Card>
     </Grid>
 </UserControl>

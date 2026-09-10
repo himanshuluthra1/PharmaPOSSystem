@@ -5,11 +5,11 @@ namespace PharmaPOS.Application.Features.Masters;
 
 // ── List rows (grid) ──────────────────────────────────────────────────────────
 
-public record SupplierListDto(int Id, string Name, string? Phone, string? GstNumber, EntityStatus Status);
-public record CustomerListDto(int Id, string Name, string? Phone, CustomerType Type, EntityStatus Status);
-public record DoctorListDto(int Id, string Name, string? Specialization, string? Phone, EntityStatus Status);
-public record ManufacturerListDto(int Id, string Name, string? City, string? Phone, EntityStatus Status);
-public record EmployeeListDto(int Id, string Code, string Name, string? Designation, EntityStatus Status);
+public record SupplierListDto(int Id, string Name, string? Phone, string? GstNumber, string? City, EntityStatus Status);
+public record CustomerListDto(int Id, string Name, string? Phone, CustomerType Type, string? City, EntityStatus Status);
+public record DoctorListDto(int Id, string Name, string? Specialization, string? Phone, string? Hospital, EntityStatus Status);
+public record ManufacturerListDto(int Id, string Name, string? City, string? Phone, string? GstNumber, EntityStatus Status);
+public record EmployeeListDto(int Id, string Code, string Name, string? Designation, string? Phone, EntityStatus Status);
 public record MedicineListDto(
     int Id,
     string Name,

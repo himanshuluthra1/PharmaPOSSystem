@@ -108,7 +108,7 @@ public sealed class CustomerDuesTabViewModel : ObservableObject
         try
         {
             var rows = await _accounting.ListPartyLedgersAsync(
-                PartyLedgerKind.Customer, SearchText, _branchId);
+                PartyLedgerKind.Customer, SearchText, _branchId, owedOnly: true);
 
             var owed = rows.Where(r => r.OutstandingBalance > 0.009m).ToList();
             Dues.Clear();

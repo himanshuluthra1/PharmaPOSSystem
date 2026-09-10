@@ -16,11 +16,13 @@ public class MastersService : IMastersService
 
     private readonly IUnitOfWork _uow;
     private readonly IReportingSyncService _reportingSync;
+    private readonly IDateTimeProvider _clock;
 
-    public MastersService(IUnitOfWork uow, IReportingSyncService reportingSync)
+    public MastersService(IUnitOfWork uow, IReportingSyncService reportingSync, IDateTimeProvider clock)
     {
         _uow = uow;
         _reportingSync = reportingSync;
+        _clock = clock;
     }
 
     #region Suppliers
@@ -34,7 +36,7 @@ public class MastersService : IMastersService
         if (normalized.Length >= 1)
             q = q.WhereSupplierMatches(normalized);
         return await q.OrderBy(s => s.Name).Take(DefaultTake)
-            .Select(s => new SupplierListDto(s.Id, s.Name, s.Phone, s.GstNumber, s.Status))
+            .Select(s => new SupplierListDto(s.Id, s.Name, s.Phone, s.GstNumber, s.City, s.Status))
             .ToListAsync(ct);
     }
 
@@ -67,6 +69,19 @@ public class MastersService : IMastersService
         await _uow.SaveChangesAsync(ct);
         await _reportingSync.EnqueueSupplierAsync(created.Id, ct);
         return Result.Success(created.Id);
+    }
+
+    public async Task<Result> DeleteSupplierAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _uow.Repository<Supplier>().GetByIdAsync(id, ct);
+        if (entity is null) return Result.Failure("Supplier not found.");
+
+        entity.IsDeleted = true;
+        entity.DeletedAtUtc = _clock.UtcNow;
+        _uow.Repository<Supplier>().Update(entity);
+        await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueSupplierAsync(entity.Id, ct);
+        return Result.Success();
     }
 
     private static SupplierDetailDto MapSupplier(Supplier s) => new()
@@ -105,7 +120,7 @@ public class MastersService : IMastersService
         if (term.Length >= 1)
             q = q.Where(c => c.Name.Contains(term) || (c.Phone != null && c.Phone.Contains(term)));
         return await q.OrderBy(c => c.Name).Take(DefaultTake)
-            .Select(c => new CustomerListDto(c.Id, c.Name, c.Phone, c.Type, c.Status))
+            .Select(c => new CustomerListDto(c.Id, c.Name, c.Phone, c.Type, c.City, c.Status))
             .ToListAsync(ct);
     }
 
@@ -140,6 +155,19 @@ public class MastersService : IMastersService
         return Result.Success(created.Id);
     }
 
+    public async Task<Result> DeleteCustomerAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _uow.Repository<Customer>().GetByIdAsync(id, ct);
+        if (entity is null) return Result.Failure("Customer not found.");
+
+        entity.IsDeleted = true;
+        entity.DeletedAtUtc = _clock.UtcNow;
+        _uow.Repository<Customer>().Update(entity);
+        await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueCustomerAsync(entity.Id, ct);
+        return Result.Success();
+    }
+
     private static CustomerDetailDto MapCustomer(Customer c) => new()
     {
         Id = c.Id, Name = c.Name, Type = c.Type, Phone = c.Phone, Email = c.Email,
@@ -170,7 +198,7 @@ public class MastersService : IMastersService
         term = (term ?? string.Empty).Trim();
         if (term.Length >= 1) q = q.Where(d => d.Name.Contains(term));
         return await q.OrderBy(d => d.Name).Take(DefaultTake)
-            .Select(d => new DoctorListDto(d.Id, d.Name, d.Specialization, d.Phone, d.Status))
+            .Select(d => new DoctorListDto(d.Id, d.Name, d.Specialization, d.Phone, d.Hospital, d.Status))
             .ToListAsync(ct);
     }
 
@@ -203,6 +231,18 @@ public class MastersService : IMastersService
         return Result.Success(created.Id);
     }
 
+    public async Task<Result> DeleteDoctorAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _uow.Repository<Doctor>().GetByIdAsync(id, ct);
+        if (entity is null) return Result.Failure("Doctor not found.");
+
+        entity.IsDeleted = true;
+        entity.DeletedAtUtc = _clock.UtcNow;
+        _uow.Repository<Doctor>().Update(entity);
+        await _uow.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
     private static DoctorDetailDto MapDoctor(Doctor d) => new()
     {
         Id = d.Id, Name = d.Name, Qualification = d.Qualification,
@@ -232,7 +272,7 @@ public class MastersService : IMastersService
         term = (term ?? string.Empty).Trim();
         if (term.Length >= 1) q = q.Where(m => m.Name.Contains(term));
         return await q.OrderBy(m => m.Name).Take(DefaultTake)
-            .Select(m => new ManufacturerListDto(m.Id, m.Name, m.City, m.Phone, m.Status))
+            .Select(m => new ManufacturerListDto(m.Id, m.Name, m.City, m.Phone, m.GstNumber, m.Status))
             .ToListAsync(ct);
     }
 
@@ -263,6 +303,18 @@ public class MastersService : IMastersService
         await _uow.Repository<Manufacturer>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
         return Result.Success(created.Id);
+    }
+
+    public async Task<Result> DeleteManufacturerAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _uow.Repository<Manufacturer>().GetByIdAsync(id, ct);
+        if (entity is null) return Result.Failure("Manufacturer not found.");
+
+        entity.IsDeleted = true;
+        entity.DeletedAtUtc = _clock.UtcNow;
+        _uow.Repository<Manufacturer>().Update(entity);
+        await _uow.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     private static ManufacturerDetailDto MapManufacturer(Manufacturer m) => new()
@@ -299,7 +351,7 @@ public class MastersService : IMastersService
         if (term.Length >= 1)
             q = q.Where(e => e.Name.Contains(term) || e.Code.Contains(term));
         return await q.OrderBy(e => e.Name).Take(DefaultTake)
-            .Select(e => new EmployeeListDto(e.Id, e.Code, e.Name, e.Designation, e.Status))
+            .Select(e => new EmployeeListDto(e.Id, e.Code, e.Name, e.Designation, e.Phone, e.Status))
             .ToListAsync(ct);
     }
 
@@ -332,6 +384,18 @@ public class MastersService : IMastersService
         await _uow.Repository<Employee>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
         return Result.Success(created.Id);
+    }
+
+    public async Task<Result> DeleteEmployeeAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _uow.Repository<Employee>().GetByIdAsync(id, ct);
+        if (entity is null) return Result.Failure("Employee not found.");
+
+        entity.IsDeleted = true;
+        entity.DeletedAtUtc = _clock.UtcNow;
+        _uow.Repository<Employee>().Update(entity);
+        await _uow.SaveChangesAsync(ct);
+        return Result.Success();
     }
 
     private static EmployeeDetailDto MapEmployee(Employee e) => new()
@@ -454,6 +518,19 @@ public class MastersService : IMastersService
         await _uow.SaveChangesAsync(ct);
         await _reportingSync.EnqueueMedicineAsync(created.Id, ct);
         return Result.Success(created.Id);
+    }
+
+    public async Task<Result> DeleteMedicineAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _uow.Repository<Medicine>().GetByIdAsync(id, ct);
+        if (entity is null) return Result.Failure("Medicine not found.");
+
+        entity.IsDeleted = true;
+        entity.DeletedAtUtc = _clock.UtcNow;
+        _uow.Repository<Medicine>().Update(entity);
+        await _uow.SaveChangesAsync(ct);
+        await _reportingSync.EnqueueMedicineAsync(entity.Id, ct);
+        return Result.Success();
     }
 
     private async Task SyncEmptyBatchRacksAsync(int medicineId, string? rackNumber, CancellationToken ct)

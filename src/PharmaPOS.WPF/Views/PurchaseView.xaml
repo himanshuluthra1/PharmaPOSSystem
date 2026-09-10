@@ -9,10 +9,8 @@
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              PreviewKeyDown="PurchaseView_PreviewKeyDown">
     <UserControl.Resources>
-        <Style x:Key="PurchaseFieldCaption" TargetType="TextBlock">
+        <Style x:Key="PurchaseFieldCaption" TargetType="TextBlock" BasedOn="{StaticResource PharmaFieldCaption}">
             <Setter Property="FontSize" Value="10" />
-            <Setter Property="Foreground" Value="#616161" />
-            <Setter Property="Margin" Value="0,0,0,2" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
         <Style x:Key="PurchaseField" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">

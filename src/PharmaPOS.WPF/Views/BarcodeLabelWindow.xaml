@@ -16,14 +16,14 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                    <TextBlock Text="How many barcodes to print" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
+                    <TextBlock Text="How many barcodes to print" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                     <TextBox x:Name="QuantityBox"
                              Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="12"
                              materialDesign:HintAssist.IsFloating="False" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                    <TextBlock Text="How many on 1 A4 page" FontSize="11" Opacity="0.7" Margin="0,0,0,2" />
+                    <TextBlock Text="How many on 1 A4 page" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                     <TextBox x:Name="PerPageBox"
                              Style="{StaticResource MaterialDesignOutlinedTextBox}"
                              Text="12"

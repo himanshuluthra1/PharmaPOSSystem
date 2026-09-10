@@ -25,7 +25,7 @@
                    Text="{Binding BalanceDue, StringFormat=Balance due: ₹{0:N2}}" />
 
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
-            <TextBlock Text="Reason" Opacity="0.7" FontSize="11" Margin="0,0,0,4" />
+            <TextBlock Text="Reason" Style="{StaticResource FieldCaption}" Margin="0,0,0,4" />
             <ComboBox ItemsSource="{Binding ReasonChoices}"
                       SelectedItem="{Binding SelectedReason}"
                       DisplayMemberPath="Label"
@@ -34,7 +34,7 @@
 
         <StackPanel Grid.Row="3" Margin="0,0,0,10"
                     Visibility="{Binding ShowReturnPicker, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="Purchase return (supplier credit)" Opacity="0.7" FontSize="11" Margin="0,0,0,4" />
+            <TextBlock Text="Purchase return (supplier credit)" Style="{StaticResource FieldCaption}" Margin="0,0,0,4" />
             <ComboBox ItemsSource="{Binding OpenReturns}"
                       SelectedItem="{Binding SelectedReturn}"
                       DisplayMemberPath="DisplayLabel"

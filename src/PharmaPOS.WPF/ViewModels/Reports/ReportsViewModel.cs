@@ -185,6 +185,14 @@ public class ReportsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Select a report by kind (used by top-menu submenus).</summary>
+    public void SelectReport(ReportKind kind)
+    {
+        var option = ReportOptions.FirstOrDefault(o => o.Kind == kind);
+        if (option is not null)
+            SelectedReport = option;
+    }
+
     public string SelectedReportDescription => SelectedReport.Description;
 
     public bool UsesDateRange => SelectedReport.Kind is not (

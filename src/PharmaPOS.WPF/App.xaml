@@ -32,10 +32,23 @@
             <SolidColorBrush x:Key="GridSelectionBrush" Color="#87CEEB" />
             <SolidColorBrush x:Key="GridSelectionForegroundBrush" Color="#1A1A1A" />
 
+            <!-- App-wide DataGrid palette: bold teal headers + light readable row tones. -->
+            <SolidColorBrush x:Key="GridHeaderBackgroundBrush" Color="#00695C" />
+            <SolidColorBrush x:Key="GridHeaderForegroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="GridHeaderBorderBrush" Color="#004D40" />
+            <SolidColorBrush x:Key="GridRowBackgroundBrush" Color="#E0F2F1" />
+            <SolidColorBrush x:Key="GridAlternatingRowBackgroundBrush" Color="#FFF8E1" />
+            <SolidColorBrush x:Key="GridLineBrush" Color="#B2DFDB" />
+
             <!-- Keyboard-focus highlight (distinct from selection blue) - used app-wide. -->
             <SolidColorBrush x:Key="FocusHighlightBrush" Color="#FFF3E0" />
             <SolidColorBrush x:Key="FocusBorderBrush" Color="#EF6C00" />
             <SolidColorBrush x:Key="FocusGridCellBrush" Color="#FFE0B2" />
+
+            <!-- Light yellow fill for all text inputs. -->
+            <SolidColorBrush x:Key="TextBoxBackgroundBrush" Color="#FFF9C4" />
+            <SolidColorBrush x:Key="TextBoxFocusBackgroundBrush" Color="#FFF59D" />
+            <SolidColorBrush x:Key="FieldCaptionForegroundBrush" Color="#212121" />
 
             <Style x:Key="FocusVisual">
                 <Setter Property="Control.Template">
@@ -51,7 +64,40 @@
                 </Setter>
             </Style>
 
-            <!-- Compact outlined inputs - floating labels disabled so height matches text. -->
+            <!-- Field labels above text boxes (Customer name, Phone, etc.). -->
+            <Style x:Key="PharmaFieldCaption" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
+                <Setter Property="Margin" Value="0,0,0,2" />
+                <Setter Property="Opacity" Value="1" />
+            </Style>
+            <Style x:Key="FieldCaption" TargetType="TextBlock" BasedOn="{StaticResource PharmaFieldCaption}" />
+
+            <!-- Content-only TabControl: headers come from the top submenu / green app bar. -->
+            <Style x:Key="HeaderlessTabControl" TargetType="TabControl">
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabControl">
+                            <ContentPresenter ContentSource="SelectedContent"
+                                              VerticalAlignment="Stretch"
+                                              HorizontalAlignment="Stretch" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemContainerStyle">
+                    <Setter.Value>
+                        <Style TargetType="TabItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style x:Key="MaterialDesignOutlinedTextBox" TargetType="TextBox"
                    BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
                 <Setter Property="Padding" Value="8,2" />
@@ -60,16 +106,24 @@
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="MaxHeight" Value="30" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
-                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
+                <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
                 <Setter Property="materialDesign:TextFieldAssist.TextBoxViewMargin" Value="0" />
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                        <Setter Property="Background" Value="{StaticResource FocusHighlightBrush}" />
+                        <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
                         <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
                         <Setter Property="BorderThickness" Value="2" />
                         <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource FocusBorderBrush}" />
+                    </Trigger>
+                    <Trigger Property="IsReadOnly" Value="True">
+                        <Setter Property="Background" Value="#FFFDE7" />
+                    </Trigger>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Background" Value="#FFFDE7" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
@@ -82,12 +136,14 @@
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="MaxHeight" Value="30" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
-                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
+                <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                        <Setter Property="Background" Value="{StaticResource FocusHighlightBrush}" />
+                        <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
                         <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
                         <Setter Property="BorderThickness" Value="2" />
                         <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource FocusBorderBrush}" />
@@ -103,12 +159,15 @@
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="MaxHeight" Value="30" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
-                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.45" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
+                <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
                 <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
                 <Setter Property="materialDesign:TransitionAssist.DisableTransitions" Value="True" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                        <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
                         <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
                         <Setter Property="BorderThickness" Value="2" />
                     </Trigger>
@@ -127,10 +186,13 @@
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="MaxHeight" Value="30" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
+                <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                        <Setter Property="Background" Value="{StaticResource FocusHighlightBrush}" />
+                        <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
                         <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
                         <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource FocusBorderBrush}" />
                     </Trigger>
@@ -138,18 +200,80 @@
             </Style>
 
             <!-- Compact grids app-wide with sky-blue selected row (same feel as bill dropdown). -->
-            <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+            <Style x:Key="PharmaDataGridColumnHeader" TargetType="DataGridColumnHeader"
+                   BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                <Setter Property="Height" Value="34" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Background" Value="{StaticResource GridHeaderBackgroundBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource GridHeaderForegroundBrush}" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="BorderBrush" Value="{StaticResource GridHeaderBorderBrush}" />
+                <Setter Property="BorderThickness" Value="0,0,1,1" />
+                <Setter Property="ToolTip" Value="{Binding Content, RelativeSource={RelativeSource Self}}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="DataGridColumnHeader">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  RecognizesAccessKey="True"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ContentTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                     MaxHeight="22">
+                                <TextBlock Text="{Binding}"
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource GridHeaderForegroundBrush}"
+                                           TextWrapping="NoWrap"
+                                           TextTrimming="None" />
+                            </Viewbox>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource PharmaDataGridColumnHeader}" />
+
+            <Style x:Key="PharmaDataGridRow" TargetType="DataGridRow"
+                   BasedOn="{StaticResource MaterialDesignDataGridRow}">
                 <Style.Triggers>
                     <Trigger Property="IsSelected" Value="True">
                         <Setter Property="Background" Value="{StaticResource GridSelectionBrush}" />
                         <Setter Property="Foreground" Value="{StaticResource GridSelectionForegroundBrush}" />
                     </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="#B2DFDB" />
+                    </Trigger>
+                    <MultiTrigger>
+                        <MultiTrigger.Conditions>
+                            <Condition Property="IsMouseOver" Value="True" />
+                            <Condition Property="IsSelected" Value="True" />
+                        </MultiTrigger.Conditions>
+                        <Setter Property="Background" Value="{StaticResource GridSelectionBrush}" />
+                    </MultiTrigger>
                 </Style.Triggers>
             </Style>
 
+            <Style TargetType="DataGridRow" BasedOn="{StaticResource PharmaDataGridRow}" />
+
             <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="BorderBrush" Value="#BDBDBD" />
+                <Setter Property="BorderBrush" Value="{StaticResource GridLineBrush}" />
                 <Style.Triggers>
                     <!-- Row/cell selection stays subtle; only the focused cell gets the strong amber. -->
                     <Trigger Property="IsSelected" Value="True">
@@ -171,44 +295,24 @@
                 </Style.Triggers>
             </Style>
 
-            <Style TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
+            <Style x:Key="PharmaDataGrid" TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
                 <Setter Property="RowHeight" Value="28" />
                 <Setter Property="ColumnHeaderHeight" Value="34" />
                 <Setter Property="GridLinesVisibility" Value="All" />
-                <Setter Property="HorizontalGridLinesBrush" Value="#BDBDBD" />
-                <Setter Property="VerticalGridLinesBrush" Value="#BDBDBD" />
-                <Setter Property="BorderBrush" Value="#9E9E9E" />
+                <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource GridLineBrush}" />
+                <Setter Property="VerticalGridLinesBrush" Value="{StaticResource GridLineBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource GridHeaderBackgroundBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Background" Value="{StaticResource GridRowBackgroundBrush}" />
+                <Setter Property="RowBackground" Value="{StaticResource GridRowBackgroundBrush}" />
+                <Setter Property="AlternatingRowBackground" Value="{StaticResource GridAlternatingRowBackgroundBrush}" />
+                <Setter Property="ColumnHeaderStyle" Value="{StaticResource PharmaDataGridColumnHeader}" />
+                <Setter Property="RowStyle" Value="{StaticResource PharmaDataGridRow}" />
                 <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="6,2" />
-                <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="4,4" />
+                <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="8,6" />
             </Style>
 
-            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
-                <Setter Property="Height" Value="34" />
-                <Setter Property="MinHeight" Value="34" />
-                <Setter Property="Padding" Value="4,4" />
-                <Setter Property="VerticalContentAlignment" Value="Center" />
-                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="FontSize" Value="12" />
-                <Setter Property="BorderBrush" Value="#BDBDBD" />
-                <Setter Property="BorderThickness" Value="0,0,1,1" />
-                <Setter Property="ToolTip" Value="{Binding Content, RelativeSource={RelativeSource Self}}" />
-                <Setter Property="ContentTemplate">
-                    <Setter.Value>
-                        <DataTemplate>
-                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly"
-                                     HorizontalAlignment="Stretch" VerticalAlignment="Center"
-                                     MaxHeight="22">
-                                <TextBlock Text="{Binding}"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="NoWrap"
-                                           TextTrimming="None" />
-                            </Viewbox>
-                        </DataTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
+            <Style TargetType="DataGrid" BasedOn="{StaticResource PharmaDataGrid}" />
 
             <!-- DataGridTextColumn defaults to TwoWay; read-only columns must be OneWay. -->
             <Style TargetType="{x:Type DataGridTextColumn}">

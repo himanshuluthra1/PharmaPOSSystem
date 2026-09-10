@@ -75,6 +75,12 @@ public class BillPaymentAllocationDto
     public decimal Amount { get; set; }
 }
 
+public class BillReceiptAllocationDto
+{
+    public int SaleId { get; set; }
+    public decimal Amount { get; set; }
+}
+
 public class CreatePaymentRequest
 {
     public int SupplierId { get; set; }
@@ -94,6 +100,8 @@ public class CreateReceiptRequest
     public int CashOrBankAccountId { get; set; }
     public DateTime EntryDate { get; set; } = DateTime.Today;
     public string? Narration { get; set; }
+    public PaymentAllocationMode AllocationMode { get; set; } = PaymentAllocationMode.Fifo;
+    public List<BillReceiptAllocationDto> BillAllocations { get; set; } = new();
 }
 
 public class CreateExpenseRequest

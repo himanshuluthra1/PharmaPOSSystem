@@ -34,23 +34,23 @@
                         Style="{StaticResource MaterialDesignRaisedButton}" Padding="20,8" />
                 <UniformGrid Columns="5" HorizontalAlignment="Left">
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Grand Total" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Grand Total" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding GrandTotal, StringFormat=N2}" FontSize="18" FontWeight="Bold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Cash Paid" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Cash Paid" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding CashPaid, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Return Credit" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Return Credit" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding ReturnCreditApplied, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,24,0">
-                        <TextBlock Text="Net Due" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Net Due" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding BalanceDue, StringFormat=N2}" FontSize="18" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel>
-                        <TextBlock Text="Due Reason" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Due Reason" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding DueReason}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
                     </StackPanel>
                 </UniformGrid>
@@ -66,19 +66,19 @@
             <materialDesign:Card Grid.Row="0" Padding="12" Margin="0,0,0,12" UniformCornerRadius="8">
                 <UniformGrid Columns="4">
                     <StackPanel Margin="0,0,12,0">
-                        <TextBlock Text="System Invoice #" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="System Invoice #" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding InvoiceNumber}" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,12,0">
-                        <TextBlock Text="Supplier Invoice #" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Supplier Invoice #" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding SupplierInvoiceNumber}" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel Margin="0,0,12,0">
-                        <TextBlock Text="Supplier" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Supplier" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding SupplierName}" FontWeight="SemiBold" TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel>
-                        <TextBlock Text="Phone" Opacity="0.6" FontSize="11" />
+                        <TextBlock Text="Phone" Style="{StaticResource FieldCaption}" />
                         <TextBlock Text="{Binding SupplierPhone}" FontWeight="SemiBold" />
                     </StackPanel>
                 </UniformGrid>

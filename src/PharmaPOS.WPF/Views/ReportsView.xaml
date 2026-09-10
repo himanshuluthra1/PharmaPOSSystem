@@ -6,301 +6,291 @@
              d:DataContext="{d:DesignInstance Type=repVm:ReportsViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
-             SizeChanged="UserControl_SizeChanged">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
     <UserControl.Resources>
         <Style x:Key="KpiCard" TargetType="materialDesign:Card">
-            <Setter Property="UniformCornerRadius" Value="10" />
-            <Setter Property="Padding" Value="14" />
-            <Setter Property="Margin" Value="4" />
-            <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp1" />
+            <Setter Property="UniformCornerRadius" Value="6" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp0" />
+            <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Background}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesign.Brush.Foreground}" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style x:Key="CompactToolbarButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="CompactRaisedButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+            <Setter Property="Padding" Value="10,2" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </UserControl.Resources>
 
-    <Grid Margin="8">
-        <materialDesign:Card UniformCornerRadius="12" Padding="16"
-                             materialDesign:ElevationAssist.Elevation="Dp2">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="200" MinWidth="140" />
-                    <ColumnDefinition Width="*" MinWidth="280" />
-                </Grid.ColumnDefinitions>
+    <Grid Margin="6">
+        <materialDesign:Card UniformCornerRadius="8" Padding="10,8"
+                             materialDesign:ElevationAssist.Elevation="Dp1">
+            <DockPanel>
+                <!-- Compact toolbar: description + dates + actions on minimal rows -->
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock Text="{Binding SelectedReportDescription}"
+                               FontSize="11" Opacity="0.55" Margin="0,0,0,4"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="Double-click a row (or press Enter) to open the invoice."
+                               FontSize="10" Opacity="0.45" Margin="0,0,0,4"
+                               Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="Double-click a row (or press Enter) to open the purchase invoice."
+                               FontSize="10" Opacity="0.45" Margin="0,0,0,4"
+                               Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="Double-click a row to open the sale invoice. Print / PDF for inspector copy."
+                               FontSize="10" Opacity="0.45" Margin="0,0,0,4"
+                               Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="{Binding GstReturnDisclaimer}"
+                               FontSize="10" Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,4"
+                               Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}" />
 
-                <DockPanel Grid.Column="0" Margin="0,0,16,0">
-                    <TextBlock DockPanel.Dock="Top" Text="Reports" FontSize="20" FontWeight="Bold" Margin="0,0,0,12" />
-                    <ListBox ItemsSource="{Binding ReportOptions}"
-                             SelectedItem="{Binding SelectedReport}"
-                             BorderThickness="0">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="4,6">
-                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Description}" FontSize="11" Opacity="0.6"
-                                               TextWrapping="Wrap" Margin="0,2,0,0" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
-
-                <DockPanel Grid.Column="1">
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                        <TextBlock Text="{Binding SelectedReport.Label}" FontSize="18" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding SelectedReportDescription}" Opacity="0.6" Margin="0,2,0,4" />
-                        <TextBlock Text="Double-click a row (or press Enter) to open the invoice."
-                                   FontSize="11" Opacity="0.5" Margin="0,0,0,8"
-                                   Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}" />
-                        <TextBlock Text="Double-click a row (or press Enter) to open the purchase invoice."
-                                   FontSize="11" Opacity="0.5" Margin="0,0,0,8"
-                                   Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}" />
-                        <TextBlock Text="Double-click a row to open the sale invoice. Print / PDF for inspector copy."
-                                   FontSize="11" Opacity="0.5" Margin="0,0,0,8"
-                                   Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}" />
-                        <TextBlock Text="{Binding GstReturnDisclaimer}"
-                                   FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,8"
-                                   Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}" />
-
-                        <Grid Margin="0,0,0,8"
-                              Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <DatePicker Grid.Column="0" Margin="0,0,8,0"
+                    <!-- Single row: dates + presets + run/export -->
+                    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}"
+                                    Margin="0,0,8,0" VerticalAlignment="Center">
+                            <DatePicker Width="130" Margin="0,0,4,0"
+                                        VerticalAlignment="Center"
                                         materialDesign:HintAssist.Hint="From"
+                                        Style="{StaticResource MaterialDesignOutlinedDatePicker}"
                                         SelectedDate="{Binding FromDate}" />
-                            <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                            <DatePicker Width="130" Margin="0,0,6,0"
+                                        VerticalAlignment="Center"
                                         materialDesign:HintAssist.Hint="To"
+                                        Style="{StaticResource MaterialDesignOutlinedDatePicker}"
                                         SelectedDate="{Binding ToDate}" />
-                            <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                <Button Command="{Binding ApplyTodayCommand}" Content="Today"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,4,0" Padding="8,4" />
-                                <Button Command="{Binding ApplyThisMonthCommand}" Content="Month"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,4,0" Padding="8,4" />
-                                <Button Command="{Binding ApplyLastMonthCommand}" Content="Last Mo"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}" Padding="8,4" />
-                            </StackPanel>
-                        </Grid>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Button Command="{Binding RunReportCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,8,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" />
-                                    <TextBlock Text="Run Report" Margin="6,0,0,0" />
-                                </StackPanel>
-                            </Button>
-                            <ComboBox Width="150" Margin="0,0,8,0"
-                                      ItemsSource="{Binding ScheduleFilterOptions}"
-                                      SelectedItem="{Binding SelectedScheduleFilter}"
-                                      DisplayMemberPath="Label"
-                                      materialDesign:HintAssist.Hint="Schedule"
-                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                      Visibility="{Binding ShowScheduleFilter, Converter={StaticResource BoolToVisibility}}" />
-                            <Button Command="{Binding PrintScheduleRegisterCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
-                                    Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="Printer" VerticalAlignment="Center" />
-                                    <TextBlock Text="Print / PDF" Margin="6,0,0,0" />
-                                </StackPanel>
-                            </Button>
-                            <Button Command="{Binding ExportCsvCommand}" IsEnabled="{Binding CanExport}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="Download" VerticalAlignment="Center" />
-                                    <TextBlock Text="Export CSV" Margin="6,0,0,0" />
-                                </StackPanel>
-                            </Button>
-                            <Button Command="{Binding ExportGstExcelCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8,0,0,0"
-                                    Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="FileExcel" VerticalAlignment="Center" />
-                                    <TextBlock Text="Export Excel" Margin="6,0,0,0" />
-                                </StackPanel>
-                            </Button>
-                            <Button Command="{Binding ExportGstJsonCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8,0,0,0"
-                                    Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="CodeJson" VerticalAlignment="Center" />
-                                    <TextBlock Text="Export JSON" Margin="6,0,0,0" />
-                                </StackPanel>
-                            </Button>
+                            <Button Command="{Binding ApplyTodayCommand}" Content="Today"
+                                    Style="{StaticResource CompactToolbarButton}" />
+                            <Button Command="{Binding ApplyThisMonthCommand}" Content="Month"
+                                    Style="{StaticResource CompactToolbarButton}" />
+                            <Button Command="{Binding ApplyLastMonthCommand}" Content="Last Mo"
+                                    Style="{StaticResource CompactToolbarButton}" Margin="0,0,8,0" />
                         </StackPanel>
 
-                        <Grid Margin="0,0,0,8"
-                              Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Margin="0,0,8,0"
-                                     materialDesign:HintAssist.Hint="{Binding FilterTextHint}"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-                            <ComboBox Grid.Column="1" Margin="0,0,8,0"
-                                      ItemsSource="{Binding FilterOptions}"
-                                      SelectedItem="{Binding SelectedFilterOption}"
-                                      DisplayMemberPath="Label"
-                                      materialDesign:HintAssist.Hint="Expiry window"
-                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                      Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}" />
-                            <ComboBox Grid.Column="2" Margin="0,0,8,0" MinWidth="160"
-                                      ItemsSource="{Binding ExpirySupplierOptions}"
-                                      SelectedValuePath="Key"
-                                      SelectedValue="{Binding SelectedExpirySupplierKey}"
-                                      DisplayMemberPath="Label"
-                                      materialDesign:HintAssist.Hint="Supplier"
-                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                      Visibility="{Binding ShowExpirySupplierFilter, Converter={StaticResource BoolToVisibility}}" />
-                            <Button Grid.Column="3"
-                                    Command="{Binding ClearFilterCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                    Padding="10,4"
-                                    Visibility="{Binding HasActiveFilter, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Text="Clear" />
-                            </Button>
-                        </Grid>
+                        <Button Command="{Binding RunReportCommand}" Style="{StaticResource CompactRaisedButton}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Play" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Run" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <ComboBox Width="120" Height="28" Margin="0,0,4,0"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding ScheduleFilterOptions}"
+                                  SelectedItem="{Binding SelectedScheduleFilter}"
+                                  DisplayMemberPath="Label"
+                                  materialDesign:HintAssist.Hint="Schedule"
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                  Visibility="{Binding ShowScheduleFilter, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Command="{Binding PrintScheduleRegisterCommand}"
+                                Style="{StaticResource CompactToolbarButton}"
+                                Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Printer" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Print" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ExportCsvCommand}" IsEnabled="{Binding CanExport}"
+                                Style="{StaticResource CompactToolbarButton}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Download" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="CSV" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ExportGstExcelCommand}"
+                                Style="{StaticResource CompactToolbarButton}"
+                                Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FileExcel" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Excel" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ExportGstJsonCommand}"
+                                Style="{StaticResource CompactToolbarButton}"
+                                Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="CodeJson" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="JSON" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
 
-                        <Border Margin="0,0,0,8" Padding="12,10" CornerRadius="6"
-                                Background="#FFF8E1"
-                                Visibility="{Binding HasNoFilterMatches, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="No matching records for the current filter. Clear or change the filter to see results."
-                                       TextWrapping="Wrap" Opacity="0.85" />
-                        </Border>
-                    </StackPanel>
+                        <TextBox Width="200" Height="28" Margin="8,0,4,0"
+                                 VerticalAlignment="Center"
+                                 VerticalContentAlignment="Center"
+                                 materialDesign:HintAssist.Hint="{Binding FilterTextHint}"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                                 Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}" />
+                        <ComboBox Width="120" Height="28" Margin="0,0,4,0"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding FilterOptions}"
+                                  SelectedItem="{Binding SelectedFilterOption}"
+                                  DisplayMemberPath="Label"
+                                  materialDesign:HintAssist.Hint="Expiry window"
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                  Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}" />
+                        <ComboBox MinWidth="140" Height="28" Margin="0,0,4,0"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding ExpirySupplierOptions}"
+                                  SelectedValuePath="Key"
+                                  SelectedValue="{Binding SelectedExpirySupplierKey}"
+                                  DisplayMemberPath="Label"
+                                  materialDesign:HintAssist.Hint="Supplier"
+                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                  Visibility="{Binding ShowExpirySupplierFilter, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Command="{Binding ClearFilterCommand}"
+                                Style="{StaticResource CompactToolbarButton}"
+                                Visibility="{Binding HasActiveFilter, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Clear" />
+                        </Button>
+                    </WrapPanel>
 
-                    <UniformGrid x:Name="GenericKpiGrid" DockPanel.Dock="Top" Columns="4" Margin="0,0,0,8"
-                                 Visibility="{Binding ShowGenericSummaryKpis, Converter={StaticResource BoolToVisibility}}">
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Records" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Total amount" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}"
-                                             Visibility="{Binding ShowTaxDiscountKpis, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel>
-                                <TextBlock Text="Tax / cost" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}"
-                                             Visibility="{Binding ShowTaxDiscountKpis, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel>
-                                <TextBlock Text="Discount / profit" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                    </UniformGrid>
+                    <Border Margin="0,0,0,4" Padding="8,4" CornerRadius="4"
+                            Background="#FFF8E1"
+                            Visibility="{Binding HasNoFilterMatches, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="No matching records for the current filter. Clear or change the filter to see results."
+                                   FontSize="11" TextWrapping="Wrap" Opacity="0.85" />
+                    </Border>
+                </StackPanel>
 
-                    <UniformGrid DockPanel.Dock="Top" Columns="2" Margin="0,0,0,8"
-                                 Visibility="{Binding ShowScheduleSummaryKpis, Converter={StaticResource BoolToVisibility}}">
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Lines" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Total quantity" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalAmount, StringFormat=0.##}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                    </UniformGrid>
+                <!-- Compact KPI strip (single-line values) -->
+                <StackPanel x:Name="GenericKpiPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding ShowGenericSummaryKpis, Converter={StaticResource BoolToVisibility}}">
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Records" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.RecordCount}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Total" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}"
+                                         Visibility="{Binding ShowTaxDiscountKpis, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Tax / cost" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}"
+                                         Visibility="{Binding ShowTaxDiscountKpis, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Disc / profit" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                </StackPanel>
 
-                    <UniformGrid x:Name="StockKpiGrid" DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
-                                 Visibility="{Binding ShowStockSummaryKpis, Converter={StaticResource BoolToVisibility}}">
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Records" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Total Amount" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Total Cost Amount" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                    </UniformGrid>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding ShowScheduleSummaryKpis, Converter={StaticResource BoolToVisibility}}">
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Lines" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.RecordCount}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Qty" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalAmount, StringFormat=0.##}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                </StackPanel>
 
-                    <UniformGrid DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
-                                 Visibility="{Binding ShowGstReturnKpis, Converter={StaticResource BoolToVisibility}}">
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="GST lines" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.RecordCount}" FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Taxable" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Tax" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
-                                           FontSize="20" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                    </UniformGrid>
+                <StackPanel x:Name="StockKpiPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding ShowStockSummaryKpis, Converter={StaticResource BoolToVisibility}}">
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Records" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.RecordCount}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Amount" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Cost" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                </StackPanel>
 
-                    <UniformGrid x:Name="GstKpiGrid" DockPanel.Dock="Top" Columns="3" Margin="0,0,0,8"
-                                 Visibility="{Binding ShowGstSummary, Converter={StaticResource BoolToVisibility}}">
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Output GST (sales)" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding GstSummary.SalesTotalTax, Converter={StaticResource Currency}}"
-                                           FontSize="18" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Input GST (purchases)" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding GstSummary.PurchaseTotalTax, Converter={StaticResource Currency}}"
-                                           FontSize="18" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Style="{StaticResource KpiCard}">
-                            <StackPanel>
-                                <TextBlock Text="Net GST payable" Opacity="0.6" FontSize="11" />
-                                <TextBlock Text="{Binding GstSummary.NetTaxPayable, Converter={StaticResource Currency}}"
-                                           FontSize="18" FontWeight="Bold" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                    </UniformGrid>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding ShowGstReturnKpis, Converter={StaticResource BoolToVisibility}}">
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="GST lines" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.RecordCount}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Taxable" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Tax" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                </StackPanel>
 
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="12" Margin="0,8,0,0"
-                                   Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
-                        <Grid>
+                <StackPanel x:Name="GstKpiPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding ShowGstSummary, Converter={StaticResource BoolToVisibility}}">
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Output GST" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding GstSummary.SalesTotalTax, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Input GST" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding GstSummary.PurchaseTotalTax, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                    <materialDesign:Card Style="{StaticResource KpiCard}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Net payable" FontSize="11" Opacity="0.6" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding GstSummary.NetTaxPayable, Converter={StaticResource Currency}}"
+                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </materialDesign:Card>
+                </StackPanel>
+
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="11" Margin="0,4,0,0"
+                               Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                    <Grid>
                         <DataGrid ItemsSource="{Binding SalesRows}" Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}"
                                   AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
                                   Cursor="Hand"
@@ -477,10 +467,9 @@
                                 <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat=0.##}" Width="60" />
                             </DataGrid.Columns>
                         </DataGrid>
-                        </Grid>
-                    </DockPanel>
+                    </Grid>
                 </DockPanel>
-            </Grid>
+            </DockPanel>
         </materialDesign:Card>
     </Grid>
 </UserControl>

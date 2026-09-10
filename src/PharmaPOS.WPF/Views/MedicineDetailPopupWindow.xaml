@@ -34,28 +34,28 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="Medicine Name" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="Medicine Name" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding MedicineName}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Salt" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="Salt" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Salt, TargetNullValue=-, FallbackValue=-}" TextWrapping="Wrap" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="Qty Available" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="Qty Available" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding QuantityAvailable, StringFormat=0.##}" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Text="Cost Price" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="Cost Price" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding CostPrice, StringFormat=N2}" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Text="MRP" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="MRP" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Mrp, StringFormat=N2}" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="5" Grid.Column="0" Text="Location" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="Location" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Location, TargetNullValue=-, FallbackValue=-}" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="6" Grid.Column="0" Text="Packing Size" Opacity="0.7" Margin="0,0,0,10" />
+            <TextBlock Grid.Column="0" Text="Packing Size" Style="{StaticResource FieldCaption}" Margin="0,0,0,10" />
             <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding PackingSize}" Margin="0,0,0,10" />
 
-            <TextBlock Grid.Row="7" Grid.Column="0" Text="Packing Type" Opacity="0.7" />
+            <TextBlock Grid.Column="0" Text="Packing Type" Style="{StaticResource FieldCaption}" />
             <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding PackingType}" />
         </Grid>
 

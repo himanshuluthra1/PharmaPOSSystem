@@ -394,7 +394,7 @@ public class VoucherTabViewModel : ObservableObject
                 ? PartyLedgerKind.Supplier
                 : PartyLedgerKind.Customer;
 
-            var rows = await _accounting.ListPartyLedgersAsync(kind, term, _branchId, token);
+            var rows = await _accounting.ListPartyLedgersAsync(kind, term, _branchId, ct: token);
             PartySuggestions.Clear();
             foreach (var row in rows.Take(12))
                 PartySuggestions.Add(row);

@@ -47,15 +47,15 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="Supplier" FontSize="11" Opacity="0.7" />
+                        <TextBlock Text="Supplier" Style="{StaticResource FieldCaption}" />
                         <TextBox x:Name="SupplierBox" Margin="0,2,0,0" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                        <TextBlock Text="Supplier invoice no." FontSize="11" Opacity="0.7" />
+                        <TextBlock Text="Supplier invoice no." Style="{StaticResource FieldCaption}" />
                         <TextBox x:Name="InvoiceNoBox" Margin="0,2,0,0" />
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="Invoice date" FontSize="11" Opacity="0.7" />
+                        <TextBlock Text="Invoice date" Style="{StaticResource FieldCaption}" />
                         <DatePicker x:Name="InvoiceDatePicker" Margin="0,2,0,0" />
                     </StackPanel>
                 </Grid>

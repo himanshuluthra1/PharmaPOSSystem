@@ -60,6 +60,8 @@ public class InventoryViewModel : ObservableObject
             if (value == 1)
                 _ = StockLedger.RefreshAsync();
             if (value == 4)
+                _ = StockTransfer.RefreshHistoryAsync();
+            if (value == 5)
                 _ = ShortageBook.RefreshAsync();
         }
     }

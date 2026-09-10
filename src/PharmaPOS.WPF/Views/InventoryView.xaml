@@ -9,17 +9,12 @@
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              SizeChanged="UserControl_SizeChanged">
     <UserControl.Resources>
-        <Style x:Key="InvDataGrid" TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
+        <Style x:Key="InvDataGrid" TargetType="DataGrid" BasedOn="{StaticResource PharmaDataGrid}">
             <Setter Property="AutoGenerateColumns" Value="False" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="HeadersVisibility" Value="Column" />
-            <Setter Property="GridLinesVisibility" Value="All" />
-            <Setter Property="HorizontalGridLinesBrush" Value="#BDBDBD" />
-            <Setter Property="VerticalGridLinesBrush" Value="#BDBDBD" />
             <Setter Property="RowHeight" Value="26" />
-            <Setter Property="ColumnHeaderHeight" Value="34" />
             <Setter Property="materialDesign:DataGridAssist.CellPadding" Value="5,1" />
-            <Setter Property="materialDesign:DataGridAssist.ColumnHeaderPadding" Value="8,6" />
         </Style>
         <Style x:Key="InvReadOnlyGrid" TargetType="DataGrid" BasedOn="{StaticResource InvDataGrid}">
             <Setter Property="IsReadOnly" Value="True" />
@@ -41,6 +36,11 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="FontSize" Value="12" />
         </Style>
+        <!-- ~50 characters at 12.5pt; ellipsis + tooltip for longer names. -->
+        <Style x:Key="MedicineNameCell" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding MedicineName}" />
+        </Style>
         <Style x:Key="KpiLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10" />
             <Setter Property="Opacity" Value="0.55" />
@@ -56,16 +56,16 @@
         <materialDesign:Card UniformCornerRadius="8" Padding="10,8"
                              materialDesign:ElevationAssist.Elevation="Dp1">
             <DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <Button DockPanel.Dock="Right" Command="{Binding StockOnHand.RefreshCommand}"
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False"
+                           HorizontalAlignment="Right">
+                    <Button Command="{Binding StockOnHand.RefreshCommand}"
                             Style="{StaticResource InvToolbarButton}" Padding="8,4" Height="30"
                             ToolTip="Refresh stock on hand">
                         <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
                     </Button>
-                    <TextBlock Text="Inventory" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </DockPanel>
 
-                <TabControl SelectedIndex="{Binding SelectedTab}" Padding="0">
+                <TabControl SelectedIndex="{Binding SelectedTab}" Style="{StaticResource HeaderlessTabControl}">
                     <!-- STOCK ON HAND -->
                     <TabItem Header="On Hand" Padding="10,4">
                         <Grid DataContext="{Binding StockOnHand}" Margin="0,6,0,0">
@@ -121,6 +121,10 @@
                                 <TextBox materialDesign:HintAssist.Hint="Search medicine, batch, barcode..."
                                          Style="{StaticResource InvOutlinedBox}"
                                          Margin="0,0,8,0"
+                                         MaxLength="50"
+                                         MaxWidth="375"
+                                         HorizontalAlignment="Left"
+                                         Width="375"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                             </DockPanel>
 
@@ -128,7 +132,9 @@
                                       ItemsSource="{Binding Items}"
                                       SelectedItem="{Binding SelectedItem}">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
+                                                        Width="375" MinWidth="120" MaxWidth="375"
+                                                        ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="100" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" />
                                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="72" />
@@ -167,6 +173,10 @@
                                 </StackPanel>
                                 <TextBox materialDesign:HintAssist.Hint="Search medicine or reference..."
                                          Style="{StaticResource InvOutlinedBox}"
+                                         MaxLength="50"
+                                         MaxWidth="375"
+                                         HorizontalAlignment="Left"
+                                         Width="375"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                             </DockPanel>
 
@@ -177,7 +187,9 @@
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Date" Binding="{Binding MovementDateLabel}" Width="130" />
                                     <DataGridTextColumn Header="Type" Binding="{Binding MovementTypeLabel}" Width="100" />
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="120" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
+                                                        Width="375" MinWidth="120" MaxWidth="375"
+                                                        ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="80" />
                                     <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="55" />
                                     <DataGridTextColumn Header="Balance" Binding="{Binding BalanceAfter}" Width="55" />
@@ -241,7 +253,9 @@
                             <DataGrid Grid.Row="2" Style="{StaticResource InvDataGrid}"
                                       ItemsSource="{Binding Lines}">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
+                                                        Width="375" MinWidth="120" MaxWidth="375" IsReadOnly="True"
+                                                        ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" IsReadOnly="True" />
                                     <DataGridTextColumn Header="System" Binding="{Binding SystemQuantity}" Width="65" IsReadOnly="True" />
                                     <DataGridTextColumn Header="Physical" IsReadOnly="False"
@@ -267,7 +281,7 @@
                         </Grid>
                     </TabItem>
 
-                    <!-- BRANCH TRANSFER -->
+                    <!-- BRANCH TRANSFER (create / send) -->
                     <TabItem Header="Transfer" Padding="10,4"
                              Visibility="{Binding CanTransferStock, Converter={StaticResource BoolToVisibility}}">
                         <Grid DataContext="{Binding StockTransfer}" Margin="0,6,0,0">
@@ -276,9 +290,6 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" MinHeight="120" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="140" MinHeight="100" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="140" MinHeight="100" />
                             </Grid.RowDefinitions>
 
                             <Grid Grid.Row="0" Margin="0,0,0,8">
@@ -338,7 +349,9 @@
                             <DataGrid Grid.Row="2" Style="{StaticResource InvDataGrid}"
                                       ItemsSource="{Binding Lines}">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
+                                                        Width="375" MinWidth="120" MaxWidth="375" IsReadOnly="True"
+                                                        ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" IsReadOnly="True" />
                                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" IsReadOnly="True" />
                                     <DataGridTextColumn Header="Available" Binding="{Binding AvailableQuantity}" Width="75" IsReadOnly="True" />
@@ -360,7 +373,20 @@
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <DockPanel Grid.Row="3" Margin="0,10,0,4">
+                            <TextBlock Grid.Row="3" Margin="0,8,0,0" Opacity="0.7" Text="{Binding StatusMessage}" />
+                        </Grid>
+                    </TabItem>
+
+                    <!-- RECENT TRANSFERS (history + lines side by side) -->
+                    <TabItem Header="Recent Transfer" Padding="10,4"
+                             Visibility="{Binding CanTransferStock, Converter={StaticResource BoolToVisibility}}">
+                        <Grid DataContext="{Binding StockTransfer}" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                     <Button Command="{Binding CancelCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
                                             ToolTip="Cancel selected sent package and restore stock">
@@ -385,40 +411,54 @@
                                            VerticalAlignment="Center" />
                             </DockPanel>
 
-                            <DataGrid Grid.Row="4" Style="{StaticResource InvReadOnlyGrid}"
-                                      ItemsSource="{Binding RecentTransfers}"
-                                      SelectedItem="{Binding SelectedHistoryRow}"
-                                      SelectionMode="Single">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Transfer #" Binding="{Binding TransferNumber}" Width="130" />
-                                    <DataGridTextColumn Header="Date" Binding="{Binding TransferDate, StringFormat=dd-MMM-yyyy}" Width="100" />
-                                    <DataGridTextColumn Header="From" Binding="{Binding FromBranchName}" Width="*" MinWidth="100" />
-                                    <DataGridTextColumn Header="To" Binding="{Binding ToBranchName}" Width="*" MinWidth="100" />
-                                    <DataGridTextColumn Header="Lines" Binding="{Binding LineCount}" Width="55" />
-                                    <DataGridTextColumn Header="Quantity" Binding="{Binding TotalQuantity}" Width="60" />
-                                    <DataGridTextColumn Header="Direction" Binding="{Binding DirectionLabel}" Width="80" />
-                                    <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="80" />
-                                </DataGrid.Columns>
-                            </DataGrid>
+                            <Grid Grid.Row="1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" MinWidth="280" />
+                                    <ColumnDefinition Width="6" />
+                                    <ColumnDefinition Width="*" MinWidth="280" />
+                                </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Row="5" Margin="0,10,0,4"
-                                       FontWeight="SemiBold" FontSize="13"
-                                       Text="{Binding SelectedTransferSummary, TargetNullValue=Select a transfer above to see medicines,
-                                                      FallbackValue=Select a transfer above to see medicines}"
-                                       TextWrapping="Wrap" Opacity="0.85" />
+                                <DataGrid Grid.Column="0" Style="{StaticResource InvReadOnlyGrid}"
+                                          ItemsSource="{Binding RecentTransfers}"
+                                          SelectedItem="{Binding SelectedHistoryRow}"
+                                          SelectionMode="Single">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Transfer #" Binding="{Binding TransferNumber}" Width="120" />
+                                        <DataGridTextColumn Header="Date" Binding="{Binding TransferDate, StringFormat=dd-MMM-yyyy}" Width="95" />
+                                        <DataGridTextColumn Header="From" Binding="{Binding FromBranchName}" Width="*" MinWidth="80" />
+                                        <DataGridTextColumn Header="To" Binding="{Binding ToBranchName}" Width="*" MinWidth="80" />
+                                        <DataGridTextColumn Header="Lines" Binding="{Binding LineCount}" Width="50" />
+                                        <DataGridTextColumn Header="Qty" Binding="{Binding TotalQuantity}" Width="50" />
+                                        <DataGridTextColumn Header="Dir" Binding="{Binding DirectionLabel}" Width="70" />
+                                        <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="60" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
 
-                            <DataGrid Grid.Row="6" Style="{StaticResource InvReadOnlyGrid}"
-                                      ItemsSource="{Binding SelectedTransferLines}">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
-                                    <DataGridTextColumn Header="Barcode" Binding="{Binding MedicineBarcode}" Width="110" />
-                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
-                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" />
-                                    <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="60" />
-                                    <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
-                                    <DataGridTextColumn Header="P.Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
-                                </DataGrid.Columns>
-                            </DataGrid>
+                                <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                                              Background="{DynamicResource MaterialDesignDivider}" />
+
+                                <DockPanel Grid.Column="2">
+                                    <TextBlock DockPanel.Dock="Top" Margin="0,0,0,4"
+                                               FontWeight="SemiBold" FontSize="13"
+                                               Text="{Binding SelectedTransferSummary, TargetNullValue=Select a transfer to see medicines,
+                                                              FallbackValue=Select a transfer to see medicines}"
+                                               TextWrapping="Wrap" Opacity="0.85" />
+                                    <DataGrid Style="{StaticResource InvReadOnlyGrid}"
+                                              ItemsSource="{Binding SelectedTransferLines}">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
+                                                                Width="375" MinWidth="120" MaxWidth="375"
+                                                                ElementStyle="{StaticResource MedicineNameCell}" />
+                                            <DataGridTextColumn Header="Barcode" Binding="{Binding MedicineBarcode}" Width="110" />
+                                            <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
+                                            <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" />
+                                            <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="60" />
+                                            <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="70" />
+                                            <DataGridTextColumn Header="P.Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </DockPanel>
+                            </Grid>
                         </Grid>
                     </TabItem>
 
@@ -459,6 +499,10 @@
                                           DisplayMemberPath="Label" />
                                 <TextBox Style="{StaticResource InvOutlinedBox}"
                                          materialDesign:HintAssist.Hint="Search medicine / customer"
+                                         MaxLength="50"
+                                         MaxWidth="375"
+                                         HorizontalAlignment="Left"
+                                         Width="375"
                                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                             </DockPanel>
 
@@ -468,7 +512,9 @@
                                       SelectionMode="Single">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="When" Binding="{Binding RecordedAtLabel}" Width="140" />
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
+                                                        Width="375" MinWidth="120" MaxWidth="375"
+                                                        ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Wanted" Binding="{Binding RequestedQuantity, StringFormat=0.##}" Width="70" />
                                     <DataGridTextColumn Header="Had" Binding="{Binding AvailableQuantity, StringFormat=0.##}" Width="60" />
                                     <DataGridTextColumn Header="Short" Binding="{Binding ShortfallQuantity, StringFormat=0.##}" Width="60" />

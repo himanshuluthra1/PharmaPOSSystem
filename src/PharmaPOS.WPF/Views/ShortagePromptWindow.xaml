@@ -25,7 +25,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,16,0,0">
-            <TextBlock Text="Wanted quantity (optional)" FontSize="11" Opacity="0.7" />
+            <TextBlock Text="Wanted quantity (optional)" Style="{StaticResource FieldCaption}" />
             <TextBox x:Name="QuantityBox"
                      Margin="0,4,0,0"
                      FontSize="15"
@@ -34,7 +34,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="2" Margin="0,12,0,0">
-            <TextBlock Text="Customer name (optional)" FontSize="11" Opacity="0.7" />
+            <TextBlock Text="Customer name (optional)" Style="{StaticResource FieldCaption}" />
             <TextBox x:Name="CustomerBox"
                      Margin="0,4,0,0"
                      FontSize="15"

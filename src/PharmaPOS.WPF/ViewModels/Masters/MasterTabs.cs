@@ -29,11 +29,7 @@ public class SupplierTabViewModel : MasterTabViewModelBase
     public SupplierListDto? SelectedItem
     {
         get => _selected;
-        set
-        {
-            if (SetProperty(ref _selected, value) && value is not null)
-                _ = LoadItemAsync(value.Id);
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     public SupplierDetailDto Editor
@@ -71,8 +67,22 @@ public class SupplierTabViewModel : MasterTabViewModelBase
         Editor = new SupplierDetailDto();
     }
 
-    protected override async Task SaveAsync()
+    protected override int? GetIdFromRow(object? row) => (row as SupplierListDto)?.Id;
+
+    protected override async Task<bool> DeleteItemAsync(int id)
     {
+        var result = await _masters.DeleteSupplierAsync(id);
+        if (result.IsFailure)
+        {
+            Dialog.ShowError(result.Error ?? "Could not delete supplier.");
+            return false;
+        }
+        return true;
+    }
+
+    protected override async Task<bool> SaveAsync()
+    {
+        var ok = false;
         await RunBusyAsync(async () =>
         {
             var result = await _masters.SaveSupplierAsync(Editor, _branchId());
@@ -84,7 +94,9 @@ public class SupplierTabViewModel : MasterTabViewModelBase
             Editor.Id = result.Value;
             StatusMessage = "Supplier saved.";
             await SearchAsync(SearchText);
+            ok = true;
         });
+        return ok;
     }
 }
 
@@ -110,11 +122,7 @@ public class CustomerTabViewModel : MasterTabViewModelBase
     public CustomerListDto? SelectedItem
     {
         get => _selected;
-        set
-        {
-            if (SetProperty(ref _selected, value) && value is not null)
-                _ = LoadItemAsync(value.Id);
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     public CustomerDetailDto Editor
@@ -152,8 +160,22 @@ public class CustomerTabViewModel : MasterTabViewModelBase
         Editor = new CustomerDetailDto();
     }
 
-    protected override async Task SaveAsync()
+    protected override int? GetIdFromRow(object? row) => (row as CustomerListDto)?.Id;
+
+    protected override async Task<bool> DeleteItemAsync(int id)
     {
+        var result = await _masters.DeleteCustomerAsync(id);
+        if (result.IsFailure)
+        {
+            Dialog.ShowError(result.Error ?? "Could not delete customer.");
+            return false;
+        }
+        return true;
+    }
+
+    protected override async Task<bool> SaveAsync()
+    {
+        var ok = false;
         await RunBusyAsync(async () =>
         {
             var result = await _masters.SaveCustomerAsync(Editor, _branchId());
@@ -165,7 +187,9 @@ public class CustomerTabViewModel : MasterTabViewModelBase
             Editor.Id = result.Value;
             StatusMessage = "Customer saved.";
             await SearchAsync(SearchText);
+            ok = true;
         });
+        return ok;
     }
 }
 
@@ -188,11 +212,7 @@ public class DoctorTabViewModel : MasterTabViewModelBase
     public DoctorListDto? SelectedItem
     {
         get => _selected;
-        set
-        {
-            if (SetProperty(ref _selected, value) && value is not null)
-                _ = LoadItemAsync(value.Id);
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     public DoctorDetailDto Editor
@@ -230,8 +250,22 @@ public class DoctorTabViewModel : MasterTabViewModelBase
         Editor = new DoctorDetailDto();
     }
 
-    protected override async Task SaveAsync()
+    protected override int? GetIdFromRow(object? row) => (row as DoctorListDto)?.Id;
+
+    protected override async Task<bool> DeleteItemAsync(int id)
     {
+        var result = await _masters.DeleteDoctorAsync(id);
+        if (result.IsFailure)
+        {
+            Dialog.ShowError(result.Error ?? "Could not delete doctor.");
+            return false;
+        }
+        return true;
+    }
+
+    protected override async Task<bool> SaveAsync()
+    {
+        var ok = false;
         await RunBusyAsync(async () =>
         {
             var result = await _masters.SaveDoctorAsync(Editor);
@@ -243,7 +277,9 @@ public class DoctorTabViewModel : MasterTabViewModelBase
             Editor.Id = result.Value;
             StatusMessage = "Doctor saved.";
             await SearchAsync(SearchText);
+            ok = true;
         });
+        return ok;
     }
 }
 
@@ -266,11 +302,7 @@ public class ManufacturerTabViewModel : MasterTabViewModelBase
     public ManufacturerListDto? SelectedItem
     {
         get => _selected;
-        set
-        {
-            if (SetProperty(ref _selected, value) && value is not null)
-                _ = LoadItemAsync(value.Id);
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     public ManufacturerDetailDto Editor
@@ -308,8 +340,22 @@ public class ManufacturerTabViewModel : MasterTabViewModelBase
         Editor = new ManufacturerDetailDto();
     }
 
-    protected override async Task SaveAsync()
+    protected override int? GetIdFromRow(object? row) => (row as ManufacturerListDto)?.Id;
+
+    protected override async Task<bool> DeleteItemAsync(int id)
     {
+        var result = await _masters.DeleteManufacturerAsync(id);
+        if (result.IsFailure)
+        {
+            Dialog.ShowError(result.Error ?? "Could not delete manufacturer.");
+            return false;
+        }
+        return true;
+    }
+
+    protected override async Task<bool> SaveAsync()
+    {
+        var ok = false;
         await RunBusyAsync(async () =>
         {
             var result = await _masters.SaveManufacturerAsync(Editor);
@@ -321,7 +367,9 @@ public class ManufacturerTabViewModel : MasterTabViewModelBase
             Editor.Id = result.Value;
             StatusMessage = "Manufacturer saved.";
             await SearchAsync(SearchText);
+            ok = true;
         });
+        return ok;
     }
 }
 
@@ -346,11 +394,7 @@ public class EmployeeTabViewModel : MasterTabViewModelBase
     public EmployeeListDto? SelectedItem
     {
         get => _selected;
-        set
-        {
-            if (SetProperty(ref _selected, value) && value is not null)
-                _ = LoadItemAsync(value.Id);
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     public EmployeeDetailDto Editor
@@ -388,8 +432,22 @@ public class EmployeeTabViewModel : MasterTabViewModelBase
         Editor = new EmployeeDetailDto();
     }
 
-    protected override async Task SaveAsync()
+    protected override int? GetIdFromRow(object? row) => (row as EmployeeListDto)?.Id;
+
+    protected override async Task<bool> DeleteItemAsync(int id)
     {
+        var result = await _masters.DeleteEmployeeAsync(id);
+        if (result.IsFailure)
+        {
+            Dialog.ShowError(result.Error ?? "Could not delete employee.");
+            return false;
+        }
+        return true;
+    }
+
+    protected override async Task<bool> SaveAsync()
+    {
+        var ok = false;
         await RunBusyAsync(async () =>
         {
             var result = await _masters.SaveEmployeeAsync(Editor, _branchId());
@@ -401,7 +459,9 @@ public class EmployeeTabViewModel : MasterTabViewModelBase
             Editor.Id = result.Value;
             StatusMessage = "Employee saved.";
             await SearchAsync(SearchText);
+            ok = true;
         });
+        return ok;
     }
 }
 
@@ -461,12 +521,7 @@ public class MedicineTabViewModel : MasterTabViewModelBase
     public MedicineListDto? SelectedItem
     {
         get => _selected;
-        set
-        {
-            if (!SetProperty(ref _selected, value) || value is null) return;
-            _isCreating = false;
-            _ = LoadItemAsync(value.Id);
-        }
+        set => SetProperty(ref _selected, value);
     }
 
     public MedicineDetailDto Editor
@@ -495,7 +550,7 @@ public class MedicineTabViewModel : MasterTabViewModelBase
         }
     }
 
-    public bool ShowEditor => _isCreating || Editor.Id > 0;
+    public bool ShowEditor => IsEditorOpen && (_isCreating || Editor.Id > 0);
     public override string EditorTitle => _isCreating
         ? "New Medicine"
         : Editor.Id > 0 ? $"Edit: {Editor.Name}" : "Select a medicine";
@@ -561,20 +616,34 @@ public class MedicineTabViewModel : MasterTabViewModelBase
         StatusMessage = null;
     }
 
-    protected override async Task SaveAsync()
+    protected override int? GetIdFromRow(object? row) => (row as MedicineListDto)?.Id;
+
+    protected override async Task<bool> DeleteItemAsync(int id)
+    {
+        var result = await _masters.DeleteMedicineAsync(id);
+        if (result.IsFailure)
+        {
+            Dialog.ShowError(result.Error ?? "Could not delete medicine.");
+            return false;
+        }
+        return true;
+    }
+
+    protected override async Task<bool> SaveAsync()
     {
         if (!_isCreating && Editor.Id <= 0)
         {
             Dialog.ShowError("Select a medicine to update, or click New.");
-            return;
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(Editor.Name))
         {
             Dialog.ShowError("Medicine name is required.");
-            return;
+            return false;
         }
 
+        var ok = false;
         await RunBusyAsync(async () =>
         {
             var result = await _masters.SaveMedicineAsync(Editor);
@@ -602,7 +671,9 @@ public class MedicineTabViewModel : MasterTabViewModelBase
             SearchText = Editor.Name;
             await SearchAsync(Editor.Name);
             SelectedItem = Items.FirstOrDefault(i => i.Id == result.Value);
+            ok = true;
         });
+        return ok;
     }
 
     private void GenerateBarcode()
