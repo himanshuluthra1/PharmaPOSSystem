@@ -35,6 +35,12 @@ public class MedicineConfiguration : IEntityTypeConfiguration<Medicine>
             .HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
         b.HasOne(x => x.Manufacturer).WithMany(m => m!.Medicines)
             .HasForeignKey(x => x.ManufacturerId).OnDelete(DeleteBehavior.SetNull);
+        b.HasOne(x => x.MappedCatalogueMedicine)
+            .WithMany()
+            .HasForeignKey(x => x.MappedCatalogueMedicineId)
+            .OnDelete(DeleteBehavior.NoAction);
+        b.HasIndex(x => x.IsNewMappingVerified);
+        b.HasIndex(x => x.MappedCatalogueMedicineId);
     }
 }
 

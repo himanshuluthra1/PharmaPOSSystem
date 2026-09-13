@@ -28,6 +28,7 @@ public class PurchaseViewModel : ObservableObject
     private readonly IBarcodeCameraService _barcodeCamera;
     private readonly IPurchaseBillScanService _billScan;
     private readonly IPurchaseOrderReceiveBridge _poReceiveBridge;
+    private readonly IFinancialYearContext _financialYear;
 
     private string _supplierSearchText = string.Empty;
     private SupplierLookupDto? _selectedSupplier;
@@ -63,7 +64,8 @@ public class PurchaseViewModel : ObservableObject
         IDialogService dialog,
         IBarcodeCameraService barcodeCamera,
         IPurchaseBillScanService billScan,
-        IPurchaseOrderReceiveBridge poReceiveBridge)
+        IPurchaseOrderReceiveBridge poReceiveBridge,
+        IFinancialYearContext financialYear)
     {
         _purchaseService = purchaseService;
         _settings = settings;
@@ -74,6 +76,7 @@ public class PurchaseViewModel : ObservableObject
         _barcodeCamera = barcodeCamera;
         _billScan = billScan;
         _poReceiveBridge = poReceiveBridge;
+        _financialYear = financialYear;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseCreate, AppConstants.Permissions.PurchaseManage);
@@ -91,7 +94,7 @@ public class PurchaseViewModel : ObservableObject
         RemoveLineCommand = new RelayCommand(p => RemoveLine(p as PurchaseLineViewModel), _ => CanModifyBill);
         SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanCreate && CanSave());
         UnlockBillCommand = new AsyncRelayCommand(_ => UnlockBillAsync(), _ => CanUnlockBill);
-        NewPurchaseCommand = new RelayCommand(_ => NewPurchase(), _ => CanCreate);
+        NewPurchaseCommand = new RelayCommand(_ => NewPurchase(), _ => CanCreate && _financialYear.CanEditTransactions);
         ClearSupplierCommand = new RelayCommand(_ => ClearSupplier(), _ => CanModifyBill);
         SearchPurchasesCommand = new AsyncRelayCommand(_ => OpenPurchaseSearchAsync(), _ => CanSearch && !IsBusy);
         ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanModifyBill && !IsBusy);
@@ -191,17 +194,21 @@ public class PurchaseViewModel : ObservableObject
 
     public bool CanModifyBill =>
         CanCreate
+        && _financialYear.CanEditTransactions
         && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked))
         && !IsBusy;
 
     public bool IsBillReadOnly =>
-        IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked);
+        !_financialYear.CanEditTransactions
+        || (IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
 
     public bool ShowSaveButton =>
-        CanCreate && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
+        CanCreate && _financialYear.CanEditTransactions
+        && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
 
     public bool CanUnlockBill =>
-        IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices && !IsBusy;
+        IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices
+        && _financialYear.CanEditTransactions && !IsBusy;
 
     public bool ShowLockBanner => IsEditing && IsInvoiceLocked && InvoiceEditEnabled;
 
@@ -607,11 +614,10 @@ public class PurchaseViewModel : ObservableObject
         if (!CanModifyBill) return;
 
         IsBusy = true;
+        ScannedPurchaseDraftDto? draft = null;
         try
         {
-            var draft = await _billScan.ScanAndReviewAsync(_currentUser.CurrentUser?.BranchId);
-            if (draft is null) return;
-            await ApplyScannedDraftAsync(draft);
+            draft = await _billScan.ScanAndReviewAsync(_currentUser.CurrentUser?.BranchId);
         }
         catch (Exception ex)
         {
@@ -620,6 +626,17 @@ public class PurchaseViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+        }
+
+        // Apply after clearing busy so CanSave / CanModifyBill re-enable with the loaded draft.
+        if (draft is null) return;
+        try
+        {
+            await ApplyScannedDraftAsync(draft);
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
         }
     }
 
@@ -630,13 +647,27 @@ public class PurchaseViewModel : ObservableObject
         SupplierLookupDto? supplier = null;
         if (draft.MatchedSupplierId is int sid)
         {
-            var found = await _purchaseService.SearchSuppliersAsync(draft.SupplierName ?? string.Empty);
-            supplier = found.FirstOrDefault(s => s.Id == sid) ?? found.FirstOrDefault();
+            supplier = await _purchaseService.GetSupplierAsync(sid);
+            if (supplier is null)
+                supplier = SupplierResults.FirstOrDefault(s => s.Id == sid);
         }
+
         if (supplier is null && !string.IsNullOrWhiteSpace(draft.SupplierName))
         {
             var found = await _purchaseService.SearchSuppliersAsync(draft.SupplierName);
-            supplier = found.FirstOrDefault();
+            supplier = found.FirstOrDefault(s =>
+                           string.Equals(s.Name, draft.SupplierName, StringComparison.OrdinalIgnoreCase))
+                       ?? found.FirstOrDefault();
+        }
+
+        if (supplier is null && draft.MatchedSupplierId is int matchedId)
+        {
+            supplier = new SupplierLookupDto(
+                matchedId,
+                draft.SupplierName ?? $"Supplier #{matchedId}",
+                draft.MatchedSupplierPhone,
+                null,
+                0);
         }
 
         if (supplier is not null)
@@ -680,8 +711,12 @@ public class PurchaseViewModel : ObservableObject
 
         EnsureTrailingEmptyRow();
         RecalculateTotals();
-        StatusMessage = $"Loaded {Lines.Count(l => !l.IsEmpty)} item(s) from scanned bill. Review and press Save (F9).";
+        var loaded = Lines.Count(l => !l.IsEmpty);
+        StatusMessage = SelectedSupplier is null
+            ? $"Loaded {loaded} item(s). Select the supplier, then press Save (F9)."
+            : $"Loaded {loaded} item(s) from scanned bill. Review and press Save (F9).";
         RequestItemFocus?.Invoke(Lines.FirstOrDefault(l => !l.IsEmpty) ?? Lines.FirstOrDefault());
+        CommandManager.InvalidateRequerySuggested();
     }
 
     private async Task TryApplyPendingPurchaseOrderReceiveAsync()

@@ -430,10 +430,7 @@ public partial class PurchaseView : UserControl
                 if (vm.SaveCommand.CanExecute(null)) vm.SaveCommand.Execute(null);
                 e.Handled = true;
                 break;
-            case Key.Escape:
-                vm.NewPurchaseCommand.Execute(null);
-                e.Handled = true;
-                break;
+            // Escape does not clear the purchase — use New / Cancel button.
         }
     }
 }

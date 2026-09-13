@@ -31,6 +31,17 @@ public static class ImportHelpers
         return int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var parsed) ? parsed : 0;
     }
 
+    /// <summary>
+    /// MedWin quantities are loose units (e.g. tablets). PharmaPOS stock/sale/purchase qty is in packs/strips.
+    /// Convert with pack size from <c>stksize</c> / <c>dpsize</c> / <c>sizefact</c> (e.g. 45 ÷ 15 → 3).
+    /// </summary>
+    public static decimal ToPackQuantity(decimal medWinUnitQty, int packSize)
+    {
+        var pack = Math.Max(1, packSize);
+        if (pack == 1 || medWinUnitQty == 0m) return medWinUnitQty;
+        return Math.Round(medWinUnitQty / pack, 4, MidpointRounding.AwayFromZero);
+    }
+
     public static DateTime? Date(object? value)
     {
         if (value is null or DBNull) return null;
@@ -74,6 +85,19 @@ public static class ImportHelpers
 
     public static string MedWinMedicineNote(int medWinId) => $"MedWinId:{medWinId}";
 
+    /// <summary>Removes every <c>MedWinId:</c> segment from Notes (keeps OneMG / pack segments).</summary>
+    public static string? StripAllMedWinIds(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes)) return null;
+
+        var kept = notes
+            .Split(" | ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => !p.StartsWith("MedWinId:", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        return kept.Length == 0 ? null : string.Join(" | ", kept);
+    }
+
     /// <summary>
     /// Resolves taxable vs tax from MedWin purchase header fields.
     /// <c>purtaxam</c> is usually the taxable amount (~bill total); occasionally it is the tax amount.
@@ -104,18 +128,18 @@ public static class ImportHelpers
     }
 
     /// <summary>
-    /// MedWin purchase header: <c>pcredit</c> is the amount still due on credit;
-    /// <c>pcheqamt</c> is the amount paid. When both are zero the bill is unpaid
-    /// (do not treat <c>pcredit = 0</c> alone as fully paid).
+    /// MedWin purchase header settlement:
+    /// <c>pcheqamt</c> = cash/cheque paid; <c>pcredit</c> = debit-note / non-cash settlement
+    /// (not remaining due — MedWin keeps the split on the header after bills are cleared).
+    /// Unpaid bills have both fields zero; partial cash-only bills have <c>pcredit = 0</c>
+    /// and <c>pcheqamt</c> &lt; bill.
     /// </summary>
-    public static decimal ResolveMedWinPurchasePaidAmount(decimal grandTotal, decimal creditDue, decimal chequePaid)
+    public static decimal ResolveMedWinPurchasePaidAmount(decimal grandTotal, decimal debitNoteSettled, decimal chequePaid)
     {
         if (grandTotal <= 0) return 0m;
-        if (creditDue > 0)
-            return Math.Clamp(grandTotal - creditDue, 0m, grandTotal);
-        if (chequePaid > 0)
-            return Math.Min(grandTotal, chequePaid);
-        return 0m;
+        var paid = chequePaid + debitNoteSettled;
+        if (paid <= 0) return 0m;
+        return Math.Min(grandTotal, paid);
     }
 
     public static int ResolveMedWinPurchasePaymentStatus(decimal grandTotal, decimal paidAmount)
@@ -141,24 +165,34 @@ public static class ImportHelpers
     public static string NormalizeName(string? name)
         => (name ?? string.Empty).Trim().Replace(" ", string.Empty).ToUpperInvariant();
 
-    private static readonly string[] MatchSuffixes =
+    /// <summary>
+    /// Longest-first dosage form suffixes stripped from names.
+    /// Synonyms map to one canonical form so TAB≈TABLET but TAB≠CREAM.
+    /// </summary>
+    private static readonly (string Suffix, string Canonical)[] FormSuffixMap =
     [
-        "CAPSULES", "CAPSULE", "CAPS", "CAP",
-        "TABLETS", "TABLET", "TABS", "TAB",
-        "LOZENGES", "LOZENGE", "LOZ",
-        "SUSPENSION", "SUSP",
-        "INJECTION", "INJ",
-        "SOLUTION", "SOLN",
-        "SYRUP", "SYR", "SYP",
-        "POWDER", "POWD", "PDR",
-        "OINTMENT", "OINT",
-        "GRANULES", "GRANULE", "GRAN",
-        "SPRAY",
-        "DROPS", "DROP", "DRP",
-        "CREAM", "GEL", "LOTION",
-        "VIAL", "AMPOULE", "AMPUL",
-        "INHALER", "RESPULES", "RESPULE"
+        ("CAPSULES", "CAP"), ("CAPSULE", "CAP"), ("CAPS", "CAP"), ("CAP", "CAP"),
+        ("TABLETS", "TAB"), ("TABLET", "TAB"), ("TABS", "TAB"), ("TAB", "TAB"),
+        ("LOZENGES", "LOZ"), ("LOZENGE", "LOZ"), ("LOZ", "LOZ"),
+        ("SUSPENSION", "SUSP"), ("SUSP", "SUSP"),
+        ("INJECTION", "INJ"), ("INJ", "INJ"),
+        ("SOLUTION", "SOLN"), ("SOLN", "SOLN"),
+        ("SYRUP", "SYR"), ("SYR", "SYR"), ("SYP", "SYR"),
+        ("POWDER", "PDR"), ("POWD", "PDR"), ("PDR", "PDR"),
+        ("OINTMENT", "OINT"), ("OINT", "OINT"),
+        ("GRANULES", "GRAN"), ("GRANULE", "GRAN"), ("GRAN", "GRAN"),
+        ("SPRAY", "SPRAY"),
+        ("DROPS", "DROP"), ("DROP", "DROP"), ("DRP", "DROP"),
+        ("CREAM", "CREAM"), ("GEL", "GEL"), ("LOTION", "LOTION"),
+        ("VIAL", "VIAL"), ("AMPOULE", "AMP"), ("AMPUL", "AMP"),
+        ("INHALER", "INH"), ("RESPULES", "RESP"), ("RESPULE", "RESP")
     ];
+
+    private static readonly string[] MatchSuffixes =
+        FormSuffixMap.Select(x => x.Suffix).ToArray();
+
+    private static readonly Dictionary<string, string> CanonicalFormByToken =
+        FormSuffixMap.ToDictionary(x => x.Suffix, x => x.Canonical, StringComparer.OrdinalIgnoreCase);
 
     private static readonly string[] FormulationCodes =
     [
@@ -177,37 +211,61 @@ public static class ImportHelpers
 
     private static readonly Regex SeparatorRegex = new(@"[\s\(\)\[\],;/\-]+", RegexOptions.Compiled);
 
-    /// <summary>Normalize medicine names for cross-catalog matching (MedWin vs OneMG).</summary>
+    /// <summary>
+    /// Normalize medicine names for cross-catalog matching (MedWin vs OneMG).
+    /// Includes canonical dosage form (e.g. #TAB / #CREAM) so forms cannot collide.
+    /// </summary>
     public static string NormalizeForMatch(string? name)
     {
-        var tokens = ExtractMatchTokens(name);
+        var (tokens, form) = ExtractMatchTokensAndForm(name);
         if (tokens.Count == 0) return string.Empty;
         tokens.Sort(StringComparer.Ordinal);
-        return string.Join("|", tokens);
+        var key = string.Join("|", tokens);
+        return form is null ? key : $"{key}#{form}";
     }
 
-    private static List<string> ExtractMatchTokens(string? name)
+    /// <summary>Canonical dosage form when present (TAB, CREAM, …); otherwise null.</summary>
+    public static string? ExtractCanonicalDosageForm(string? name)
+        => ExtractMatchTokensAndForm(name).Form;
+
+    private static (List<string> Tokens, string? Form) ExtractMatchTokensAndForm(string? name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return [];
+        if (string.IsNullOrWhiteSpace(name)) return ([], null);
 
         var text = name.Trim();
-        var rawTokens = text.Any(char.IsWhiteSpace) || text.Contains('(') || text.Contains('-')
-            ? SeparatorRegex.Split(text)
-            : TokenizeCompact(text);
+        string? form = null;
+        string[] rawTokens;
+        if (text.Any(char.IsWhiteSpace) || text.Contains('(') || text.Contains('-'))
+        {
+            rawTokens = SeparatorRegex.Split(text);
+        }
+        else
+        {
+            rawTokens = TokenizeCompact(text, out form);
+        }
 
         var tokens = new List<string>();
         foreach (var raw in rawTokens)
         {
-            var token = NormalizeToken(raw);
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var upper = raw.Trim().ToUpperInvariant();
+            if (TryCanonicalForm(upper, out var tokenForm))
+            {
+                form ??= tokenForm;
+                continue;
+            }
+
+            var token = NormalizeToken(raw, ref form);
             if (token.Length == 0 || IsDosageFormToken(token)) continue;
             tokens.Add(token);
         }
 
-        return tokens;
+        return (tokens, form);
     }
 
-    private static string[] TokenizeCompact(string compact)
+    private static string[] TokenizeCompact(string compact, out string? form)
     {
+        form = null;
         var work = compact.ToUpperInvariant();
         var numbers = new List<string>();
 
@@ -216,9 +274,10 @@ public static class ImportHelpers
         {
             changed = false;
 
-            var afterForm = StripTrailingFormSuffixes(work);
+            var afterForm = StripTrailingFormSuffixes(work, out var strippedForm);
             if (afterForm != work)
             {
+                form ??= strippedForm;
                 work = afterForm;
                 changed = true;
                 continue;
@@ -270,12 +329,13 @@ public static class ImportHelpers
         }
     }
 
-    private static string NormalizeToken(string token)
+    private static string NormalizeToken(string token, ref string? form)
     {
         if (string.IsNullOrWhiteSpace(token)) return string.Empty;
 
         var t = token.Trim().ToUpperInvariant();
-        t = StripTrailingFormSuffixes(t);
+        t = StripTrailingFormSuffixes(t, out var strippedForm);
+        form ??= strippedForm;
 
         var strength = StrengthTokenRegex.Match(t);
         if (strength.Success) return strength.Groups[1].Value;
@@ -283,15 +343,17 @@ public static class ImportHelpers
         return t;
     }
 
-    private static string StripTrailingFormSuffixes(string value)
+    private static string StripTrailingFormSuffixes(string value, out string? form)
     {
+        form = null;
         var changed = true;
         while (changed)
         {
             changed = false;
-            foreach (var suffix in MatchSuffixes)
+            foreach (var (suffix, canonical) in FormSuffixMap)
             {
                 if (!value.EndsWith(suffix, StringComparison.Ordinal)) continue;
+                form ??= canonical;
                 value = value[..^suffix.Length];
                 changed = true;
                 break;
@@ -299,6 +361,9 @@ public static class ImportHelpers
         }
         return value;
     }
+
+    private static bool TryCanonicalForm(string token, out string canonical)
+        => CanonicalFormByToken.TryGetValue(token, out canonical!);
 
     private static bool IsDosageFormToken(string token)
         => DosageFormTokens.Contains(token);

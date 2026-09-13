@@ -450,15 +450,16 @@
                         <ColumnDefinition Width="72" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="40" />
-                        <ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="110" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="Generic :" Style="{StaticResource FormLabel}" HorizontalAlignment="Right" />
                     <TextBox Grid.Column="1" Style="{StaticResource FieldBox}" MaxLength="50"
                              Text="{Binding Editor.GenericName, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Column="2" Text="HSN :" Style="{StaticResource FormLabel}" HorizontalAlignment="Right" />
-                    <TextBox Grid.Column="3" Style="{StaticResource FieldBox}" MaxLength="8" Margin="0,1,0,1"
-                             behaviors:TextBoxLimits.DigitsOnly="True"
-                             Text="{Binding Editor.HsnCode, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Grid.Column="3" Style="{StaticResource FieldBox}" MaxLength="16" Margin="0,1,0,1"
+                             IsReadOnly="False"
+                             materialDesign:HintAssist.Hint="HSN code"
+                             Text="{Binding Editor.HsnCode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </Grid>
                 <Grid Margin="0,1">
                     <Grid.ColumnDefinitions>
@@ -548,8 +549,9 @@
                         <ColumnDefinition Width="52" />
                         <ColumnDefinition Width="80" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Rack :" Style="{StaticResource FormLabel}" HorizontalAlignment="Right" />
+                    <TextBlock Text="Location :" Style="{StaticResource FormLabel}" HorizontalAlignment="Right" />
                     <TextBox Grid.Column="1" Style="{StaticResource FieldBox}" MaxLength="20"
+                             materialDesign:HintAssist.Hint="Rack / shelf"
                              Text="{Binding Editor.RackNumber, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Column="2" Text="Bin :" Style="{StaticResource FormLabel}" HorizontalAlignment="Right" />
                     <TextBox Grid.Column="3" Style="{StaticResource FieldBox}" MaxLength="20"

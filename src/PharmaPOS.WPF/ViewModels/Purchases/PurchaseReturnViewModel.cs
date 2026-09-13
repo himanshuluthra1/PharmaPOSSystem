@@ -17,6 +17,7 @@ public class PurchaseReturnViewModel : ObservableObject
     private readonly IMedicinePickerService _medicinePicker;
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
+    private readonly IFinancialYearContext _financialYear;
 
     private string _searchText = string.Empty;
     private PurchaseReturnSearchResultDto? _selectedSearch;
@@ -43,27 +44,29 @@ public class PurchaseReturnViewModel : ObservableObject
         IPurchaseService purchaseService,
         IMedicinePickerService medicinePicker,
         ICurrentUserService currentUser,
-        IDialogService dialog)
+        IDialogService dialog,
+        IFinancialYearContext financialYear)
     {
         _service = service;
         _purchaseService = purchaseService;
         _medicinePicker = medicinePicker;
         _currentUser = currentUser;
         _dialog = dialog;
+        _financialYear = financialYear;
 
         SearchCommand = new AsyncRelayCommand(SearchAsync, () => !IsBusy);
         LoadPurchaseCommand = new AsyncRelayCommand(LoadSelectedPurchaseAsync, () => !IsBusy && SelectedSearch is not null);
-        ProcessReturnCommand = new AsyncRelayCommand(ProcessReturnAsync, () => !IsBusy && LoadedPurchase is not null);
+        ProcessReturnCommand = new AsyncRelayCommand(ProcessReturnAsync, () => !IsBusy && LoadedPurchase is not null && _financialYear.CanEditTransactions);
         RefreshReturnsCommand = new AsyncRelayCommand(RefreshReturnsAsync, () => !IsBusy);
-        AttachReceiptCommand = new AsyncRelayCommand(AttachReceiptAsync, () => !IsBusy);
+        AttachReceiptCommand = new AsyncRelayCommand(AttachReceiptAsync, () => !IsBusy && _financialYear.CanEditTransactions);
         ClearCommand = new RelayCommand(ClearLoaded);
 
-        AddDirectMedicineCommand = new AsyncRelayCommand(AddDirectMedicineAsync, () => !IsBusy);
+        AddDirectMedicineCommand = new AsyncRelayCommand(AddDirectMedicineAsync, () => !IsBusy && _financialYear.CanEditTransactions);
         RemoveDirectLineCommand = new RelayCommand(p =>
         {
             if (p is DirectReturnLineRow row) DirectLines.Remove(row);
-        });
-        ProcessDirectReturnCommand = new AsyncRelayCommand(ProcessDirectReturnAsync, () => !IsBusy && DirectSupplier is not null && DirectLines.Count > 0);
+        }, _ => _financialYear.CanEditTransactions);
+        ProcessDirectReturnCommand = new AsyncRelayCommand(ProcessDirectReturnAsync, () => !IsBusy && _financialYear.CanEditTransactions && DirectSupplier is not null && DirectLines.Count > 0);
         ClearDirectCommand = new RelayCommand(ClearDirect);
 
         _ = InitializeAsync();

@@ -284,8 +284,10 @@ public partial class App : System.Windows.Application
     private bool TrySelectBillingCounter()
         => Services.GetRequiredService<ICounterPickerUiService>().ShowPicker(switchMode: false);
 
-    private void ShowShell()
+    private async void ShowShell()
     {
+        await Services.GetRequiredService<IFinancialYearContext>().RefreshAsync();
+
         var mainWindow = Services.GetRequiredService<MainWindow>();
         var mainVm = Services.GetRequiredService<MainViewModel>();
         mainWindow.DataContext = mainVm;

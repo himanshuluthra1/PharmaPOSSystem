@@ -34,6 +34,22 @@ public partial class LastSaleRefillWindow : Window
             DialogResult = false;
             Close();
             e.Handled = true;
+            return;
+        }
+
+        if (e.Key is Key.Down or Key.Up)
+        {
+            if (ViewModel.Matches.Count == 0) return;
+            var index = ViewModel.SelectedMatch is null
+                ? -1
+                : ViewModel.Matches.IndexOf(ViewModel.SelectedMatch);
+            index = e.Key == Key.Down
+                ? Math.Min(index + 1, ViewModel.Matches.Count - 1)
+                : Math.Max(index - 1, 0);
+            if (index < 0) index = 0;
+            ViewModel.SelectedMatch = ViewModel.Matches[index];
+            MatchList.ScrollIntoView(ViewModel.SelectedMatch);
+            e.Handled = true;
         }
     }
 

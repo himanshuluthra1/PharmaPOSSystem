@@ -1,0 +1,860 @@
+using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Features.SaleReturns;
+using PharmaPOS.Domain.Entities.Accounting;
+using PharmaPOS.Domain.Entities.Inventory;
+using PharmaPOS.Domain.Entities.Masters;
+using PharmaPOS.Domain.Entities.Purchases;
+using PharmaPOS.Domain.Entities.Sales;
+using PharmaPOS.Domain.Enums;
+
+namespace PharmaPOS.Application.Features.Reports;
+
+public partial class ReportsService
+{
+    public async Task<ReportTableDto> GetReportTableAsync(
+        ReportKind kind,
+        DateTime from,
+        DateTime to,
+        int? branchId,
+        ScheduleRegisterFilter scheduleFilter = ScheduleRegisterFilter.HAndH1,
+        CancellationToken ct = default)
+    {
+        switch (kind)
+        {
+            case ReportKind.Sales:
+            {
+                var (s, rows) = await GetSalesReportAsync(from, to, branchId, ct);
+                return ReportTableMapper.FromSales(s, rows);
+            }
+            case ReportKind.Purchases:
+            {
+                var (s, rows) = await GetPurchaseReportAsync(from, to, branchId, ct);
+                return ReportTableMapper.FromPurchases(s, rows);
+            }
+            case ReportKind.GstSummary:
+            {
+                var (gst, rows) = await GetGstReportAsync(from, to, branchId, ct);
+                return ReportTableMapper.FromGst(gst, rows);
+            }
+            case ReportKind.Gstr1:
+                return ReportTableMapper.FromGstReturn(await GetGstr1ExportAsync(from, to, branchId, ct));
+            case ReportKind.Gstr2B:
+                return ReportTableMapper.FromGstReturn(await GetGstr2BExportAsync(from, to, branchId, ct));
+            case ReportKind.Profit:
+            {
+                var (s, rows) = await GetProfitReportAsync(from, to, branchId, ct);
+                return ReportTableMapper.FromProfit(s, rows);
+            }
+            case ReportKind.SalesByMedicine:
+            {
+                var (s, rows) = await GetSalesByMedicineReportAsync(from, to, branchId, ct);
+                return ReportTableMapper.FromMedicineSales(s, rows);
+            }
+            case ReportKind.StockValuation:
+            {
+                var (s, rows) = await GetStockValuationReportAsync(branchId, ct);
+                return ReportTableMapper.FromStock(s, rows);
+            }
+            case ReportKind.Expiry:
+            {
+                var (s, rows) = await GetExpiryReportAsync(branchId, ct);
+                return ReportTableMapper.FromExpiry(s, rows);
+            }
+            case ReportKind.LowStock:
+            {
+                var (s, rows) = await GetLowStockReportAsync(branchId, ct);
+                return ReportTableMapper.FromLowStock(s, rows);
+            }
+            case ReportKind.ScheduleRegister:
+            {
+                var (s, report) = await GetScheduleRegisterAsync(from, to, branchId, scheduleFilter, ct);
+                return ReportTableMapper.FromSchedule(s, report);
+            }
+            case ReportKind.SaleReturns:
+            {
+                var rows = await _saleReturns.ListReturnsAsync(from, to, branchId, ct);
+                var summary = BuildSummary(rows.Count, rows.Sum(r => r.RefundAmount), 0, 0);
+                return ReportTableMapper.FromSaleReturns(summary, rows);
+            }
+            case ReportKind.MedicineReturns:
+            {
+                var rows = await _saleReturns.GetMedicineReturnReportAsync(from, to, branchId, ct);
+                var summary = BuildSummary(rows.Count, rows.Sum(r => r.RefundAmount), 0, 0);
+                return ReportTableMapper.FromMedicineReturns(summary, rows);
+            }
+            case ReportKind.SalesByCustomer:
+                return await BuildSalesByCustomerAsync(from, to, branchId, ct);
+            case ReportKind.SalesByPaymentMode:
+                return await BuildSalesByPaymentModeAsync(from, to, branchId, ct);
+            case ReportKind.SalesDayWise:
+                return await BuildSalesDayWiseAsync(from, to, branchId, ct);
+            case ReportKind.SalesCreditDue:
+                return await BuildSalesCreditDueAsync(from, to, branchId, ct);
+            case ReportKind.PurchasesBySupplier:
+                return await BuildPurchasesBySupplierAsync(from, to, branchId, ct);
+            case ReportKind.SupplierOutstanding:
+                return await BuildSupplierOutstandingAsync(branchId, ct);
+            case ReportKind.SupplierPayments:
+                return await BuildPurchasePaymentsAsync(from, to, branchId, ct);
+            case ReportKind.PaymentVouchers:
+                return await BuildVoucherRegisterAsync("Payment", from, to, branchId, ct);
+            case ReportKind.PurchaseReturns:
+                return await BuildPurchaseReturnsAsync(from, to, branchId, ct);
+            case ReportKind.ExpiryToCompanyClaims:
+                return await BuildExpiryToCompanyClaimsAsync(from, to, branchId, ct);
+            case ReportKind.CustomerOutstanding:
+                return await BuildCustomerOutstandingAsync(branchId, ct);
+            case ReportKind.CustomerReceipts:
+            case ReportKind.ReceiptVouchers:
+                return await BuildVoucherRegisterAsync("Receipt", from, to, branchId, ct);
+            case ReportKind.ExpenseRegister:
+                return await BuildExpenseRegisterAsync(from, to, branchId, ct);
+            case ReportKind.ExpenseByAccount:
+                return await BuildExpenseByAccountAsync(from, to, branchId, ct);
+            case ReportKind.CashBookSummary:
+                return await BuildCashBookSummaryAsync(from, to, branchId, ct);
+            case ReportKind.BatchStock:
+                return await BuildBatchStockAsync(branchId, ct);
+            case ReportKind.SlowMovingStock:
+                return await BuildSlowMovingStockAsync(branchId, ct);
+            default:
+                return Empty($"Report '{kind}' is not implemented.");
+        }
+    }
+
+    private static ReportTableDto Empty(string note) => new()
+    {
+        Summary = new ReportSummaryDto { FooterNote = note }
+    };
+
+    private async Task<ReportTableDto> BuildSalesByCustomerAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var rows = await SalesQuery(branchId)
+            .Where(s => s.InvoiceDate >= start && s.InvoiceDate < end)
+            .GroupBy(s => s.Customer != null ? s.Customer.Name : (s.BillingCustomerName ?? "Walk-in"))
+            .Select(g => new
+            {
+                Customer = g.Key,
+                Bills = g.Count(),
+                Total = g.Sum(x => x.GrandTotal),
+                Paid = g.Sum(x => x.PaidAmount),
+                Due = g.Sum(x => x.GrandTotal > x.PaidAmount ? x.GrandTotal - x.PaidAmount : 0m)
+            })
+            .OrderByDescending(x => x.Total)
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.Total), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Customer", "Customer"),
+                ReportTableMapper.C("Bills", "Bills"),
+                ReportTableMapper.C("Total", "Total", "N2"),
+                ReportTableMapper.C("Paid", "Paid", "N2"),
+                ReportTableMapper.C("Due", "Due", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Customer", (object?)r.Customer),
+                ("Bills", r.Bills),
+                ("Total", r.Total),
+                ("Paid", r.Paid),
+                ("Due", r.Due))));
+    }
+
+    private async Task<ReportTableDto> BuildSalesByPaymentModeAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var saleIds = await SalesQuery(branchId)
+            .Where(s => s.InvoiceDate >= start && s.InvoiceDate < end)
+            .Select(s => s.Id)
+            .ToListAsync(ct);
+
+        if (saleIds.Count == 0)
+            return Empty("No sales in this period.");
+
+        var payments = await _uow.Repository<SalePayment>().Query().AsNoTracking()
+            .Where(p => saleIds.Contains(p.SaleId))
+            .GroupBy(p => p.Method)
+            .Select(g => new { Method = g.Key, Amount = g.Sum(x => x.Amount), Count = g.Count() })
+            .OrderByDescending(x => x.Amount)
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            BuildSummary(payments.Count, payments.Sum(r => r.Amount), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Method", "PaymentMode"),
+                ReportTableMapper.C("Count", "Lines"),
+                ReportTableMapper.C("Amount", "Amount", "N2")),
+            payments.Select(r => ReportTableMapper.Dict(
+                ("Method", (object?)r.Method.ToString()),
+                ("Count", r.Count),
+                ("Amount", r.Amount))));
+    }
+
+    private async Task<ReportTableDto> BuildSalesDayWiseAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var raw = await SalesQuery(branchId)
+            .Where(s => s.InvoiceDate >= start && s.InvoiceDate < end)
+            .Select(s => new { s.InvoiceDate, s.GrandTotal, s.CgstAmount, s.SgstAmount, s.IgstAmount, s.DiscountAmount })
+            .ToListAsync(ct);
+
+        var rows = raw
+            .GroupBy(s => s.InvoiceDate.Date)
+            .Select(g => new
+            {
+                Day = g.Key,
+                Bills = g.Count(),
+                Total = g.Sum(x => x.GrandTotal),
+                Tax = g.Sum(x => x.CgstAmount + x.SgstAmount + x.IgstAmount),
+                Discount = g.Sum(x => x.DiscountAmount)
+            })
+            .OrderBy(x => x.Day)
+            .ToList();
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.Total), rows.Sum(r => r.Tax), rows.Sum(r => r.Discount)),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Date", "Date"),
+                ReportTableMapper.C("Bills", "Bills"),
+                ReportTableMapper.C("Total", "Total", "N2"),
+                ReportTableMapper.C("Tax", "Tax", "N2"),
+                ReportTableMapper.C("Discount", "Discount", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Date", (object?)r.Day.ToString("dd/MM/yyyy")),
+                ("Bills", r.Bills),
+                ("Total", r.Total),
+                ("Tax", r.Tax),
+                ("Discount", r.Discount))));
+    }
+
+    private async Task<ReportTableDto> BuildSalesCreditDueAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var (summary, all) = await GetSalesReportAsync(from, to, branchId, ct);
+        var due = all.Where(r => r.BalanceDue > 0.009m).ToList();
+        summary.RecordCount = due.Count;
+        summary.TotalAmount = due.Sum(r => r.BalanceDue);
+        summary.FooterNote = $"{due.Count} credit bill(s) · due ₹{summary.TotalAmount:N2}";
+        return ReportTableMapper.FromSales(summary, due);
+    }
+
+    private async Task<ReportTableDto> BuildPurchasesBySupplierAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        // Group by id + name (no string.Format) so EF can translate; format label in-memory.
+        var rows = await PurchasesQuery(branchId)
+            .Where(p => p.InvoiceDate >= start && p.InvoiceDate < end)
+            .GroupBy(p => new { p.SupplierId, Name = p.Supplier != null ? p.Supplier.Name : null })
+            .Select(g => new
+            {
+                g.Key.SupplierId,
+                g.Key.Name,
+                Bills = g.Count(),
+                Total = g.Sum(x => x.GrandTotal),
+                Paid = g.Sum(x => x.PaidAmount),
+                Due = g.Sum(x => x.GrandTotal > x.PaidAmount ? x.GrandTotal - x.PaidAmount : 0m)
+            })
+            .OrderByDescending(x => x.Total)
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.Total), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Supplier", "Supplier"),
+                ReportTableMapper.C("Bills", "Bills"),
+                ReportTableMapper.C("Total", "Total", "N2"),
+                ReportTableMapper.C("Paid", "Paid", "N2"),
+                ReportTableMapper.C("Due", "Due", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Supplier", (object?)(r.Name ?? $"Supplier #{r.SupplierId}")),
+                ("Bills", r.Bills),
+                ("Total", r.Total),
+                ("Paid", r.Paid),
+                ("Due", r.Due))));
+    }
+
+    private async Task<ReportTableDto> BuildSupplierOutstandingAsync(int? branchId, CancellationToken ct)
+    {
+        var q = _uow.Repository<Supplier>().Query().AsNoTracking()
+            .Where(s => s.Status == EntityStatus.Active);
+        if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
+
+        // OutstandingBalance is synced from open purchase dues by MedWin backfill.
+        var rows = await q
+            .Select(s => new
+            {
+                s.Name,
+                s.Phone,
+                Due = s.OutstandingBalance > 0.009m ? s.OutstandingBalance : s.OpeningBalance
+            })
+            .Where(s => s.Due > 0.009m)
+            .OrderByDescending(s => s.Due)
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.Due), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Name", "Supplier"),
+                ReportTableMapper.C("Phone", "Phone"),
+                ReportTableMapper.C("OutstandingBalance", "Outstanding", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Name", (object?)r.Name),
+                ("Phone", r.Phone),
+                ("OutstandingBalance", r.Due))));
+    }
+
+    private async Task<ReportTableDto> BuildCustomerOutstandingAsync(int? branchId, CancellationToken ct)
+    {
+        var q = _uow.Repository<Customer>().Query().AsNoTracking()
+            .Where(c => c.Status == EntityStatus.Active && c.OutstandingBalance > 0);
+        if (branchId.HasValue) q = q.Where(c => c.BranchId == branchId);
+
+        var rows = await q
+            .OrderByDescending(c => c.OutstandingBalance)
+            .Select(c => new { c.Name, c.Phone, c.OutstandingBalance })
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.OutstandingBalance), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Name", "Customer"),
+                ReportTableMapper.C("Phone", "Phone"),
+                ReportTableMapper.C("OutstandingBalance", "Outstanding", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Name", (object?)r.Name),
+                ("Phone", r.Phone),
+                ("OutstandingBalance", r.OutstandingBalance))));
+    }
+
+    private async Task<ReportTableDto> BuildPurchaseReturnsAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+            .Where(r => r.Status == PurchaseReturnStatus.Completed
+                        && r.ReturnDate >= start && r.ReturnDate < end);
+        if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
+
+        var rows = await q
+            .OrderByDescending(r => r.ReturnDate)
+            .Select(r => new
+            {
+                r.ReturnNumber,
+                r.ReturnDate,
+                r.SupplierId,
+                SupplierName = r.Supplier != null ? r.Supplier.Name : null,
+                Invoice = r.Purchase != null ? r.Purchase.InvoiceNumber : null,
+                r.GrandTotal,
+                r.CreditAmount,
+                r.CreditAppliedAmount,
+                Remaining = r.CreditAmount - r.CreditAppliedAmount
+            })
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.GrandTotal), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("ReturnNumber", "Return#"),
+                ReportTableMapper.C("Date", "Date"),
+                ReportTableMapper.C("Supplier", "Supplier"),
+                ReportTableMapper.C("Invoice", "PurchaseInvoice"),
+                ReportTableMapper.C("GrandTotal", "Amount", "N2"),
+                ReportTableMapper.C("CreditAmount", "Credit", "N2"),
+                ReportTableMapper.C("Remaining", "Remaining", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("ReturnNumber", (object?)r.ReturnNumber),
+                ("Date", r.ReturnDate.ToString("dd/MM/yyyy")),
+                ("Supplier", r.SupplierName ?? $"Supplier #{r.SupplierId}"),
+                ("Invoice", r.Invoice ?? "—"),
+                ("GrandTotal", r.GrandTotal),
+                ("CreditAmount", r.CreditAmount),
+                ("Remaining", r.Remaining))));
+    }
+
+    private async Task<ReportTableDto> BuildExpiryToCompanyClaimsAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var q = _uow.Repository<ExpirySupplierClaim>().Query().AsNoTracking()
+            .Where(c => c.ClaimDate >= start && c.ClaimDate < end
+                        && c.Status != ExpiryClaimStatus.Cancelled);
+        if (branchId.HasValue) q = q.Where(c => c.BranchId == branchId);
+
+        var claims = await q
+            .OrderByDescending(c => c.ClaimDate)
+            .Select(c => new
+            {
+                c.ClaimNumber,
+                c.ClaimDate,
+                SupplierName = c.Supplier != null ? c.Supplier.Name : "—",
+                c.ExpectedCreditAmount,
+                c.Status,
+                c.CreditNoteNumber,
+                ReturnNumber = c.PurchaseReturn != null ? c.PurchaseReturn.ReturnNumber : "",
+                Items = c.Items.Select(i => new
+                {
+                    i.MedicineId,
+                    i.BatchNumber,
+                    i.ExpiryDate,
+                    i.ClaimQuantity,
+                    i.LineTotal,
+                    i.PurchaseId
+                }).ToList()
+            })
+            .ToListAsync(ct);
+
+        var medIds = claims.SelectMany(c => c.Items.Select(i => i.MedicineId)).Distinct().ToList();
+        var names = medIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
+                .Where(m => medIds.Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
+
+        var purchaseIds = claims.SelectMany(c => c.Items)
+            .Where(i => i.PurchaseId.HasValue)
+            .Select(i => i.PurchaseId!.Value)
+            .Distinct()
+            .ToList();
+        var invoices = purchaseIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _uow.Repository<Purchase>().Query().AsNoTracking()
+                .Where(p => purchaseIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.InvoiceNumber, ct);
+
+        var rows = claims.SelectMany(c =>
+        {
+            var status = c.Status == ExpiryClaimStatus.CreditReceived
+                ? "Credit received"
+                : "Awaiting credit note";
+            return c.Items.Select(i => new
+            {
+                c.ClaimNumber,
+                c.ClaimDate,
+                c.SupplierName,
+                Medicine = names.TryGetValue(i.MedicineId, out var n) ? n : $"Medicine #{i.MedicineId}",
+                i.BatchNumber,
+                i.ExpiryDate,
+                i.ClaimQuantity,
+                i.LineTotal,
+                Status = status,
+                c.CreditNoteNumber,
+                c.ReturnNumber,
+                Invoice = i.PurchaseId is int pid && invoices.TryGetValue(pid, out var inv) ? inv : null
+            });
+        }).ToList();
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.LineTotal), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("ClaimNumber", "Claim#"),
+                ReportTableMapper.C("Date", "Date"),
+                ReportTableMapper.C("Supplier", "Supplier"),
+                ReportTableMapper.C("Medicine", "Medicine"),
+                ReportTableMapper.C("Batch", "Batch"),
+                ReportTableMapper.C("Expiry", "Expiry"),
+                ReportTableMapper.C("Qty", "Qty", "0.##"),
+                ReportTableMapper.C("LineTotal", "Amount", "N2"),
+                ReportTableMapper.C("Status", "Status"),
+                ReportTableMapper.C("CreditNote", "CN#"),
+                ReportTableMapper.C("ReturnNumber", "Return#"),
+                ReportTableMapper.C("Invoice", "PurchaseInvoice")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("ClaimNumber", (object?)r.ClaimNumber),
+                ("Date", r.ClaimDate.ToString("dd/MM/yyyy")),
+                ("Supplier", r.SupplierName),
+                ("Medicine", r.Medicine),
+                ("Batch", r.BatchNumber),
+                ("Expiry", r.ExpiryDate?.ToString("dd/MM/yyyy") ?? "—"),
+                ("Qty", r.ClaimQuantity),
+                ("LineTotal", r.LineTotal),
+                ("Status", r.Status),
+                ("CreditNote", r.CreditNoteNumber ?? "—"),
+                ("ReturnNumber", string.IsNullOrWhiteSpace(r.ReturnNumber) ? "—" : r.ReturnNumber),
+                ("Invoice", r.Invoice ?? "—"))));
+    }
+
+    private async Task<ReportTableDto> BuildPurchasePaymentsAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.Status != PurchaseStatus.Cancelled
+                        && p.Status != PurchaseStatus.Draft
+                        // Period bills, plus any still-pending bills (so Pending filter is useful)
+                        && ((p.InvoiceDate >= start && p.InvoiceDate < end)
+                            || p.GrandTotal > p.PaidAmount));
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        var rows = await q
+            .OrderByDescending(p => p.InvoiceDate)
+            .Select(p => new
+            {
+                p.InvoiceNumber,
+                SupplierBillNumber = p.SupplierInvoiceNumber,
+                p.InvoiceDate,
+                Supplier = p.Supplier != null ? p.Supplier.Name : "—",
+                p.GrandTotal,
+                p.PaidAmount,
+                BalanceDue = p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m
+            })
+            .ToListAsync(ct);
+
+        var projected = rows.Select(r =>
+        {
+            var status = r.BalanceDue <= 0.009m
+                ? "Paid"
+                : r.PaidAmount <= 0.009m
+                    ? "Pending"
+                    : "Partial";
+            return new
+            {
+                r.InvoiceNumber,
+                r.SupplierBillNumber,
+                r.InvoiceDate,
+                r.Supplier,
+                r.GrandTotal,
+                r.PaidAmount,
+                r.BalanceDue,
+                Status = status
+            };
+        }).ToList();
+
+        return ReportTableMapper.Table(
+            new ReportSummaryDto
+            {
+                RecordCount = projected.Count,
+                TotalAmount = projected.Sum(r => r.GrandTotal),
+                FooterNote =
+                    $"Paid ₹{projected.Sum(r => r.PaidAmount):N2} · Pending ₹{projected.Sum(r => r.BalanceDue):N2}"
+            },
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("InvoiceNumber", "Invoice"),
+                ReportTableMapper.C("SupplierBillNumber", "SupplierBill#"),
+                ReportTableMapper.C("InvoiceDateLabel", "Date"),
+                ReportTableMapper.C("Supplier", "Supplier"),
+                ReportTableMapper.C("GrandTotal", "BillAmt", "N2"),
+                ReportTableMapper.C("PaidAmount", "Paid", "N2"),
+                ReportTableMapper.C("BalanceDue", "Due", "N2"),
+                ReportTableMapper.C("Status", "Status")),
+            projected.Select(r => ReportTableMapper.Dict(
+                ("InvoiceNumber", (object?)r.InvoiceNumber),
+                ("SupplierBillNumber", r.SupplierBillNumber ?? "—"),
+                ("InvoiceDateLabel", r.InvoiceDate.ToString("dd/MM/yyyy")),
+                ("Supplier", r.Supplier),
+                ("GrandTotal", r.GrandTotal),
+                ("PaidAmount", r.PaidAmount),
+                ("BalanceDue", r.BalanceDue),
+                ("Status", r.Status))));
+    }
+
+    private async Task<ReportTableDto> BuildVoucherRegisterAsync(
+        string referenceType, DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var q = _uow.Repository<JournalEntry>().Query().AsNoTracking()
+            .Where(e => e.ReferenceType == referenceType
+                        && e.EntryDate >= start && e.EntryDate < end);
+        if (branchId.HasValue) q = q.Where(e => e.BranchId == branchId);
+
+        var entries = await q
+            .OrderByDescending(e => e.EntryDate)
+            .Select(e => new
+            {
+                e.VoucherNumber,
+                e.EntryDate,
+                e.Narration,
+                e.ReferenceId,
+                Amount = e.Lines.Where(l => l.EntryType == LedgerEntryType.Debit).Sum(l => l.Amount)
+            })
+            .ToListAsync(ct);
+
+        var partyIds = entries
+            .Where(e => e.ReferenceId.HasValue)
+            .Select(e => e.ReferenceId!.Value)
+            .Distinct()
+            .ToList();
+
+        Dictionary<int, string> partyNames;
+        if (string.Equals(referenceType, "Payment", StringComparison.OrdinalIgnoreCase))
+        {
+            partyNames = await _uow.Repository<Supplier>().Query().AsNoTracking()
+                .Where(s => partyIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.Name, ct);
+        }
+        else
+        {
+            partyNames = await _uow.Repository<Customer>().Query().AsNoTracking()
+                .Where(c => partyIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        }
+
+        return ReportTableMapper.Table(
+            BuildSummary(entries.Count, entries.Sum(r => r.Amount), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("VoucherNumber", "Voucher"),
+                ReportTableMapper.C("Date", "Date"),
+                ReportTableMapper.C("Party", "Party"),
+                ReportTableMapper.C("Narration", "Narration"),
+                ReportTableMapper.C("Amount", "Amount", "N2")),
+            entries.Select(r =>
+            {
+                string party = "—";
+                if (r.ReferenceId.HasValue && partyNames.TryGetValue(r.ReferenceId.Value, out var name))
+                    party = name;
+                return ReportTableMapper.Dict(
+                    ("VoucherNumber", (object?)r.VoucherNumber),
+                    ("Date", r.EntryDate.ToString("dd/MM/yyyy")),
+                    ("Party", party),
+                    ("Narration", r.Narration),
+                    ("Amount", r.Amount));
+            }));
+    }
+
+    private async Task<ReportTableDto> BuildExpenseRegisterAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var (start, end) = NormalizeRange(from, to);
+        var q = _uow.Repository<JournalEntry>().Query().AsNoTracking()
+            .Where(e => e.ReferenceType == "Expense"
+                        && e.EntryDate >= start && e.EntryDate < end);
+        if (branchId.HasValue) q = q.Where(e => e.BranchId == branchId);
+
+        var entries = await q
+            .Include(e => e.Lines).ThenInclude(l => l.Account)
+            .OrderByDescending(e => e.EntryDate)
+            .ToListAsync(ct);
+
+        var rows = entries.Select(e =>
+        {
+            var expenseLine = e.Lines.FirstOrDefault(l =>
+                l.EntryType == LedgerEntryType.Debit && l.Account?.Type == AccountType.Expense);
+            return new
+            {
+                e.VoucherNumber,
+                e.EntryDate,
+                Account = expenseLine?.Account?.Name ?? "Expense",
+                e.Narration,
+                Amount = expenseLine?.Amount ?? e.Lines.Where(l => l.EntryType == LedgerEntryType.Debit).Sum(l => l.Amount)
+            };
+        }).ToList();
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.Amount), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("VoucherNumber", "Voucher"),
+                ReportTableMapper.C("Date", "Date"),
+                ReportTableMapper.C("Account", "ExpenseAccount"),
+                ReportTableMapper.C("Narration", "Narration"),
+                ReportTableMapper.C("Amount", "Amount", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("VoucherNumber", (object?)r.VoucherNumber),
+                ("Date", r.EntryDate.ToString("dd/MM/yyyy")),
+                ("Account", r.Account),
+                ("Narration", r.Narration),
+                ("Amount", r.Amount))));
+    }
+
+    private async Task<ReportTableDto> BuildExpenseByAccountAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var table = await BuildExpenseRegisterAsync(from, to, branchId, ct);
+        var grouped = table.Rows
+            .GroupBy(r => r.TryGetValue("Account", out var a) ? a?.ToString() ?? "Expense" : "Expense")
+            .Select(g => new
+            {
+                Account = g.Key,
+                Count = g.Count(),
+                Amount = g.Sum(x => x.TryGetValue("Amount", out var amt) && amt is decimal d ? d : 0m)
+            })
+            .OrderByDescending(x => x.Amount)
+            .ToList();
+
+        return ReportTableMapper.Table(
+            BuildSummary(grouped.Count, grouped.Sum(r => r.Amount), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Account", "ExpenseAccount"),
+                ReportTableMapper.C("Count", "Vouchers"),
+                ReportTableMapper.C("Amount", "Amount", "N2")),
+            grouped.Select(r => ReportTableMapper.Dict(
+                ("Account", (object?)r.Account),
+                ("Count", r.Count),
+                ("Amount", r.Amount))));
+    }
+
+    private async Task<ReportTableDto> BuildCashBookSummaryAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct)
+    {
+        var cash = await _uow.Repository<Account>().Query().AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Code == "1000", ct);
+        if (cash is null)
+            return Empty("Cash account (1000) not found.");
+
+        var (start, end) = NormalizeRange(from, to);
+        var q = _uow.Repository<JournalLine>().Query().AsNoTracking()
+            .Where(l => l.AccountId == cash.Id
+                        && l.JournalEntry != null
+                        && l.JournalEntry.EntryDate >= start
+                        && l.JournalEntry.EntryDate < end);
+        if (branchId.HasValue)
+            q = q.Where(l => l.JournalEntry!.BranchId == branchId);
+
+        var lines = await q
+            .Select(l => new
+            {
+                l.JournalEntry!.EntryDate,
+                l.EntryType,
+                l.Amount
+            })
+            .ToListAsync(ct);
+
+        var rows = lines
+            .GroupBy(l => l.EntryDate.Date)
+            .Select(g =>
+            {
+                var inflow = g.Where(x => x.EntryType == LedgerEntryType.Debit).Sum(x => x.Amount);
+                var outflow = g.Where(x => x.EntryType == LedgerEntryType.Credit).Sum(x => x.Amount);
+                return new
+                {
+                    Day = g.Key,
+                    Inflow = inflow,
+                    Outflow = outflow,
+                    Net = inflow - outflow
+                };
+            })
+            .OrderBy(x => x.Day)
+            .ToList();
+
+        return ReportTableMapper.Table(
+            BuildSummary(rows.Count, rows.Sum(r => r.Net), 0, 0),
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Date", "Date"),
+                ReportTableMapper.C("Inflow", "CashIn", "N2"),
+                ReportTableMapper.C("Outflow", "CashOut", "N2"),
+                ReportTableMapper.C("Net", "Net", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Date", (object?)r.Day.ToString("dd/MM/yyyy")),
+                ("Inflow", r.Inflow),
+                ("Outflow", r.Outflow),
+                ("Net", r.Net))));
+    }
+
+    private async Task<ReportTableDto> BuildBatchStockAsync(int? branchId, CancellationToken ct)
+    {
+        var rows = await BatchQuery(branchId)
+            .Where(b => b.QuantityAvailable != 0)
+            .OrderBy(b => b.Medicine!.Name).ThenBy(b => b.ExpiryDate)
+            .Select(b => new
+            {
+                Medicine = b.Medicine!.Name,
+                b.BatchNumber,
+                b.ExpiryDate,
+                b.QuantityAvailable,
+                b.PurchasePrice,
+                b.Mrp
+            })
+            .ToListAsync(ct);
+
+        return ReportTableMapper.Table(
+            new ReportSummaryDto
+            {
+                RecordCount = rows.Count,
+                TotalAmount = rows.Sum(r => r.QuantityAvailable * r.Mrp),
+                FooterNote = $"Cost value ₹{rows.Sum(r => r.QuantityAvailable * r.PurchasePrice):N2}"
+            },
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Medicine", "Medicine"),
+                ReportTableMapper.C("Batch", "Batch"),
+                ReportTableMapper.C("Expiry", "Expiry"),
+                ReportTableMapper.C("Qty", "Qty", "0.##"),
+                ReportTableMapper.C("Cost", "Cost", "N2"),
+                ReportTableMapper.C("Mrp", "MRP", "N2"),
+                ReportTableMapper.C("Value", "MRPValue", "N2")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Medicine", (object?)r.Medicine),
+                ("Batch", r.BatchNumber),
+                ("Expiry", r.ExpiryDate.HasValue ? r.ExpiryDate.Value.ToString("dd/MM/yyyy") : "—"),
+                ("Qty", r.QuantityAvailable),
+                ("Cost", r.PurchasePrice),
+                ("Mrp", r.Mrp),
+                ("Value", Math.Round(r.QuantityAvailable * r.Mrp, 2)))));
+    }
+
+    private async Task<ReportTableDto> BuildSlowMovingStockAsync(int? branchId, CancellationToken ct)
+    {
+        var cutoff = _clock.Today.AddDays(-90);
+        var stock = await BatchQuery(branchId)
+            .Where(b => b.QuantityAvailable != 0)
+            .Select(b => new
+            {
+                b.MedicineId,
+                Medicine = b.Medicine!.Name,
+                b.BatchNumber,
+                b.QuantityAvailable,
+                b.PurchasePrice,
+                b.Mrp
+            })
+            .ToListAsync(ct);
+
+        if (stock.Count == 0)
+            return Empty("No stock on hand.");
+
+        var medIds = stock.Select(s => s.MedicineId).Distinct().ToList();
+        var lastSales = await (
+            from item in _uow.Repository<SaleItem>().Query().AsNoTracking()
+            join sale in SalesQuery(branchId) on item.SaleId equals sale.Id
+            where medIds.Contains(item.MedicineId)
+            group sale by item.MedicineId
+            into g
+            select new { MedicineId = g.Key, LastSale = g.Max(x => x.InvoiceDate) }
+        ).ToDictionaryAsync(x => x.MedicineId, x => x.LastSale, ct);
+
+        var rows = stock
+            .Select(s =>
+            {
+                lastSales.TryGetValue(s.MedicineId, out var last);
+                var days = last == default
+                    ? (int?)null
+                    : (int)(_clock.Today.Date - last.Date).TotalDays;
+                return new
+                {
+                    s.Medicine,
+                    s.BatchNumber,
+                    s.QuantityAvailable,
+                    Value = Math.Round(s.QuantityAvailable * s.PurchasePrice, 2),
+                    LastSale = last == default ? null : last.ToString("dd/MM/yyyy"),
+                    DaysSince = days,
+                    IsSlow = last == default || last < cutoff
+                };
+            })
+            .Where(r => r.IsSlow)
+            .OrderByDescending(r => r.DaysSince ?? 9999)
+            .ToList();
+
+        return ReportTableMapper.Table(
+            new ReportSummaryDto
+            {
+                RecordCount = rows.Count,
+                TotalAmount = rows.Sum(r => r.Value),
+                FooterNote = "No sale in last 90 days (or never sold)."
+            },
+            ReportTableMapper.Cols(
+                ReportTableMapper.C("Medicine", "Medicine"),
+                ReportTableMapper.C("Batch", "Batch"),
+                ReportTableMapper.C("Qty", "Qty", "0.##"),
+                ReportTableMapper.C("Value", "CostValue", "N2"),
+                ReportTableMapper.C("LastSale", "LastSale"),
+                ReportTableMapper.C("DaysSince", "DaysIdle")),
+            rows.Select(r => ReportTableMapper.Dict(
+                ("Medicine", (object?)r.Medicine),
+                ("Batch", r.BatchNumber),
+                ("Qty", r.QuantityAvailable),
+                ("Value", r.Value),
+                ("LastSale", r.LastSale ?? "Never"),
+                ("DaysSince", r.DaysSince ?? 9999))));
+    }
+}

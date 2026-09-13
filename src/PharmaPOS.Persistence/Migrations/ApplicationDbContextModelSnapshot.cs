@@ -1649,7 +1649,13 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<bool>("IsExpiryEnabled")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsNewMappingVerified")
+                        .HasColumnType("bit");
+
                     b.Property<int?>("ManufacturerId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MappedCatalogueMedicineId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ModifiedAtUtc")
@@ -1732,7 +1738,11 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.HasIndex("GenericNameSearchKey");
 
+                    b.HasIndex("IsNewMappingVerified");
+
                     b.HasIndex("ManufacturerId");
+
+                    b.HasIndex("MappedCatalogueMedicineId");
 
                     b.HasIndex("Name");
 
@@ -3793,6 +3803,9 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<int?>("ViewFinancialYearStartYear")
+                        .HasColumnType("int");
+
                     b.Property<string>("Website")
                         .HasColumnType("nvarchar(max)");
 
@@ -4235,9 +4248,16 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasForeignKey("ManufacturerId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("PharmaPOS.Domain.Entities.Masters.Medicine", "MappedCatalogueMedicine")
+                        .WithMany()
+                        .HasForeignKey("MappedCatalogueMedicineId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Category");
 
                     b.Navigation("Manufacturer");
+
+                    b.Navigation("MappedCatalogueMedicine");
                 });
 
             modelBuilder.Entity("PharmaPOS.Domain.Entities.Masters.MedicineMedWinMapping", b =>

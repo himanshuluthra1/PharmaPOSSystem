@@ -9,7 +9,7 @@
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
              Focusable="True"
              PreviewKeyDown="SaleReturnView_PreviewKeyDown">
-    <Grid Margin="8">
+    <Grid Margin="4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -18,45 +18,46 @@
         </Grid.RowDefinitions>
 
         <!-- Search bar -->
-        <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="160" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ComboBox Grid.Column="0" Margin="0,0,8,0"
-                          ItemsSource="{Binding CriteriaOptions}"
-                          SelectedItem="{Binding SelectedCriteria}"
-                          DisplayMemberPath="Label"
-                          materialDesign:HintAssist.Hint="Search by"
-                          Style="{StaticResource MaterialDesignOutlinedComboBox}" />
-                <TextBox x:Name="SearchBox" Grid.Column="1" Margin="0,0,8,0"
-                         materialDesign:HintAssist.Hint="{Binding SearchHint}"
-                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                <Button Grid.Column="2" Margin="0,0,8,0"
+        <materialDesign:Card Grid.Row="0" Margin="0,0,0,4" UniformCornerRadius="10" Padding="8,6">
+            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <TextBlock Text="Search by :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <ComboBox Width="140" Height="28"
+                              ItemsSource="{Binding CriteriaOptions}"
+                              SelectedItem="{Binding SelectedCriteria}"
+                              DisplayMemberPath="Label"
+                              materialDesign:HintAssist.Hint="Search by"
+                              materialDesign:HintAssist.IsFloating="False"
+                              Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <TextBlock Text="Search :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                    <TextBox x:Name="SearchBox" Width="260" MaxWidth="260"
+                             materialDesign:HintAssist.Hint="{Binding SearchHint}"
+                             materialDesign:HintAssist.IsFloating="False"
+                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+                <Button Margin="0,0,8,0"
                         Command="{Binding SearchCommand}"
                         Style="{StaticResource MaterialDesignRaisedButton}"
-                        Padding="16,8">
+                        Padding="8,2" Height="28">
                     <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="Magnify" Width="18" Height="18" Margin="0,0,6,0" />
+                        <materialDesign:PackIcon Kind="Magnify" Width="16" Height="16" Margin="0,0,4,0" />
                         <TextBlock Text="Search" />
                     </StackPanel>
                 </Button>
-                <Button Grid.Column="3"
-                        Command="{Binding LoadInvoiceCommand}"
+                <Button Command="{Binding LoadInvoiceCommand}"
                         Style="{StaticResource MaterialDesignOutlinedButton}"
-                        Padding="16,8"
+                        Padding="8,2" Height="28"
                         ToolTip="Load selected invoice (Enter)">
                     <TextBlock Text="Load Invoice" />
                 </Button>
-            </Grid>
+            </WrapPanel>
         </materialDesign:Card>
 
         <!-- Search results -->
-        <materialDesign:Card Grid.Row="1" Margin="0,0,0,8" UniformCornerRadius="10" Padding="8"
+        <materialDesign:Card Grid.Row="1" Margin="0,0,0,4" UniformCornerRadius="10" Padding="8"
                              MaxHeight="150"
                              Visibility="{Binding HasSearchResults, Converter={StaticResource BoolToVisibility}}">
             <DockPanel>
@@ -90,7 +91,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Invoice lines + inspection -->
-            <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
+            <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -98,22 +99,22 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="True">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
+                    <DockPanel Grid.Row="0" Margin="0,0,0,4" LastChildFill="True">
+                        <WrapPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                             <Button Command="{Binding ReturnEntireInvoiceCommand}"
                                     Style="{StaticResource MaterialDesignOutlinedButton}"
-                                    Margin="0,0,8,0" Padding="12,6"
+                                    Margin="0,0,4,0" Padding="8,2" Height="28"
                                     ToolTip="Return all eligible items">
                                 <TextBlock Text="Return Entire Invoice" />
                             </Button>
                             <Button Command="{Binding ClearCommand}"
                                     Style="{StaticResource MaterialDesignFlatButton}"
-                                    Padding="12,6">
+                                    Padding="8,2" Height="28">
                                 <TextBlock Text="Clear" />
                             </Button>
-                        </StackPanel>
+                        </WrapPanel>
                         <StackPanel>
-                            <TextBlock Text="Invoice Items" FontSize="18" FontWeight="Bold" />
+                            <TextBlock Text="Invoice Items" FontSize="13" FontWeight="SemiBold" />
                             <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Opacity="0.85" TextTrimming="CharacterEllipsis">
                                 <Run Text="{Binding InvoiceNumber, StringFormat=Invoice: {0}, Mode=OneWay}" />
                                 <Run Text="  ·  " />
@@ -213,10 +214,10 @@
             </materialDesign:Card>
 
             <!-- Refund panel -->
-            <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="16">
+            <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="8">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Return Summary" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
+                        <TextBlock Text="Return Summary" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
 
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>

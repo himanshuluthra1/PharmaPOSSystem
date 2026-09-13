@@ -4,19 +4,48 @@ namespace PharmaPOS.Application.Features.Reports;
 
 public enum ReportKind
 {
+    // Sales
     Sales,
+    SalesByCustomer,
+    SalesByMedicine,
+    SalesByPaymentMode,
+    SalesDayWise,
+    SalesCreditDue,
+    Profit,
+    SaleReturns,
+    MedicineReturns,
+    ScheduleRegister,
+
+    // Purchase
     Purchases,
+    PurchasesBySupplier,
+    SupplierOutstanding,
+    SupplierPayments,
+    PurchaseReturns,
+    ExpiryToCompanyClaims,
+
+    // Customers
+    CustomerOutstanding,
+    CustomerReceipts,
+
+    // Payments & Expenses
+    PaymentVouchers,
+    ReceiptVouchers,
+    ExpenseRegister,
+    ExpenseByAccount,
+    CashBookSummary,
+
+    // GST
     GstSummary,
     Gstr1,
     Gstr2B,
-    Profit,
-    SalesByMedicine,
+
+    // Stock
     StockValuation,
+    BatchStock,
     Expiry,
     LowStock,
-    SaleReturns,
-    MedicineReturns,
-    ScheduleRegister
+    SlowMovingStock
 }
 
 public sealed class ReportKindOption(ReportKind kind, string label, string description)
@@ -24,6 +53,162 @@ public sealed class ReportKindOption(ReportKind kind, string label, string descr
     public ReportKind Kind { get; } = kind;
     public string Label { get; } = label;
     public string Description { get; } = description;
+}
+
+public record ReportDefinition(
+    ReportKind Kind,
+    string Group,
+    string Label,
+    string Description,
+    bool UsesDateRange,
+    IReadOnlyList<FilterPreset> FilterPresets);
+
+public enum FilterPreset
+{
+    None,
+    PaymentStatus,
+    GstDocumentType,
+    Gstr1Section,
+    Gstr2BSection,
+    ExpiryWindow,
+    LowStockSeverity,
+    SaleReturnMode
+}
+
+public record ReportColumnDto(string Key, string Header, string? Format = null);
+
+public sealed class ReportTableDto
+{
+    public ReportSummaryDto Summary { get; set; } = new();
+    public List<ReportColumnDto> Columns { get; set; } = [];
+    public List<Dictionary<string, object?>> Rows { get; set; } = [];
+    public GstSummaryDto? GstSummary { get; set; }
+    public GstReturnExportDto? GstReturnExport { get; set; }
+    public ScheduleRegisterReportDto? ScheduleRegister { get; set; }
+}
+
+public static class ReportCatalog
+{
+    public const string GroupSales = "Sales";
+    public const string GroupPurchase = "Purchase";
+    public const string GroupCustomers = "Customers";
+    public const string GroupPayments = "Payments & Expenses";
+    public const string GroupGst = "GST";
+    public const string GroupStock = "Stock & Inventory";
+
+    public static IReadOnlyList<ReportDefinition> All { get; } =
+    [
+        // Sales
+        Def(ReportKind.Sales, GroupSales, "Invoice Register",
+            "Completed sales invoices for the selected period.", true, FilterPreset.PaymentStatus),
+        Def(ReportKind.SalesByCustomer, GroupSales, "By Customer",
+            "Sales totals grouped by customer / patient.", true, FilterPreset.None),
+        Def(ReportKind.SalesByMedicine, GroupSales, "By Medicine",
+            "Quantity and revenue ranked by medicine.", true, FilterPreset.None),
+        Def(ReportKind.SalesByPaymentMode, GroupSales, "By Payment Mode",
+            "Collections split by Cash, UPI, Card, Credit, etc.", true, FilterPreset.None),
+        Def(ReportKind.SalesDayWise, GroupSales, "Day-wise Summary",
+            "Daily sales count, tax and totals.", true, FilterPreset.None),
+        Def(ReportKind.SalesCreditDue, GroupSales, "Credit / Balance Due",
+            "Open credit bills with amount still due.", true, FilterPreset.None),
+        Def(ReportKind.Profit, GroupSales, "Gross Profit",
+            "Revenue vs estimated cost per sale invoice.", true, FilterPreset.None),
+        Def(ReportKind.SaleReturns, GroupSales, "Sale Returns",
+            "Return transactions for the selected period.", true, FilterPreset.SaleReturnMode),
+        Def(ReportKind.MedicineReturns, GroupSales, "Medicine-wise Returns",
+            "Returned quantities grouped by medicine and batch.", true, FilterPreset.None),
+        Def(ReportKind.ScheduleRegister, GroupSales, "Schedule H / H1 Register",
+            "Inspector register for Schedule H and H1 sales.", true, FilterPreset.None),
+
+        // Purchase
+        Def(ReportKind.Purchases, GroupPurchase, "Purchase Register",
+            "Received purchase / GRN invoices for the period.", true, FilterPreset.PaymentStatus),
+        Def(ReportKind.PurchasesBySupplier, GroupPurchase, "By Supplier",
+            "Purchase totals grouped by supplier.", true, FilterPreset.None),
+        Def(ReportKind.SupplierOutstanding, GroupPurchase, "Supplier Outstanding",
+            "Open payables by supplier (current balance).", false, FilterPreset.None),
+        Def(ReportKind.SupplierPayments, GroupPurchase, "Purchase Payments",
+            "Supplier bills with paid, partial, and pending amounts. Filter by payment status.", true, FilterPreset.PaymentStatus),
+        Def(ReportKind.PurchaseReturns, GroupPurchase, "Purchase Returns",
+            "Supplier return / debit notes for the period.", true, FilterPreset.None),
+        Def(ReportKind.ExpiryToCompanyClaims, GroupPurchase, "Expiry to Company Claims",
+            "Expiry claims sent to suppliers — claim lines, expected credit, and credit-note status.", true, FilterPreset.None),
+
+        // Customers
+        Def(ReportKind.CustomerOutstanding, GroupCustomers, "Customer Outstanding",
+            "Open receivables by customer (current balance).", false, FilterPreset.None),
+        Def(ReportKind.CustomerReceipts, GroupCustomers, "Customer Receipts",
+            "Receipt vouchers collected from customers.", true, FilterPreset.None),
+        Def(ReportKind.SalesByCustomer, GroupCustomers, "Customer-wise Sales",
+            "Sales totals grouped by customer / patient.", true, FilterPreset.None),
+        Def(ReportKind.SalesCreditDue, GroupCustomers, "Pending Collections",
+            "Customer bills still due (pending receipts).", true, FilterPreset.None),
+
+        // Payments & Expenses
+        Def(ReportKind.SupplierPayments, GroupPayments, "Purchase Payments",
+            "Supplier bills with paid, partial, and pending amounts. Filter by payment status.", true, FilterPreset.PaymentStatus),
+        Def(ReportKind.PaymentVouchers, GroupPayments, "Payment Vouchers",
+            "Supplier payment vouchers posted in the period.", true, FilterPreset.None),
+        Def(ReportKind.ReceiptVouchers, GroupPayments, "Receipt Vouchers",
+            "Customer receipt vouchers posted in the period.", true, FilterPreset.None),
+        Def(ReportKind.SalesCreditDue, GroupPayments, "Pending Collections",
+            "Customer bills still due (pending receipts).", true, FilterPreset.None),
+        Def(ReportKind.ExpenseRegister, GroupPayments, "Expense Register",
+            "Expense vouchers with account and amount.", true, FilterPreset.None),
+        Def(ReportKind.ExpenseByAccount, GroupPayments, "Expense by Account",
+            "Expenses rolled up by expense account.", true, FilterPreset.None),
+        Def(ReportKind.CashBookSummary, GroupPayments, "Cash Book Summary",
+            "Day-wise cash in / out / closing from the cash book.", true, FilterPreset.None),
+
+        // GST
+        Def(ReportKind.GstSummary, GroupGst, "GST Summary",
+            "Output vs input GST with invoice-wise detail.", true, FilterPreset.GstDocumentType),
+        Def(ReportKind.Gstr1, GroupGst, "GSTR-1 export",
+            "B2B / B2CS / HSN / credit notes from sales. Export JSON or Excel.", true, FilterPreset.Gstr1Section),
+        Def(ReportKind.Gstr2B, GroupGst, "GSTR-2B worksheet",
+            "Inward invoices and ITC by rate from purchases.", true, FilterPreset.Gstr2BSection),
+
+        // Stock
+        Def(ReportKind.StockValuation, GroupStock, "Stock Valuation",
+            "Current stock value at MRP and purchase cost (includes negative qty batches).", false, FilterPreset.None),
+        Def(ReportKind.BatchStock, GroupStock, "Batch-wise Stock",
+            "All batches with non-zero quantity (including negative).", false, FilterPreset.None),
+        Def(ReportKind.Expiry, GroupStock, "Expiry Report",
+            "Expired stock and batches expiring within 1–12 months.", false, FilterPreset.ExpiryWindow),
+        Def(ReportKind.LowStock, GroupStock, "Low Stock",
+            "Medicines at or below reorder level.", false, FilterPreset.LowStockSeverity),
+        Def(ReportKind.SlowMovingStock, GroupStock, "Slow / Non-moving Stock",
+            "Stock with no sale in 90+ days (or never sold).", false, FilterPreset.None),
+    ];
+
+    public static IReadOnlyList<string> Groups { get; } =
+    [
+        GroupSales, GroupPurchase, GroupCustomers, GroupPayments, GroupGst, GroupStock
+    ];
+
+    public static ReportDefinition Get(ReportKind kind) =>
+        All.First(d => d.Kind == kind);
+
+    public static IEnumerable<ReportDefinition> ForGroup(string group) =>
+        All.Where(d => d.Group == group);
+
+    /// <summary>Unique kinds for the report picker (Customer-wise Sales shares SalesByCustomer).</summary>
+    public static IReadOnlyList<ReportKindOption> DistinctOptions()
+    {
+        var seen = new HashSet<ReportKind>();
+        var list = new List<ReportKindOption>();
+        foreach (var d in All)
+        {
+            if (!seen.Add(d.Kind)) continue;
+            list.Add(new ReportKindOption(d.Kind, d.Label, d.Description));
+        }
+        return list;
+    }
+
+    private static ReportDefinition Def(
+        ReportKind kind, string group, string label, string description,
+        bool usesDateRange, FilterPreset filter) =>
+        new(kind, group, label, description, usesDateRange, [filter]);
 }
 
 public class ReportSummaryDto
@@ -66,15 +251,10 @@ public record PurchaseReportRowDto(
     decimal SgstAmount,
     decimal IgstAmount,
     decimal GrandTotal,
-    /// <summary>Total settled (cash/bank + return credit applied).</summary>
     decimal PaidAmount,
-    /// <summary>Cash/bank paid only (excludes return credit).</summary>
     decimal CashPaid,
-    /// <summary>Supplier return credit applied toward this bill.</summary>
     decimal ReturnCreditApplied,
-    /// <summary>Net amount still payable after cash and return credit.</summary>
     decimal BalanceDue,
-    /// <summary>Why the bill was left unpaid / partially paid.</summary>
     string DueReason)
 {
     public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
@@ -176,7 +356,6 @@ public record LowStockReportRowDto(
     public bool IsCritical => QuantityOnHand <= 0;
 }
 
-/// <summary>Which scheduled drugs to include in the inspector register.</summary>
 public enum ScheduleRegisterFilter
 {
     HAndH1 = 0,

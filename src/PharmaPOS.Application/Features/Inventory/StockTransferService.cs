@@ -24,12 +24,18 @@ public sealed class StockTransferService : IStockTransferService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly IReportingSyncService _reportingSync;
+    private readonly IFinancialYearContext _financialYear;
 
-    public StockTransferService(IUnitOfWork uow, IDateTimeProvider clock, IReportingSyncService reportingSync)
+    public StockTransferService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        IReportingSyncService reportingSync,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
         _reportingSync = reportingSync;
+        _financialYear = financialYear;
     }
 
     public async Task<string> PreviewNextTransferNumberAsync(int? fromBranchId, CancellationToken ct = default)
@@ -65,6 +71,8 @@ public sealed class StockTransferService : IStockTransferService
         int? userId,
         CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<StockTransferReceiptDto>(_financialYear);
         if (fromBranchId is null or <= 0)
             return Result.Failure<StockTransferReceiptDto>("Your user is not assigned to a branch.");
 
@@ -294,6 +302,8 @@ public sealed class StockTransferService : IStockTransferService
         string? reason,
         CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<StockTransferReceiptDto>(_financialYear);
         if (branchId is null or <= 0)
             return Result.Failure<StockTransferReceiptDto>("Your user is not assigned to a branch.");
 

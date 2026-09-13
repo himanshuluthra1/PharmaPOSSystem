@@ -190,7 +190,13 @@ public sealed class AppUpdateWorker : BackgroundService
     {
         var app = System.Windows.Application.Current;
         if (app?.Dispatcher is null) return;
-        await app.Dispatcher.InvokeAsync(() => app.Shutdown());
+        await app.Dispatcher.InvokeAsync(() =>
+        {
+            // Skip exit confirmation — user already accepted the update prompt.
+            if (app.MainWindow is Views.MainWindow main)
+                main.Tag = "force-close";
+            app.Shutdown();
+        });
     }
 
     private async Task ShowErrorOnUiAsync(string message)

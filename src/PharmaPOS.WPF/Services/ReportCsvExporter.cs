@@ -2,12 +2,32 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using PharmaPOS.Application.Features.Reports;
 
 namespace PharmaPOS.WPF.Services;
 
 /// <summary>Exports report rows to a simple CSV file.</summary>
 public static class ReportCsvExporter
 {
+    public static void ExportTable(
+        string filePath,
+        IReadOnlyList<ReportColumnDto> columns,
+        IEnumerable<Dictionary<string, object?>> rows)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine(string.Join(",", columns.Select(c => Escape(c.Header))));
+        foreach (var row in rows)
+        {
+            var values = columns.Select(c =>
+            {
+                row.TryGetValue(c.Key, out var raw);
+                return Escape(FormatValue(raw, c.Format));
+            });
+            sb.AppendLine(string.Join(",", values));
+        }
+        File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+    }
+
     public static void Export<T>(string filePath, IEnumerable<T> rows, IReadOnlyList<string>? columnOrder = null)
     {
         var list = rows.ToList();
@@ -41,12 +61,13 @@ public static class ReportCsvExporter
             .ToArray();
     }
 
-    private static string FormatValue(object? value)
+    private static string FormatValue(object? value, string? format = null)
     {
         return value switch
         {
             null => "",
             DateTime dt => dt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+            decimal d when !string.IsNullOrWhiteSpace(format) => d.ToString(format, CultureInfo.InvariantCulture),
             decimal d => d.ToString(CultureInfo.InvariantCulture),
             double d => d.ToString(CultureInfo.InvariantCulture),
             float f => f.ToString(CultureInfo.InvariantCulture),

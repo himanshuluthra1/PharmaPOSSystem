@@ -5,7 +5,7 @@
 ;   Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /DIR="C:\Program Files\PharmaPOS"
 
 #define MyAppName "PharmaPOS"
-#define MyAppVersion "1.3.1"
+#define MyAppVersion "1.3.5"
 #define MyAppPublisher "PharmaPOS"
 #define MyAppExeName "PharmaPOS.exe"
 #ifndef PublishDir
@@ -13,6 +13,9 @@
 #endif
 #ifndef DistDataDir
   #define DistDataDir "..\artifacts\dist"
+#endif
+#ifndef OutputDir
+  #define OutputDir "..\artifacts\installer"
 #endif
 
 [Setup]
@@ -24,7 +27,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 UsePreviousAppDir=yes
-OutputDir=..\artifacts\installer
+OutputDir={#OutputDir}
 OutputBaseFilename=PharmaPOS-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes

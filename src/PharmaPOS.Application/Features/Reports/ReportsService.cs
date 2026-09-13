@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Application.Features.SaleReturns;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
@@ -10,17 +11,23 @@ using PharmaPOS.Shared.Constants;
 
 namespace PharmaPOS.Application.Features.Reports;
 
-public class ReportsService : IReportsService
+public partial class ReportsService : IReportsService
 {
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
+    private readonly ISaleReturnService _saleReturns;
 
-    public ReportsService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
+    public ReportsService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        ISettingsService settings,
+        ISaleReturnService saleReturns)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
+        _saleReturns = saleReturns;
     }
 
     public async Task<(ReportSummaryDto Summary, List<SalesReportRowDto> Rows)> GetSalesReportAsync(
@@ -313,7 +320,7 @@ public class ReportsService : IReportsService
     public async Task<(ReportSummaryDto Summary, List<StockValuationReportRowDto> Rows)> GetStockValuationReportAsync(
         int? branchId, CancellationToken ct = default)
     {
-        var q = BatchQuery(branchId).Where(b => b.QuantityAvailable > 0);
+        var q = BatchQuery(branchId).Where(b => b.QuantityAvailable != 0);
 
         var rows = await q
             .OrderBy(b => b.Medicine!.Name)

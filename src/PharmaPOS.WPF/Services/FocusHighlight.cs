@@ -9,14 +9,13 @@ using System.Windows.Threading;
 namespace PharmaPOS.WPF.Services;
 
 /// <summary>
-/// App-wide keyboard-focus highlight. Only one control is highlighted at a time;
-/// previous highlights are fully cleared (including DataGrid cells when tabbing).
+/// App-wide keyboard-focus cue: only the active control's fill color changes
+/// (no orange border ring). Previous cues are fully cleared when focus moves.
 /// </summary>
 public static class FocusHighlight
 {
-    private static readonly Brush Highlight;
-    private static readonly Brush StrongHighlight;
-    private static readonly Brush BorderBrush;
+    private static readonly Brush FocusFill;
+    private static readonly Brush StrongFocusFill;
 
     private static readonly ConditionalWeakTable<DependencyObject, Snapshot> Originals = new();
     private static FrameworkElement? _active;
@@ -34,9 +33,9 @@ public static class FocusHighlight
 
     static FocusHighlight()
     {
-        Highlight = CreateBrush(0xFF, 0xF3, 0xE0);
-        StrongHighlight = CreateBrush(0xFF, 0xE0, 0xB2);
-        BorderBrush = CreateBrush(0xEF, 0x6C, 0x00);
+        // Light green fill — matches App.xaml TextBoxFocusBackgroundBrush / FocusGridCellBrush.
+        FocusFill = CreateBrush(0xC8, 0xE6, 0xC9);
+        StrongFocusFill = CreateBrush(0xC8, 0xE6, 0xC9);
     }
 
     private static SolidColorBrush CreateBrush(byte r, byte g, byte b)
@@ -104,6 +103,9 @@ public static class FocusHighlight
                 case DataGridCell c:
                     cell = c;
                     break;
+                case DatePickerTextBox:
+                    // Prefer the outer DatePicker; focus fill on the text box blanks the date.
+                    break;
                 case TextBox or PasswordBox or ComboBox or DatePicker or ButtonBase:
                     other ??= (FrameworkElement)d;
                     break;
@@ -120,9 +122,14 @@ public static class FocusHighlight
 
     private static void Apply(FrameworkElement target)
     {
+        // DatePicker / its text box: never wash with green fill — MD paints date text
+        // on the same layer and the fill makes the value look blank.
+        if (target is DatePicker or DatePickerTextBox)
+            return;
+
         ClearActive();
 
-        var fill = target is DataGridCell or ButtonBase ? StrongHighlight : Highlight;
+        var fill = target is DataGridCell or ButtonBase ? StrongFocusFill : FocusFill;
         var snap = new Snapshot();
 
         if (target is Control control)
@@ -134,10 +141,8 @@ public static class FocusHighlight
             snap.BorderBrush = control.BorderBrush;
             snap.BorderThickness = control.BorderThickness;
 
-            control.SetCurrentValue(Control.BorderBrushProperty, BorderBrush);
-            control.SetCurrentValue(Control.BorderThicknessProperty, new Thickness(2));
-            if (control is not DatePicker)
-                control.SetCurrentValue(Control.BackgroundProperty, fill);
+            // Fill only — do not thicken or recolor the border (no orange ring).
+            control.SetCurrentValue(Control.BackgroundProperty, fill);
         }
 
         Originals.Add(target, snap);
@@ -167,6 +172,11 @@ public static class FocusHighlight
         if (root is DataGridCell)
             return;
 
+        // DatePicker: outer Background style trigger is enough. Painting nested chrome
+        // blanks the date text in MaterialDesign's outlined template.
+        if (root is DatePicker)
+            return;
+
         foreach (var child in WalkVisual(root))
         {
             if (ReferenceEquals(child, root)) continue;
@@ -179,25 +189,22 @@ public static class FocusHighlight
             {
                 Capture(snap, border, Border.BackgroundProperty);
                 border.SetCurrentValue(Border.BackgroundProperty, fill);
-
-                if (border.BorderThickness.Left > 0 || border.BorderThickness.Top > 0
-                    || border.BorderThickness.Right > 0 || border.BorderThickness.Bottom > 0)
-                {
-                    Capture(snap, border, Border.BorderBrushProperty);
-                    border.SetCurrentValue(Border.BorderBrushProperty, BorderBrush);
-                }
             }
             else if (child is Panel panel && IsWashoutBrush(panel.Background))
             {
                 Capture(snap, panel, Panel.BackgroundProperty);
                 panel.SetCurrentValue(Panel.BackgroundProperty, fill);
             }
-            else if (child is Control nestedControl && IsWashoutBrush(nestedControl.Background))
+            else if (child is Control nestedControl
+                     and not DatePickerTextBox
+                     && IsWashoutBrush(nestedControl.Background))
             {
                 Capture(snap, nestedControl, Control.BackgroundProperty);
                 nestedControl.SetCurrentValue(Control.BackgroundProperty, fill);
             }
-            else if (TryGetBackgroundProperty(child, out var bgDp))
+            // Do not paint DatePickerTextBox / TextBoxView — that can blank the date text.
+            else if (TryGetBackgroundProperty(child, out var bgDp)
+                     && child is not DatePickerTextBox)
             {
                 var current = child.GetValue(bgDp) as Brush;
                 if (current is null || IsWashoutBrush(current))

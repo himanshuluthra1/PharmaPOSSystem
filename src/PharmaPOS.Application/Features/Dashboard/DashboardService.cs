@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Entities.Inventory;
@@ -6,6 +7,7 @@ using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Shared;
 
 namespace PharmaPOS.Application.Features.Dashboard;
 
@@ -18,12 +20,18 @@ public class DashboardService : IDashboardService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
+    private readonly IFinancialYearContext _financialYear;
 
-    public DashboardService(IUnitOfWork uow, IDateTimeProvider clock, ISettingsService settings)
+    public DashboardService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        ISettingsService settings,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
+        _financialYear = financialYear;
     }
 
     public async Task<DashboardDto> GetDashboardAsync(int? branchId = null, CancellationToken ct = default)
@@ -32,30 +40,36 @@ public class DashboardService : IDashboardService
         var tomorrow = today.AddDays(1);
         var prefs = await _settings.GetPreferencesAsync(ct);
         var nearExpiryDate = today.AddDays(prefs.NearExpiryDays);
+        var fy = _financialYear.Active;
 
         var sales = _uow.Repository<Sale>().Query()
-            .Where(s => s.Status == SaleStatus.Completed);
+            .Where(s => s.Status == SaleStatus.Completed)
+            .WhereInFinancialYear(fy, s => s.InvoiceDate);
         if (branchId.HasValue) sales = sales.Where(s => s.BranchId == branchId);
 
         var purchases = _uow.Repository<Purchase>().Query()
-            .Where(p => p.Status == PurchaseStatus.Received);
+            .Where(p => p.Status == PurchaseStatus.Received)
+            .WhereInFinancialYear(fy, p => p.InvoiceDate);
         if (branchId.HasValue) purchases = purchases.Where(p => p.BranchId == branchId);
 
-        var todaySales = sales.Where(s => s.InvoiceDate >= today && s.InvoiceDate < tomorrow);
-        var todayPurchases = purchases.Where(p => p.InvoiceDate >= today && p.InvoiceDate < tomorrow);
+        var dto = new DashboardDto();
 
-        var dto = new DashboardDto
+        // Today KPIs are only meaningful in the current FY.
+        if (fy.IsCurrent)
         {
-            TodaySales = await todaySales.SumAsync(s => (decimal?)s.GrandTotal, ct) ?? 0m,
-            TodayPurchase = await todayPurchases.SumAsync(p => (decimal?)p.GrandTotal, ct) ?? 0m,
-            TodayInvoices = await todaySales.CountAsync(ct),
-            TodayCustomers = await todaySales.Where(s => s.CustomerId != null)
-                .Select(s => s.CustomerId).Distinct().CountAsync(ct),
-            PendingReceivables = await _uow.Repository<Customer>().Query()
-                .SumAsync(c => (decimal?)c.OutstandingBalance, ct) ?? 0m,
-            PendingPayables = await _uow.Repository<Supplier>().Query()
-                .SumAsync(s => (decimal?)s.OutstandingBalance, ct) ?? 0m
-        };
+            var todaySales = sales.Where(s => s.InvoiceDate >= today && s.InvoiceDate < tomorrow);
+            var todayPurchases = purchases.Where(p => p.InvoiceDate >= today && p.InvoiceDate < tomorrow);
+            dto.TodaySales = await todaySales.SumAsync(s => (decimal?)s.GrandTotal, ct) ?? 0m;
+            dto.TodayPurchase = await todayPurchases.SumAsync(p => (decimal?)p.GrandTotal, ct) ?? 0m;
+            dto.TodayInvoices = await todaySales.CountAsync(ct);
+            dto.TodayCustomers = await todaySales.Where(s => s.CustomerId != null)
+                .Select(s => s.CustomerId).Distinct().CountAsync(ct);
+        }
+
+        dto.PendingReceivables = await _uow.Repository<Customer>().Query()
+            .SumAsync(c => (decimal?)c.OutstandingBalance, ct) ?? 0m;
+        dto.PendingPayables = await _uow.Repository<Supplier>().Query()
+            .SumAsync(s => (decimal?)s.OutstandingBalance, ct) ?? 0m;
 
         var batches = _uow.Repository<MedicineBatch>().Query();
         if (branchId.HasValue) batches = batches.Where(b => b.BranchId == branchId);
@@ -65,10 +79,6 @@ public class DashboardService : IDashboardService
         dto.NearExpiryCount = await batches.CountAsync(
             b => b.QuantityAvailable > 0 && b.ExpiryDate != null && b.ExpiryDate >= today && b.ExpiryDate <= nearExpiryDate, ct);
 
-        // Low stock: only medicines with a reorder level configured whose total
-        // on-hand quantity is at or below it. The reorder-level filter keeps the
-        // candidate set tiny, so we resolve stock with two simple translatable
-        // queries and compare in memory.
         var reorderMeds = await _uow.Repository<Medicine>().Query()
             .Where(m => m.Status == EntityStatus.Active && m.ReorderLevel > 0)
             .Select(m => new { m.Id, m.ReorderLevel })
@@ -87,9 +97,12 @@ public class DashboardService : IDashboardService
                 (stockLookup.TryGetValue(m.Id, out var q) ? q : 0m) <= m.ReorderLevel);
         }
 
-        var thirtyDaysAgo = today.AddDays(-30);
+        var topWindowStart = fy.IsCurrent
+            ? (today.AddDays(-30) < fy.Start ? fy.Start : today.AddDays(-30))
+            : fy.Start;
         var completedSales = _uow.Repository<Sale>().Query()
-            .Where(s => s.Status == SaleStatus.Completed && s.InvoiceDate >= thirtyDaysAgo);
+            .Where(s => s.Status == SaleStatus.Completed && s.InvoiceDate >= topWindowStart)
+            .WhereInFinancialYear(fy, s => s.InvoiceDate);
         if (branchId.HasValue) completedSales = completedSales.Where(s => s.BranchId == branchId);
 
         var topRows = await (
@@ -111,7 +124,10 @@ public class DashboardService : IDashboardService
             .Select(r => new TopMedicineDto(r.Name, r.QuantitySold, r.Revenue))
             .ToList();
 
-        var windowStart = FirstDayOfMonth(_clock.Today.AddMonths(-5));
+        var windowStart = fy.IsCurrent
+            ? FirstDayOfMonth(_clock.Today.AddMonths(-5))
+            : FirstDayOfMonth(fy.Start);
+        if (windowStart < fy.Start) windowStart = fy.Start;
 
         var saleRows = await sales
             .Where(s => s.InvoiceDate >= windowStart)
@@ -122,20 +138,24 @@ public class DashboardService : IDashboardService
             .Select(p => new MonthlyRaw(p.InvoiceDate, p.GrandTotal))
             .ToListAsync(ct);
 
-        dto.MonthlySales = BuildMonthly(saleRows, windowStart);
-        dto.MonthlyPurchases = BuildMonthly(purchaseRows, windowStart);
+        dto.MonthlySales = BuildMonthly(saleRows, windowStart, fy);
+        dto.MonthlyPurchases = BuildMonthly(purchaseRows, windowStart, fy);
 
         return dto;
     }
 
     private static DateTime FirstDayOfMonth(DateTime date) => new(date.Year, date.Month, 1);
 
-    private static List<MonthlySalesDto> BuildMonthly(IReadOnlyList<MonthlyRaw> rows, DateTime windowStart)
+    private static List<MonthlySalesDto> BuildMonthly(
+        IReadOnlyList<MonthlyRaw> rows,
+        DateTime windowStart,
+        FinancialYearInfo fy)
     {
         var result = new List<MonthlySalesDto>(6);
         for (int i = 0; i < 6; i++)
         {
             var month = windowStart.AddMonths(i);
+            if (month >= fy.EndExclusive) break;
             var total = rows
                 .Where(r => r.Date.Year == month.Year && r.Date.Month == month.Month)
                 .Sum(r => r.Amount);

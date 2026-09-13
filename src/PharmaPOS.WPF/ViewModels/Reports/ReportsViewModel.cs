@@ -1,11 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Windows.Input;
 using Microsoft.Win32;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Reports;
-using PharmaPOS.Application.Features.SaleReturns;
-using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -15,11 +15,11 @@ namespace PharmaPOS.WPF.ViewModels.Reports;
 public class ReportsViewModel : ObservableObject
 {
     private readonly IReportsService _reports;
-    private readonly ISaleReturnService _saleReturns;
     private readonly IInvoiceViewerDialogService _invoiceViewer;
     private readonly IInvoicePrintService _printService;
     private readonly int? _branchId;
     private readonly IDialogService _dialog;
+    private readonly IFinancialYearContext _financialYear;
 
     private ReportKindOption _selectedReport;
     private DateTime _fromDate = DateTime.Today;
@@ -28,44 +28,35 @@ public class ReportsViewModel : ObservableObject
     private GstSummaryDto? _gstSummary;
     private bool _isBusy;
     private string? _statusMessage;
-    private string _activeGrid = "Sales";
     private string _filterText = string.Empty;
     private FilterOption _selectedFilterOption = FilterOption.All;
     private List<FilterOption> _filterOptions = [FilterOption.All];
     private string _selectedExpirySupplierKey = "all";
     private List<FilterOption> _expirySupplierOptions = [FilterOption.All];
     private DateTime _expiryFilterToday = DateTime.Today;
-
-    private List<SalesReportRowDto> _allSales = [];
-    private List<PurchaseReportRowDto> _allPurchases = [];
-    private List<GstDetailRowDto> _allGst = [];
-    private List<ProfitReportRowDto> _allProfit = [];
-    private List<MedicineSalesRowDto> _allMedicineSales = [];
-    private List<StockValuationReportRowDto> _allStock = [];
-    private List<ExpiryReportRowDto> _allExpiry = [];
-    private List<LowStockReportRowDto> _allLowStock = [];
-    private List<SaleReturnSummaryRowDto> _allSaleReturns = [];
-    private List<MedicineReturnReportRowDto> _allMedicineReturns = [];
-    private List<ScheduleRegisterRowDto> _allScheduleRegister = [];
-    private List<GstReturnPreviewRowDto> _allGstReturn = [];
+    private List<ReportColumnDto> _columns = [];
+    private List<Dictionary<string, object?>> _allRows = [];
     private GstReturnExportDto? _gstReturnExport;
     private ScheduleRegisterReportDto? _scheduleRegisterReport;
     private ScheduleRegisterFilterOption _selectedScheduleFilter;
+    private ReportDefinition _definition;
 
     public ReportsViewModel(
         IReportsService reports,
-        ISaleReturnService saleReturns,
         IInvoiceViewerDialogService invoiceViewer,
         IInvoicePrintService printService,
         ICurrentUserService currentUser,
+        IFinancialYearContext financialYear,
         IDialogService dialog)
     {
         _reports = reports;
-        _saleReturns = saleReturns;
         _invoiceViewer = invoiceViewer;
         _printService = printService;
         _branchId = currentUser.CurrentUser?.BranchId;
+        _financialYear = financialYear;
         _dialog = dialog;
+
+        ApplyActiveFinancialYearDates();
 
         CanExport = currentUser.HasAnyPermission(
             AppConstants.Permissions.ReportsExport, AppConstants.Permissions.ReportsManage);
@@ -78,43 +69,28 @@ public class ReportsViewModel : ObservableObject
         ];
         _selectedScheduleFilter = ScheduleFilterOptions[0];
 
-        ReportOptions =
-        [
-            new(ReportKind.Sales, "Sales Report", "Completed sales invoices for the selected period."),
-            new(ReportKind.Purchases, "Purchase Report", "Received purchase / GRN invoices for the period."),
-            new(ReportKind.GstSummary, "GST Summary", "Output vs input GST with invoice-wise detail."),
-            new(ReportKind.Gstr1, "GSTR-1 export", "B2B / B2CS / HSN / credit notes from sales. Export JSON or Excel."),
-            new(ReportKind.Gstr2B, "GSTR-2B worksheet", "Inward invoices and ITC by rate from purchases. Export JSON or Excel."),
-            new(ReportKind.Profit, "Gross Profit", "Revenue vs estimated cost per sale invoice."),
-            new(ReportKind.SalesByMedicine, "Sales by Medicine", "Quantity and revenue ranked by medicine."),
-            new(ReportKind.ScheduleRegister, "Schedule H / H1 Register",
-                "Inspector register: date, patient, doctor, qty, invoice for Schedule H and H1 sales."),
-            new(ReportKind.StockValuation, "Stock Valuation", "Current stock value at purchase cost."),
-            new(ReportKind.Expiry, "Expiry Report", "Expired stock and batches expiring within 1–12 months."),
-            new(ReportKind.LowStock, "Low Stock", "Medicines at or below reorder level."),
-            new(ReportKind.SaleReturns, "Sale Returns", "Return transactions for the selected period."),
-            new(ReportKind.MedicineReturns, "Medicine-wise Returns", "Returned quantities grouped by medicine and batch.")
-        ];
-        _selectedReport = ReportOptions[0];
+        ReportOptions = ReportCatalog.DistinctOptions()
+            .Where(o => currentUser.HasPermission(ReportMenuPermissions.For(o.Kind)))
+            .ToList();
+        if (ReportOptions.Count == 0 && currentUser.CanAccessModule("reports"))
+            ReportOptions = ReportCatalog.DistinctOptions().ToList();
+
+        _selectedReport = ReportOptions.FirstOrDefault()
+            ?? ReportCatalog.DistinctOptions().First();
+        _definition = ReportCatalog.Get(_selectedReport.Kind);
         RefreshFilterOptions();
 
         RunReportCommand = new AsyncRelayCommand(_ => RunReportAsync(), _ => !IsBusy);
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => CanExport && HasData && !IsBusy);
+        ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => CanExport && HasData && !IsBusy);
+        ExportPdfCommand = new RelayCommand(_ => ExportPdf(), _ => CanExport && HasData && !IsBusy);
         ExportGstJsonCommand = new RelayCommand(_ => ExportGstJson(), _ => CanExport && ShowGstReturnExport && _gstReturnExport is not null && !IsBusy);
         ExportGstExcelCommand = new RelayCommand(_ => ExportGstExcel(), _ => CanExport && ShowGstReturnExport && _gstReturnExport is not null && !IsBusy);
         PrintScheduleRegisterCommand = new RelayCommand(
             _ => PrintScheduleRegister(),
-            _ => ShowScheduleRegisterGrid && HasData && !IsBusy);
+            _ => ShowScheduleActions && HasData && !IsBusy);
         ClearFilterCommand = new RelayCommand(_ => ClearFilters());
-        OpenSaleRowCommand = new AsyncRelayCommand(
-            p => OpenSaleRowAsync(p as SalesReportRowDto),
-            _ => !IsBusy);
-        OpenPurchaseRowCommand = new AsyncRelayCommand(
-            p => OpenPurchaseRowAsync(p as PurchaseReportRowDto),
-            _ => !IsBusy);
-        OpenScheduleRowCommand = new AsyncRelayCommand(
-            p => OpenScheduleRowAsync(p as ScheduleRegisterRowDto),
-            _ => !IsBusy);
+        OpenRowCommand = new AsyncRelayCommand(p => OpenRowAsync(p as ReportRowViewModel), _ => !IsBusy);
         ApplyTodayCommand = new RelayCommand(_ => ApplyPreset(DateTime.Today, DateTime.Today));
         ApplyThisMonthCommand = new RelayCommand(_ =>
         {
@@ -129,22 +105,13 @@ public class ReportsViewModel : ObservableObject
         });
     }
 
-    public IReadOnlyList<ReportKindOption> ReportOptions { get; }
+    public event Action? ColumnsChanged;
 
+    public IReadOnlyList<ReportKindOption> ReportOptions { get; }
     public bool CanExport { get; }
 
-    public ObservableCollection<SalesReportRowDto> SalesRows { get; } = new();
-    public ObservableCollection<PurchaseReportRowDto> PurchaseRows { get; } = new();
-    public ObservableCollection<GstDetailRowDto> GstRows { get; } = new();
-    public ObservableCollection<ProfitReportRowDto> ProfitRows { get; } = new();
-    public ObservableCollection<MedicineSalesRowDto> MedicineSalesRows { get; } = new();
-    public ObservableCollection<StockValuationReportRowDto> StockValuationRows { get; } = new();
-    public ObservableCollection<ExpiryReportRowDto> ExpiryRows { get; } = new();
-    public ObservableCollection<LowStockReportRowDto> LowStockRows { get; } = new();
-    public ObservableCollection<SaleReturnSummaryRowDto> SaleReturnRows { get; } = new();
-    public ObservableCollection<MedicineReturnReportRowDto> MedicineReturnRows { get; } = new();
-    public ObservableCollection<ScheduleRegisterRowDto> ScheduleRegisterRows { get; } = new();
-    public ObservableCollection<GstReturnPreviewRowDto> GstReturnRows { get; } = new();
+    public ObservableCollection<ReportColumnDto> Columns { get; } = new();
+    public ObservableCollection<ReportRowViewModel> Rows { get; } = new();
 
     public IReadOnlyList<ScheduleRegisterFilterOption> ScheduleFilterOptions { get; }
 
@@ -159,6 +126,7 @@ public class ReportsViewModel : ObservableObject
     }
 
     public bool ShowScheduleFilter => SelectedReport.Kind == ReportKind.ScheduleRegister;
+    public bool ShowScheduleActions => SelectedReport.Kind == ReportKind.ScheduleRegister;
 
     public ReportKindOption SelectedReport
     {
@@ -166,17 +134,19 @@ public class ReportsViewModel : ObservableObject
         set
         {
             if (!SetProperty(ref _selectedReport, value)) return;
+            _definition = ReportCatalog.Get(value.Kind);
             OnPropertyChanged(nameof(UsesDateRange));
             OnPropertyChanged(nameof(SelectedReportDescription));
             OnPropertyChanged(nameof(FilterTextHint));
             OnPropertyChanged(nameof(ShowScheduleFilter));
+            OnPropertyChanged(nameof(ShowScheduleActions));
             OnPropertyChanged(nameof(ShowGstReturnExport));
+            OnPropertyChanged(nameof(CanOpenInvoiceHint));
             RefreshFilterOptions();
             ClearFilters(apply: false);
             ClearAllRows();
             GstSummary = null;
             StatusMessage = null;
-            SetActiveGrid(GridNameFor(value.Kind));
             OnPropertyChanged(nameof(HasData));
             OnPropertyChanged(nameof(HasSourceData));
             OnPropertyChanged(nameof(ShowFilters));
@@ -185,7 +155,6 @@ public class ReportsViewModel : ObservableObject
         }
     }
 
-    /// <summary>Select a report by kind (used by top-menu submenus).</summary>
     public void SelectReport(ReportKind kind)
     {
         var option = ReportOptions.FirstOrDefault(o => o.Kind == kind);
@@ -195,20 +164,25 @@ public class ReportsViewModel : ObservableObject
 
     public string SelectedReportDescription => SelectedReport.Description;
 
-    public bool UsesDateRange => SelectedReport.Kind is not (
-        ReportKind.StockValuation or ReportKind.Expiry or ReportKind.LowStock);
+    public bool UsesDateRange => _definition.UsesDateRange;
 
     public string FilterTextHint => SelectedReport.Kind switch
     {
-        ReportKind.Sales or ReportKind.Profit => "Filter by invoice # or customer...",
-        ReportKind.Purchases => "Filter by invoice #, supplier, or due reason...",
+        ReportKind.Sales or ReportKind.Profit or ReportKind.SalesCreditDue => "Filter by invoice # or customer...",
+        ReportKind.Purchases or ReportKind.PurchasesBySupplier or ReportKind.SupplierOutstanding =>
+            "Filter by invoice #, supplier, or due reason...",
         ReportKind.GstSummary => "Filter by invoice # or party...",
         ReportKind.Gstr1 or ReportKind.Gstr2B => "Filter by invoice, party, GSTIN, or section...",
-        ReportKind.SalesByMedicine or ReportKind.LowStock => "Filter by medicine or generic...",
+        ReportKind.SalesByMedicine or ReportKind.LowStock or ReportKind.SlowMovingStock or ReportKind.BatchStock =>
+            "Filter by medicine or generic...",
         ReportKind.ScheduleRegister => "Filter by invoice, patient, doctor, or medicine...",
         ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine, batch, or supplier...",
         ReportKind.SaleReturns => "Filter by return #, invoice, or customer...",
         ReportKind.MedicineReturns => "Filter by medicine or batch...",
+        ReportKind.SalesByCustomer or ReportKind.CustomerOutstanding or ReportKind.CustomerReceipts =>
+            "Filter by customer...",
+        ReportKind.PaymentVouchers or ReportKind.ReceiptVouchers or ReportKind.SupplierPayments or
+            ReportKind.ExpenseRegister => "Filter by voucher #, party, or account...",
         _ => "Filter results..."
     };
 
@@ -238,7 +212,6 @@ public class ReportsViewModel : ObservableObject
 
     public IReadOnlyList<FilterOption> ExpirySupplierOptions => _expirySupplierOptions;
 
-    /// <summary>Supplier filter key: "all" or supplier id as string.</summary>
     public string SelectedExpirySupplierKey
     {
         get => _selectedExpirySupplierKey;
@@ -250,7 +223,8 @@ public class ReportsViewModel : ObservableObject
         }
     }
 
-    public bool ShowExpirySupplierFilter => ShowExpiryGrid && HasSourceData;
+    public bool ShowExpirySupplierFilter =>
+        SelectedReport.Kind == ReportKind.Expiry && HasSourceData;
 
     public bool HasActiveFilter =>
         !string.IsNullOrWhiteSpace(FilterText) ||
@@ -278,37 +252,27 @@ public class ReportsViewModel : ObservableObject
     public GstSummaryDto? GstSummary
     {
         get => _gstSummary;
-        private set => SetProperty(ref _gstSummary, value);
+        private set
+        {
+            if (!SetProperty(ref _gstSummary, value)) return;
+            OnPropertyChanged(nameof(ShowGstSummary));
+        }
     }
 
-    public string ActiveGrid
-    {
-        get => _activeGrid;
-        private set => SetProperty(ref _activeGrid, value);
-    }
-
-    public bool ShowSalesGrid => ActiveGrid == "Sales";
-    public bool ShowPurchaseGrid => ActiveGrid == "Purchases";
-    public bool ShowGstGrid => ActiveGrid == "Gst";
-    public bool ShowGstSummary => ActiveGrid == "Gst" && GstSummary is not null;
-    public bool ShowGstReturnGrid => ActiveGrid == "GstReturn";
+    public bool ShowGstSummary => SelectedReport.Kind == ReportKind.GstSummary && GstSummary is not null;
     public bool ShowGstReturnExport => SelectedReport.Kind is ReportKind.Gstr1 or ReportKind.Gstr2B;
     public string? GstReturnDisclaimer => _gstReturnExport?.Disclaimer;
-    public bool ShowProfitGrid => ActiveGrid == "Profit";
-    public bool ShowMedicineGrid => ActiveGrid == "Medicine";
-    public bool ShowStockGrid => ActiveGrid == "Stock";
-    public bool ShowExpiryGrid => ActiveGrid == "Expiry";
-    public bool ShowLowStockGrid => ActiveGrid == "LowStock";
-    public bool ShowSaleReturnGrid => ActiveGrid == "SaleReturns";
-    public bool ShowMedicineReturnGrid => ActiveGrid == "MedicineReturns";
-    public bool ShowScheduleRegisterGrid => ActiveGrid == "ScheduleRegister";
 
-    /// <summary>Stock valuation uses Amount (MRP) + Cost KPIs instead of tax/discount.</summary>
-    public bool ShowStockSummaryKpis => ShowStockGrid && HasData;
-    public bool ShowGenericSummaryKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid && !ShowGstReturnGrid;
-    public bool ShowTaxDiscountKpis => HasData && !ShowStockGrid && !ShowScheduleRegisterGrid && !ShowGstReturnGrid;
-    public bool ShowScheduleSummaryKpis => ShowScheduleRegisterGrid && HasData;
-    public bool ShowGstReturnKpis => ShowGstReturnGrid && HasData;
+    public bool ShowStockSummaryKpis => SelectedReport.Kind == ReportKind.StockValuation && HasData;
+    public bool ShowScheduleSummaryKpis => SelectedReport.Kind == ReportKind.ScheduleRegister && HasData;
+    public bool ShowGstReturnKpis => ShowGstReturnExport && HasData;
+    public bool ShowPaymentSummaryKpis => SelectedReport.Kind == ReportKind.SupplierPayments && HasData;
+    public bool ShowGenericSummaryKpis =>
+        HasData && !ShowStockSummaryKpis && !ShowScheduleSummaryKpis && !ShowGstReturnKpis && !ShowPaymentSummaryKpis;
+    public bool ShowTaxDiscountKpis => ShowGenericSummaryKpis;
+
+    public bool CanOpenInvoiceHint => SelectedReport.Kind is
+        ReportKind.Sales or ReportKind.Purchases or ReportKind.ScheduleRegister or ReportKind.SalesCreditDue;
 
     public bool IsBusy
     {
@@ -323,54 +287,49 @@ public class ReportsViewModel : ObservableObject
     }
 
     public bool HasData => Summary.RecordCount > 0;
-
-    /// <summary>True after a report run that returned at least one source row (before filtering).</summary>
-    public bool HasSourceData => GetSourceCount() > 0;
-
+    public bool HasSourceData => _allRows.Count > 0;
     public bool ShowFilters => HasSourceData;
-
     public bool HasNoFilterMatches => HasSourceData && HasActiveFilter && !HasData;
 
     public ICommand RunReportCommand { get; }
     public ICommand ExportCsvCommand { get; }
+    public ICommand ExportExcelCommand { get; }
+    public ICommand ExportPdfCommand { get; }
     public ICommand ExportGstJsonCommand { get; }
     public ICommand ExportGstExcelCommand { get; }
     public ICommand PrintScheduleRegisterCommand { get; }
     public ICommand ClearFilterCommand { get; }
-    public ICommand OpenSaleRowCommand { get; }
-    public ICommand OpenPurchaseRowCommand { get; }
-    public ICommand OpenScheduleRowCommand { get; }
+    public ICommand OpenRowCommand { get; }
     public ICommand ApplyTodayCommand { get; }
     public ICommand ApplyThisMonthCommand { get; }
     public ICommand ApplyLastMonthCommand { get; }
 
-    public Task OpenSaleRowAsync(SalesReportRowDto? row)
+    public Task OpenRowAsync(ReportRowViewModel? row)
     {
-        if (row is null || row.SaleId <= 0) return Task.CompletedTask;
-        return _invoiceViewer.ShowSaleAsync(row.SaleId);
-    }
-
-    public Task OpenPurchaseRowAsync(PurchaseReportRowDto? row)
-    {
-        if (row is null || row.PurchaseId <= 0) return Task.CompletedTask;
-        return _invoiceViewer.ShowPurchaseAsync(row.PurchaseId);
-    }
-
-    public Task OpenScheduleRowAsync(ScheduleRegisterRowDto? row)
-    {
-        if (row is null || row.SaleId <= 0) return Task.CompletedTask;
-        return _invoiceViewer.ShowSaleAsync(row.SaleId);
+        if (row is null) return Task.CompletedTask;
+        if (TryGetInt(row, "SaleId", out var saleId) && saleId > 0)
+            return _invoiceViewer.ShowSaleAsync(saleId);
+        if (TryGetInt(row, "PurchaseId", out var purchaseId) && purchaseId > 0)
+            return _invoiceViewer.ShowPurchaseAsync(purchaseId);
+        return Task.CompletedTask;
     }
 
     private void PrintScheduleRegister()
     {
-        if (_scheduleRegisterReport is null || ScheduleRegisterRows.Count == 0)
+        if (_scheduleRegisterReport is null || Rows.Count == 0)
         {
             _dialog.ShowInfo("Run the Schedule H / H1 register first.");
             return;
         }
 
-        // Print filtered view if user narrowed results.
+        var visibleKeys = Rows
+            .Select(r => (
+                TryGetInt(r, "SaleId", out var id) ? id : 0,
+                GetString(r, "InvoiceNumber"),
+                GetString(r, "MedicineName"),
+                GetString(r, "BatchNumber")))
+            .ToHashSet();
+
         var printable = new ScheduleRegisterReportDto
         {
             FromDate = _scheduleRegisterReport.FromDate,
@@ -381,7 +340,9 @@ public class ReportsViewModel : ObservableObject
             DrugLicenseNumber = _scheduleRegisterReport.DrugLicenseNumber,
             Address = _scheduleRegisterReport.Address,
             Phone = _scheduleRegisterReport.Phone,
-            Rows = ScheduleRegisterRows.ToList()
+            Rows = _scheduleRegisterReport.Rows
+                .Where(r => visibleKeys.Contains((r.SaleId, r.InvoiceNumber, r.MedicineName, r.BatchNumber ?? "")))
+                .ToList()
         };
         _printService.ShowScheduleRegisterPreview(printable);
     }
@@ -392,38 +353,50 @@ public class ReportsViewModel : ObservableObject
         ToDate = to;
     }
 
+    private void ApplyActiveFinancialYearDates()
+    {
+        var fy = _financialYear.Active;
+        FromDate = fy.Start;
+        var lastDay = fy.EndExclusive.AddDays(-1);
+        ToDate = fy.IsCurrent && DateTime.Today < lastDay
+            ? DateTime.Today
+            : lastDay;
+    }
+
     private void RefreshFilterOptions()
     {
-        _filterOptions = SelectedReport.Kind switch
+        var preset = _definition.FilterPresets.FirstOrDefault();
+        _filterOptions = preset switch
         {
-            ReportKind.Sales or ReportKind.Purchases =>
+            FilterPreset.PaymentStatus =>
             [
                 FilterOption.All,
-                new("unpaid", "Unpaid / due"),
+                new("due", "Pending + partial paid"),
+                new("unpaid", "Pending / unpaid"),
                 new("partial", "Partially paid"),
                 new("paid", "Fully paid")
             ],
-            ReportKind.GstSummary =>
+            FilterPreset.GstDocumentType =>
             [
                 FilterOption.All,
                 new("sale", "Sales only"),
                 new("purchase", "Purchases only")
             ],
-            ReportKind.Gstr1 =>
+            FilterPreset.Gstr1Section =>
             [
                 FilterOption.All,
                 new("B2B", "B2B"),
                 new("B2CS", "B2CS"),
                 new("CDNR", "Credit notes")
             ],
-            ReportKind.Gstr2B =>
+            FilterPreset.Gstr2BSection =>
             [
                 FilterOption.All,
                 new("B2B", "B2B registered"),
                 new("Unregistered", "Unregistered"),
                 new("CDN", "Credit/debit notes")
             ],
-            ReportKind.Expiry =>
+            FilterPreset.ExpiryWindow =>
             [
                 new("expired", "Expired"),
                 new("1", "1 month"),
@@ -439,13 +412,13 @@ public class ReportsViewModel : ObservableObject
                 new("11", "11 months"),
                 new("12", "12 months")
             ],
-            ReportKind.LowStock =>
+            FilterPreset.LowStockSeverity =>
             [
                 FilterOption.All,
                 new("critical", "Out of stock"),
                 new("low", "Below reorder")
             ],
-            ReportKind.SaleReturns =>
+            FilterPreset.SaleReturnMode =>
             [
                 FilterOption.All,
                 new("full", "Full returns"),
@@ -486,8 +459,6 @@ public class ReportsViewModel : ObservableObject
         _runCts = new CancellationTokenSource();
         var token = _runCts.Token;
 
-        // Serialize runs on the shared ReportsService/DbContext. Cancel alone is not
-        // enough — EF may still be mid-query when the next report starts.
         await _runGate.WaitAsync();
         try
         {
@@ -501,136 +472,17 @@ public class ReportsViewModel : ObservableObject
 
             try
             {
-                switch (SelectedReport.Kind)
-                {
-                    case ReportKind.Sales:
-                        var sales = await _reports.GetSalesReportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        _allSales = sales.Rows;
-                        Summary = sales.Summary;
-                        SetActiveGrid("Sales");
-                        break;
-
-                    case ReportKind.Purchases:
-                        var purchases = await _reports.GetPurchaseReportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        _allPurchases = purchases.Rows;
-                        Summary = purchases.Summary;
-                        SetActiveGrid("Purchases");
-                        break;
-
-                    case ReportKind.GstSummary:
-                        var gst = await _reports.GetGstReportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        GstSummary = gst.Summary;
-                        _allGst = gst.Rows;
-                        Summary = new ReportSummaryDto
-                        {
-                            RecordCount = gst.Rows.Count,
-                            TotalAmount = gst.Summary.SalesGrandTotal,
-                            TotalTax = gst.Summary.NetTaxPayable,
-                            FooterNote = $"Net GST payable: {gst.Summary.NetTaxPayable:N2}"
-                        };
-                        SetActiveGrid("Gst");
-                        break;
-
-                    case ReportKind.Gstr1:
-                        var gstr1 = await _reports.GetGstr1ExportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        ApplyGstReturn(gstr1);
-                        break;
-
-                    case ReportKind.Gstr2B:
-                        var gstr2 = await _reports.GetGstr2BExportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        ApplyGstReturn(gstr2);
-                        break;
-
-                    case ReportKind.Profit:
-                        var profit = await _reports.GetProfitReportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        _allProfit = profit.Rows;
-                        Summary = profit.Summary;
-                        SetActiveGrid("Profit");
-                        break;
-
-                    case ReportKind.SalesByMedicine:
-                        var med = await _reports.GetSalesByMedicineReportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        _allMedicineSales = med.Rows;
-                        Summary = med.Summary;
-                        SetActiveGrid("Medicine");
-                        break;
-
-                    case ReportKind.ScheduleRegister:
-                        var schedule = await _reports.GetScheduleRegisterAsync(
-                            FromDate, ToDate, _branchId, SelectedScheduleFilter.Filter, token);
-                        if (runId != _runId) return;
-                        _scheduleRegisterReport = schedule.Report;
-                        _allScheduleRegister = schedule.Report.Rows;
-                        Summary = schedule.Summary;
-                        SetActiveGrid("ScheduleRegister");
-                        break;
-
-                    case ReportKind.StockValuation:
-                        var stock = await _reports.GetStockValuationReportAsync(_branchId, token);
-                        if (runId != _runId) return;
-                        _allStock = stock.Rows;
-                        Summary = stock.Summary;
-                        SetActiveGrid("Stock");
-                        break;
-
-                    case ReportKind.Expiry:
-                        var expiry = await _reports.GetExpiryReportAsync(_branchId, token);
-                        if (runId != _runId) return;
-                        _allExpiry = expiry.Rows;
-                        _expiryFilterToday = DateTime.Today;
-                        Summary = expiry.Summary;
-                        SetActiveGrid("Expiry");
-                        break;
-
-                    case ReportKind.LowStock:
-                        var low = await _reports.GetLowStockReportAsync(_branchId, token);
-                        if (runId != _runId) return;
-                        _allLowStock = low.Rows;
-                        Summary = low.Summary;
-                        SetActiveGrid("LowStock");
-                        break;
-
-                    case ReportKind.SaleReturns:
-                        var returns = await _saleReturns.ListReturnsAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        _allSaleReturns = returns;
-                        Summary = new ReportSummaryDto
-                        {
-                            RecordCount = returns.Count,
-                            TotalAmount = returns.Sum(r => r.RefundAmount),
-                            FooterNote = $"{returns.Count} return(s)"
-                        };
-                        SetActiveGrid("SaleReturns");
-                        break;
-
-                    case ReportKind.MedicineReturns:
-                        var medRet = await _saleReturns.GetMedicineReturnReportAsync(FromDate, ToDate, _branchId, token);
-                        if (runId != _runId) return;
-                        _allMedicineReturns = medRet;
-                        Summary = new ReportSummaryDto
-                        {
-                            RecordCount = medRet.Count,
-                            TotalAmount = medRet.Sum(r => r.RefundAmount),
-                            FooterNote = $"{medRet.Count} medicine/batch group(s)"
-                        };
-                        SetActiveGrid("MedicineReturns");
-                        break;
-                }
-
+                var table = await _reports.GetReportTableAsync(
+                    SelectedReport.Kind, FromDate, ToDate, _branchId,
+                    SelectedScheduleFilter.Filter, token);
                 if (runId != _runId) return;
+
+                ApplyTable(table);
                 ApplyFilters();
                 CommandManager.InvalidateRequerySuggested();
             }
             catch (OperationCanceledException)
             {
-                // Switched to another report; ignore.
             }
             catch (Exception ex)
             {
@@ -650,110 +502,48 @@ public class ReportsViewModel : ObservableObject
         }
     }
 
+    private void ApplyTable(ReportTableDto table)
+    {
+        _columns = table.Columns;
+        _allRows = table.Rows;
+        GstSummary = table.GstSummary;
+        _gstReturnExport = table.GstReturnExport;
+        _scheduleRegisterReport = table.ScheduleRegister;
+        if (SelectedReport.Kind == ReportKind.Expiry)
+            _expiryFilterToday = DateTime.Today;
+
+        Columns.Clear();
+        foreach (var c in _columns)
+            Columns.Add(c);
+        ColumnsChanged?.Invoke();
+
+        OnPropertyChanged(nameof(GstReturnDisclaimer));
+        OnPropertyChanged(nameof(ShowGstReturnExport));
+        OnPropertyChanged(nameof(ShowGstSummary));
+    }
+
     private void ApplyFilters()
     {
         var term = FilterText.Trim();
         var option = SelectedFilterOption.Key;
+        IEnumerable<Dictionary<string, object?>> filtered = _allRows;
 
-        switch (ActiveGrid)
+        if (SelectedReport.Kind == ReportKind.Expiry)
         {
-            case "Sales":
-                Fill(SalesRows, _allSales.Where(r =>
-                    Matches(term, r.InvoiceNumber, r.CustomerName) &&
-                    option switch
-                    {
-                        "unpaid" => r.PaidAmount <= 0 && r.BalanceDue > 0,
-                        "partial" => r.PaidAmount > 0 && r.BalanceDue > 0,
-                        "paid" => r.BalanceDue <= 0,
-                        _ => true
-                    }));
-                break;
-
-            case "Purchases":
-                Fill(PurchaseRows, _allPurchases.Where(r =>
-                    Matches(term, r.InvoiceNumber, r.SupplierName, r.DueReason) &&
-                    option switch
-                    {
-                        "unpaid" => r.PaidAmount <= 0 && r.BalanceDue > 0,
-                        "partial" => r.PaidAmount > 0 && r.BalanceDue > 0,
-                        "paid" => r.BalanceDue <= 0,
-                        _ => true
-                    }));
-                break;
-
-            case "Gst":
-                Fill(GstRows, _allGst.Where(r =>
-                    Matches(term, r.InvoiceNumber, r.PartyName, r.DocumentType) &&
-                    option switch
-                    {
-                        "sale" => r.DocumentType.Contains("Sale", StringComparison.OrdinalIgnoreCase),
-                        "purchase" => r.DocumentType.Contains("Purchase", StringComparison.OrdinalIgnoreCase),
-                        _ => true
-                    }));
-                break;
-
-            case "GstReturn":
-                Fill(GstReturnRows, _allGstReturn.Where(r =>
-                    Matches(term, r.InvoiceNumber, r.PartyName, r.Gstin, r.Section, r.HsnCode) &&
-                    (option is "all" || string.Equals(r.Section, option, StringComparison.OrdinalIgnoreCase))));
-                break;
-
-            case "Profit":
-                Fill(ProfitRows, _allProfit.Where(r => Matches(term, r.InvoiceNumber, r.CustomerName)));
-                break;
-
-            case "Medicine":
-                Fill(MedicineSalesRows, _allMedicineSales.Where(r => Matches(term, r.MedicineName, r.GenericName)));
-                break;
-
-            case "Stock":
-                Fill(StockValuationRows, _allStock.Where(r => Matches(term, r.MedicineName, r.BatchNumber)));
-                break;
-
-            case "Expiry":
-            {
-                // Build supplier list from the expiry-window (+ text) result set first,
-                // then apply the supplier filter. Do not rebuild the combo after selecting
-                // a supplier — replacing ItemsSource clears SelectedValue and empties the grid.
-                var windowRows = _allExpiry.Where(MatchesExpiryWindowAndText).ToList();
-                RefreshExpirySupplierOptions(windowRows);
-                Fill(ExpiryRows, windowRows.Where(MatchesSelectedSupplier));
-                break;
-            }
-
-            case "LowStock":
-                Fill(LowStockRows, _allLowStock.Where(r =>
-                    Matches(term, r.MedicineName, r.GenericName) &&
-                    option switch
-                    {
-                        "critical" => r.IsCritical,
-                        "low" => !r.IsCritical,
-                        _ => true
-                    }));
-                break;
-
-            case "SaleReturns":
-                Fill(SaleReturnRows, _allSaleReturns.Where(r =>
-                    Matches(term, r.ReturnNumber, r.OriginalInvoiceNumber, r.CustomerName, r.CashierName, r.RefundMode.ToString()) &&
-                    option switch
-                    {
-                        "full" => r.IsFullReturn,
-                        "partial" => !r.IsFullReturn,
-                        "cash" => r.RefundMode is RefundMode.Cash or RefundMode.Card or RefundMode.Upi or RefundMode.Wallet,
-                        "credit" => r.RefundMode is RefundMode.StoreCredit or RefundMode.CreditNote,
-                        _ => true
-                    }));
-                break;
-
-            case "MedicineReturns":
-                Fill(MedicineReturnRows, _allMedicineReturns.Where(r => Matches(term, r.MedicineName, r.BatchNumber)));
-                break;
-
-            case "ScheduleRegister":
-                Fill(ScheduleRegisterRows, _allScheduleRegister.Where(r =>
-                    Matches(term, r.InvoiceNumber, r.PatientName, r.PatientPhone, r.DoctorName, r.MedicineName, r.BatchNumber)));
-                break;
+            var windowRows = _allRows.Where(r => MatchesExpiryWindowAndText(r, term)).ToList();
+            RefreshExpirySupplierOptions(windowRows);
+            filtered = windowRows.Where(MatchesSelectedSupplier);
         }
+        else
+        {
+            filtered = _allRows.Where(r =>
+                MatchesText(term, r) &&
+                MatchesOption(option, r));
+        }
+
+        Rows.Clear();
+        foreach (var row in filtered)
+            Rows.Add(new ReportRowViewModel(row));
 
         UpdateFilteredSummary();
         OnPropertyChanged(nameof(HasActiveFilter));
@@ -762,71 +552,131 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowFilters));
         OnPropertyChanged(nameof(ShowExpirySupplierFilter));
         OnPropertyChanged(nameof(HasNoFilterMatches));
+        OnPropertyChanged(nameof(ShowStockSummaryKpis));
+        OnPropertyChanged(nameof(ShowGenericSummaryKpis));
+        OnPropertyChanged(nameof(ShowTaxDiscountKpis));
+        OnPropertyChanged(nameof(ShowPaymentSummaryKpis));
+        OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
+        OnPropertyChanged(nameof(ShowGstReturnKpis));
         CommandManager.InvalidateRequerySuggested();
     }
 
-    private bool MatchesExpiryWindowAndText(ExpiryReportRowDto row)
+    private bool MatchesText(string term, Dictionary<string, object?> row)
     {
-        if (!Matches(FilterText.Trim(), row.MedicineName, row.BatchNumber, row.ExpiryStatus, row.SupplierName))
-            return false;
+        if (string.IsNullOrWhiteSpace(term)) return true;
+        return row.Values.Any(v =>
+            v is not null &&
+            v.ToString() is { Length: > 0 } s &&
+            s.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
 
-        if (row.ExpiryDate is null) return false;
-        var expiry = row.ExpiryDate.Value.Date;
+    private bool MatchesOption(string option, Dictionary<string, object?> row)
+    {
+        if (option is "all" or "") return true;
+
+        return SelectedReport.Kind switch
+        {
+            ReportKind.Sales or ReportKind.Purchases or ReportKind.SupplierPayments => option switch
+            {
+                "due" => ToDecimal(Get(row, "BalanceDue")) > 0,
+                "unpaid" => ToDecimal(Get(row, "PaidAmount")) <= 0 && ToDecimal(Get(row, "BalanceDue")) > 0,
+                "partial" => ToDecimal(Get(row, "PaidAmount")) > 0 && ToDecimal(Get(row, "BalanceDue")) > 0,
+                "paid" => ToDecimal(Get(row, "BalanceDue")) <= 0,
+                _ => true
+            },
+            ReportKind.GstSummary => option switch
+            {
+                "sale" => GetString(row, "DocumentType").Contains("Sale", StringComparison.OrdinalIgnoreCase),
+                "purchase" => GetString(row, "DocumentType").Contains("Purchase", StringComparison.OrdinalIgnoreCase),
+                _ => true
+            },
+            ReportKind.Gstr1 or ReportKind.Gstr2B =>
+                string.Equals(GetString(row, "Section"), option, StringComparison.OrdinalIgnoreCase),
+            ReportKind.LowStock => option switch
+            {
+                "critical" => IsTruthy(Get(row, "IsCritical")),
+                "low" => !IsTruthy(Get(row, "IsCritical")),
+                _ => true
+            },
+            ReportKind.SaleReturns => option switch
+            {
+                "full" => IsTruthy(Get(row, "IsFullReturn")) ||
+                          string.Equals(GetString(row, "IsFullReturn"), "Yes", StringComparison.OrdinalIgnoreCase),
+                "partial" => !(IsTruthy(Get(row, "IsFullReturn")) ||
+                               string.Equals(GetString(row, "IsFullReturn"), "Yes", StringComparison.OrdinalIgnoreCase)),
+                "cash" => IsCashRefund(GetString(row, "RefundMode")),
+                "credit" => IsCreditRefund(GetString(row, "RefundMode")),
+                _ => true
+            },
+            _ => true
+        };
+    }
+
+    private bool MatchesExpiryWindowAndText(Dictionary<string, object?> row, string term)
+    {
+        if (!MatchesText(term, row)) return false;
+
+        var expiryObj = Get(row, "ExpiryDate");
+        DateTime? expiryDate = expiryObj switch
+        {
+            DateTime dt => dt.Date,
+            DateTimeOffset dto => dto.Date,
+            string s when DateTime.TryParse(s, out var parsed) => parsed.Date,
+            _ => null
+        };
+        if (expiryDate is null)
+        {
+            // Fall back to ExpiryLabel parsing is unreliable; use ExpiryStatus for expired.
+            var status = GetString(row, "ExpiryStatus");
+            if (SelectedFilterOption.Key == "expired")
+                return status.Contains("Expired", StringComparison.OrdinalIgnoreCase);
+            return true;
+        }
+
         var today = _expiryFilterToday.Date;
         var key = SelectedFilterOption.Key;
-
         if (key == "expired")
-            return expiry < today;
+            return expiryDate < today;
 
         if (int.TryParse(key, out var months) && months is >= 1 and <= 12)
         {
-            if (expiry < today) return false;
-            return expiry <= today.AddMonths(months);
+            if (expiryDate < today) return false;
+            return expiryDate <= today.AddMonths(months);
         }
 
         return true;
     }
 
-    private bool MatchesSelectedSupplier(ExpiryReportRowDto row)
+    private bool MatchesSelectedSupplier(Dictionary<string, object?> row)
     {
-        if (SelectedExpirySupplierKey == "all")
+        if (SelectedExpirySupplierKey == "all") return true;
+        var id = Get(row, "SupplierId")?.ToString();
+        if (string.Equals(id, SelectedExpirySupplierKey, StringComparison.Ordinal))
             return true;
-
-        // Match by id, or by the selected option's label (name) as a fallback.
-        if (string.Equals(row.SupplierId?.ToString(), SelectedExpirySupplierKey, StringComparison.Ordinal))
-            return true;
-
         var selectedLabel = _expirySupplierOptions
             .FirstOrDefault(o => o.Key == SelectedExpirySupplierKey)?.Label;
+        var name = GetString(row, "SupplierName");
         return !string.IsNullOrWhiteSpace(selectedLabel) &&
-               !string.IsNullOrWhiteSpace(row.SupplierName) &&
-               string.Equals(row.SupplierName.Trim(), selectedLabel.Trim(), StringComparison.OrdinalIgnoreCase);
+               !string.IsNullOrWhiteSpace(name) &&
+               string.Equals(name.Trim(), selectedLabel.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Supplier combo shows only suppliers present in the current expiry window (+ text filter).
-    /// </summary>
-    private void RefreshExpirySupplierOptions(IReadOnlyList<ExpiryReportRowDto> windowRows)
+    private void RefreshExpirySupplierOptions(IReadOnlyList<Dictionary<string, object?>> windowRows)
     {
         var options = windowRows
-            .Where(r => r.SupplierId is > 0 && !string.IsNullOrWhiteSpace(r.SupplierName))
-            .GroupBy(r => r.SupplierId!.Value)
-            .OrderBy(g => g.First().SupplierName)
-            .Select(g => new FilterOption(g.Key.ToString(), g.First().SupplierName!.Trim()))
+            .Select(r => (Id: Get(r, "SupplierId"), Name: GetString(r, "SupplierName")))
+            .Where(x => x.Id is int and > 0 && !string.IsNullOrWhiteSpace(x.Name))
+            .GroupBy(x => (int)x.Id!)
+            .OrderBy(g => g.First().Name)
+            .Select(g => new FilterOption(g.Key.ToString(), g.First().Name.Trim()))
             .ToList();
 
         var newKeys = options.Select(o => o.Key).Append("all").ToHashSet(StringComparer.Ordinal);
         var oldKeys = _expirySupplierOptions.Select(o => o.Key).ToHashSet(StringComparer.Ordinal);
-
-        if (newKeys.SetEquals(oldKeys))
-        {
-            // Keep instances stable so the ComboBox selection is not cleared.
-            return;
-        }
+        if (newKeys.SetEquals(oldKeys)) return;
 
         _expirySupplierOptions = [FilterOption.All, .. options];
         OnPropertyChanged(nameof(ExpirySupplierOptions));
-
         if (!newKeys.Contains(SelectedExpirySupplierKey))
         {
             _selectedExpirySupplierKey = "all";
@@ -834,47 +684,46 @@ public class ReportsViewModel : ObservableObject
         }
     }
 
-    private int GetSourceCount() => ActiveGrid switch
-    {
-        "Sales" => _allSales.Count,
-        "Purchases" => _allPurchases.Count,
-        "Gst" => _allGst.Count,
-        "Profit" => _allProfit.Count,
-        "Medicine" => _allMedicineSales.Count,
-        "Stock" => _allStock.Count,
-        "Expiry" => _allExpiry.Count,
-        "LowStock" => _allLowStock.Count,
-        "SaleReturns" => _allSaleReturns.Count,
-        "MedicineReturns" => _allMedicineReturns.Count,
-        "ScheduleRegister" => _allScheduleRegister.Count,
-        "GstReturn" => _allGstReturn.Count,
-        _ => 0
-    };
-
     private void UpdateFilteredSummary()
     {
-        var (count, amount, tax, discount) = ActiveGrid switch
+        var count = Rows.Count;
+        var amount = SumKey("GrandTotal", "Total", "Revenue", "RefundAmount", "StockAmount", "InvoiceValue", "OutstandingBalance", "Amount");
+        var tax = SumKey("TaxAmount", "TotalTax", "Cost", "StockValue", "CgstAmount");
+        var discount = SumKey("DiscountAmount", "GrossProfit", "TaxableAmount", "Shortfall");
+
+        // Prefer typed summary keys per report family.
+        amount = SelectedReport.Kind switch
         {
-            "Sales" => (SalesRows.Count, SalesRows.Sum(r => r.GrandTotal), SalesRows.Sum(r => r.TaxAmount), SalesRows.Sum(r => r.DiscountAmount)),
-            "Purchases" => (PurchaseRows.Count, PurchaseRows.Sum(r => r.GrandTotal), PurchaseRows.Sum(r => r.TaxAmount), PurchaseRows.Sum(r => r.DiscountAmount)),
-            "Gst" => (GstRows.Count, GstRows.Sum(r => r.GrandTotal), GstRows.Sum(r => r.TotalTax), 0m),
-            "Profit" => (ProfitRows.Count, ProfitRows.Sum(r => r.Revenue), ProfitRows.Sum(r => r.Cost), ProfitRows.Sum(r => r.GrossProfit)),
-            "Medicine" => (MedicineSalesRows.Count, MedicineSalesRows.Sum(r => r.Revenue), MedicineSalesRows.Sum(r => r.Cost), MedicineSalesRows.Sum(r => r.GrossProfit)),
-            "Stock" => (StockValuationRows.Count,
-                StockValuationRows.Sum(r => r.StockAmount),
-                StockValuationRows.Sum(r => r.StockValue),
-                0m),
-            "Expiry" => (ExpiryRows.Count, ExpiryRows.Sum(r => r.StockValue), 0m, 0m),
-            "LowStock" => (LowStockRows.Count, 0m, 0m, LowStockRows.Sum(r => r.Shortfall)),
-            "SaleReturns" => (SaleReturnRows.Count, SaleReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
-            "MedicineReturns" => (MedicineReturnRows.Count, MedicineReturnRows.Sum(r => r.RefundAmount), 0m, 0m),
-            "ScheduleRegister" => (ScheduleRegisterRows.Count, ScheduleRegisterRows.Sum(r => r.Quantity), 0m, 0m),
-            "GstReturn" => (GstReturnRows.Count, GstReturnRows.Sum(r => r.InvoiceValue), GstReturnRows.Sum(r => r.TotalTax), GstReturnRows.Sum(r => r.TaxableAmount)),
-            _ => (0, 0m, 0m, 0m)
+            ReportKind.StockValuation => SumKey("StockAmount"),
+            ReportKind.Expiry or ReportKind.BatchStock or ReportKind.SlowMovingStock => SumKey("StockValue"),
+            ReportKind.Profit => SumKey("Revenue"),
+            ReportKind.SalesByMedicine => SumKey("Revenue"),
+            ReportKind.ScheduleRegister => SumKey("Quantity"),
+            ReportKind.Gstr1 or ReportKind.Gstr2B => SumKey("InvoiceValue"),
+            ReportKind.SaleReturns or ReportKind.MedicineReturns => SumKey("RefundAmount"),
+            ReportKind.SupplierPayments => SumKey("GrandTotal"),
+            ReportKind.LowStock => 0m,
+            _ => amount
+        };
+        tax = SelectedReport.Kind switch
+        {
+            ReportKind.StockValuation => SumKey("StockValue"),
+            ReportKind.Profit or ReportKind.SalesByMedicine => SumKey("Cost"),
+            ReportKind.Gstr1 or ReportKind.Gstr2B => SumKey("TotalTax"),
+            ReportKind.GstSummary => SumKey("TotalTax"),
+            ReportKind.SupplierPayments => SumKey("PaidAmount"),
+            _ => tax
+        };
+        discount = SelectedReport.Kind switch
+        {
+            ReportKind.Profit or ReportKind.SalesByMedicine => SumKey("GrossProfit"),
+            ReportKind.Gstr1 or ReportKind.Gstr2B => SumKey("TaxableAmount"),
+            ReportKind.LowStock => SumKey("Shortfall"),
+            ReportKind.SupplierPayments => SumKey("BalanceDue"),
+            _ => discount
         };
 
-        var totalSource = GetSourceCount();
-
+        var totalSource = _allRows.Count;
         Summary = new ReportSummaryDto
         {
             RecordCount = count,
@@ -885,105 +734,42 @@ public class ReportsViewModel : ObservableObject
                 ? (count == 0
                     ? $"No matching records (filtered from {totalSource})"
                     : $"Showing {count} of {totalSource} record(s)")
-                : ActiveGrid == "Stock"
+                : SelectedReport.Kind == ReportKind.StockValuation
                     ? $"{count} batch(es) — Amount {amount:N2} · Cost {tax:N2}"
-                    : ActiveGrid == "ScheduleRegister"
+                    : SelectedReport.Kind == ReportKind.ScheduleRegister
                         ? $"{count} line(s) — total qty {amount:0.##}"
-                        : ActiveGrid == "GstReturn"
+                        : SelectedReport.Kind == ReportKind.SupplierPayments
+                            ? $"{count} bill(s) — paid {tax:N2} · pending {discount:N2}"
+                        : ShowGstReturnExport
                             ? $"{count} GST line(s) — taxable {discount:N2} · tax {tax:N2}"
                             : $"{count} record(s) — total {amount:N2}"
         };
         StatusMessage = Summary.FooterNote;
-        OnPropertyChanged(nameof(ShowStockSummaryKpis));
-        OnPropertyChanged(nameof(ShowGenericSummaryKpis));
-        OnPropertyChanged(nameof(ShowTaxDiscountKpis));
-        OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
-        OnPropertyChanged(nameof(ShowGstReturnKpis));
     }
 
-    private static void Fill<T>(ObservableCollection<T> target, IEnumerable<T> source)
+    private decimal SumKey(params string[] keys)
     {
-        target.Clear();
-        foreach (var item in source)
-            target.Add(item);
+        decimal total = 0;
+        foreach (var row in Rows)
+        {
+            foreach (var key in keys)
+            {
+                if (row.Values.ContainsKey(key))
+                {
+                    total += ToDecimal(row.Get(key));
+                    break;
+                }
+            }
+        }
+        return total;
     }
-
-    private static bool Matches(string term, params string?[] values)
-    {
-        if (string.IsNullOrWhiteSpace(term)) return true;
-        return values.Any(v => !string.IsNullOrWhiteSpace(v) &&
-                               v.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void SetActiveGrid(string name)
-    {
-        ActiveGrid = name;
-        OnPropertyChanged(nameof(ShowSalesGrid));
-        OnPropertyChanged(nameof(ShowPurchaseGrid));
-        OnPropertyChanged(nameof(ShowGstGrid));
-        OnPropertyChanged(nameof(ShowGstSummary));
-        OnPropertyChanged(nameof(ShowProfitGrid));
-        OnPropertyChanged(nameof(ShowMedicineGrid));
-        OnPropertyChanged(nameof(ShowStockGrid));
-        OnPropertyChanged(nameof(ShowExpiryGrid));
-        OnPropertyChanged(nameof(ShowLowStockGrid));
-        OnPropertyChanged(nameof(ShowSaleReturnGrid));
-        OnPropertyChanged(nameof(ShowMedicineReturnGrid));
-        OnPropertyChanged(nameof(ShowScheduleRegisterGrid));
-        OnPropertyChanged(nameof(ShowGstReturnGrid));
-        OnPropertyChanged(nameof(ShowGstReturnExport));
-        OnPropertyChanged(nameof(GstReturnDisclaimer));
-        OnPropertyChanged(nameof(ShowStockSummaryKpis));
-        OnPropertyChanged(nameof(ShowGenericSummaryKpis));
-        OnPropertyChanged(nameof(ShowTaxDiscountKpis));
-        OnPropertyChanged(nameof(ShowScheduleSummaryKpis));
-        OnPropertyChanged(nameof(ShowGstReturnKpis));
-        OnPropertyChanged(nameof(ShowExpirySupplierFilter));
-    }
-
-    private static string GridNameFor(ReportKind kind) => kind switch
-    {
-        ReportKind.Sales => "Sales",
-        ReportKind.Purchases => "Purchases",
-        ReportKind.GstSummary => "Gst",
-        ReportKind.Gstr1 or ReportKind.Gstr2B => "GstReturn",
-        ReportKind.Profit => "Profit",
-        ReportKind.SalesByMedicine => "Medicine",
-        ReportKind.ScheduleRegister => "ScheduleRegister",
-        ReportKind.StockValuation => "Stock",
-        ReportKind.Expiry => "Expiry",
-        ReportKind.LowStock => "LowStock",
-        ReportKind.SaleReturns => "SaleReturns",
-        ReportKind.MedicineReturns => "MedicineReturns",
-        _ => "Sales"
-    };
 
     private void ClearAllRows()
     {
-        SalesRows.Clear();
-        PurchaseRows.Clear();
-        GstRows.Clear();
-        ProfitRows.Clear();
-        MedicineSalesRows.Clear();
-        StockValuationRows.Clear();
-        ExpiryRows.Clear();
-        LowStockRows.Clear();
-        SaleReturnRows.Clear();
-        MedicineReturnRows.Clear();
-        ScheduleRegisterRows.Clear();
-        GstReturnRows.Clear();
-        _allSales = [];
-        _allPurchases = [];
-        _allGst = [];
-        _allProfit = [];
-        _allMedicineSales = [];
-        _allStock = [];
-        _allExpiry = [];
-        _allLowStock = [];
-        _allSaleReturns = [];
-        _allMedicineReturns = [];
-        _allScheduleRegister = [];
-        _allGstReturn = [];
+        Rows.Clear();
+        Columns.Clear();
+        _columns = [];
+        _allRows = [];
         _gstReturnExport = null;
         _scheduleRegisterReport = null;
         _expirySupplierOptions = [FilterOption.All];
@@ -992,6 +778,7 @@ public class ReportsViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedExpirySupplierKey));
         OnPropertyChanged(nameof(ShowExpirySupplierFilter));
         Summary = new ReportSummaryDto();
+        ColumnsChanged?.Invoke();
     }
 
     private void ExportCsv()
@@ -1002,24 +789,9 @@ public class ReportsViewModel : ObservableObject
             FileName = $"{SelectedReport.Kind}_{DateTime.Today:yyyyMMdd}.csv"
         };
         if (dialog.ShowDialog() != true) return;
-
         try
         {
-            switch (ActiveGrid)
-            {
-                case "Sales": ReportCsvExporter.Export(dialog.FileName, SalesRows); break;
-                case "Purchases": ReportCsvExporter.Export(dialog.FileName, PurchaseRows); break;
-                case "Gst": ReportCsvExporter.Export(dialog.FileName, GstRows); break;
-                case "Profit": ReportCsvExporter.Export(dialog.FileName, ProfitRows); break;
-                case "Medicine": ReportCsvExporter.Export(dialog.FileName, MedicineSalesRows); break;
-                case "Stock": ReportCsvExporter.Export(dialog.FileName, StockValuationRows); break;
-                case "Expiry": ReportCsvExporter.Export(dialog.FileName, ExpiryRows); break;
-                case "LowStock": ReportCsvExporter.Export(dialog.FileName, LowStockRows); break;
-                case "SaleReturns": ReportCsvExporter.Export(dialog.FileName, SaleReturnRows); break;
-                case "MedicineReturns": ReportCsvExporter.Export(dialog.FileName, MedicineReturnRows); break;
-                case "ScheduleRegister": ReportCsvExporter.Export(dialog.FileName, ScheduleRegisterRows); break;
-                case "GstReturn": ReportCsvExporter.Export(dialog.FileName, GstReturnRows); break;
-            }
+            ReportCsvExporter.ExportTable(dialog.FileName, _columns, Rows.Select(r => r.Values));
             _dialog.ShowInfo($"Exported to {dialog.FileName}");
         }
         catch (Exception ex)
@@ -1028,21 +800,54 @@ public class ReportsViewModel : ObservableObject
         }
     }
 
-    private void ApplyGstReturn(GstReturnExportDto export)
+    private void ExportExcel()
     {
-        _gstReturnExport = export;
-        _allGstReturn = export.PreviewRows;
-        OnPropertyChanged(nameof(GstReturnDisclaimer));
-        OnPropertyChanged(nameof(ShowGstReturnExport));
-        Summary = new ReportSummaryDto
+        var dialog = new SaveFileDialog
         {
-            RecordCount = export.PreviewRows.Count,
-            TotalAmount = export.PreviewRows.Sum(r => r.InvoiceValue),
-            TotalTax = export.PreviewRows.Sum(r => r.TotalTax),
-            TotalDiscount = export.PreviewRows.Sum(r => r.TaxableAmount),
-            FooterNote = $"{export.Title} · GSTIN {export.Gstin} · FP {export.FilingPeriod}"
+            Filter = "Excel workbook (*.xlsx)|*.xlsx",
+            FileName = $"{SelectedReport.Kind}_{DateTime.Today:yyyyMMdd}.xlsx"
         };
-        SetActiveGrid("GstReturn");
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            ReportExcelExporter.Export(
+                dialog.FileName,
+                SelectedReport.Label,
+                _columns,
+                Rows.Select(r => r.Values));
+            _dialog.ShowInfo($"Exported to {dialog.FileName}");
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Export failed: {ex.Message}");
+        }
+    }
+
+    private void ExportPdf()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = "PDF files (*.pdf)|*.pdf",
+            FileName = $"{SelectedReport.Kind}_{DateTime.Today:yyyyMMdd}.pdf"
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var subtitle = UsesDateRange
+                ? $"{FromDate:dd MMM yyyy} – {ToDate:dd MMM yyyy}"
+                : "As of today";
+            ReportPdfExporter.Export(
+                dialog.FileName,
+                SelectedReport.Label,
+                subtitle,
+                _columns,
+                Rows.Select(r => r.Values));
+            _dialog.ShowInfo($"Exported to {dialog.FileName}");
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Export failed: {ex.Message}");
+        }
     }
 
     private void ExportGstJson()
@@ -1086,15 +891,86 @@ public class ReportsViewModel : ObservableObject
             _dialog.ShowError($"Export failed: {ex.Message}");
         }
     }
+
+    private static object? Get(Dictionary<string, object?> row, string key) =>
+        row.TryGetValue(key, out var v) ? v : null;
+
+    private static string GetString(Dictionary<string, object?> row, string key) =>
+        Get(row, key)?.ToString() ?? "";
+
+    private static string GetString(ReportRowViewModel row, string key) =>
+        row.Get(key)?.ToString() ?? "";
+
+    private static bool TryGetInt(ReportRowViewModel row, string key, out int value)
+    {
+        value = 0;
+        var v = row.Get(key);
+        switch (v)
+        {
+            case int i:
+                value = i;
+                return true;
+            case long l:
+                value = (int)l;
+                return true;
+            case string s when int.TryParse(s, out var parsed):
+                value = parsed;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static decimal ToDecimal(object? value) => value switch
+    {
+        null => 0m,
+        decimal d => d,
+        double d => (decimal)d,
+        float f => (decimal)f,
+        int i => i,
+        long l => l,
+        string s when decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) => d,
+        string s when decimal.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out var d2) => d2,
+        _ => 0m
+    };
+
+    private static bool IsTruthy(object? value) => value switch
+    {
+        null => false,
+        bool b => b,
+        string s => s.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                    s.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+                    s == "1",
+        int i => i != 0,
+        _ => false
+    };
+
+    private static bool IsCashRefund(string mode) =>
+        mode.Contains("Cash", StringComparison.OrdinalIgnoreCase) ||
+        mode.Contains("Card", StringComparison.OrdinalIgnoreCase) ||
+        mode.Contains("Upi", StringComparison.OrdinalIgnoreCase) ||
+        mode.Contains("Wallet", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCreditRefund(string mode) =>
+        mode.Contains("Credit", StringComparison.OrdinalIgnoreCase) ||
+        mode.Contains("Store", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed class ReportRowViewModel(Dictionary<string, object?> values)
+{
+    public Dictionary<string, object?> Values { get; } = values;
+
+    public object? Get(string key) =>
+        Values.TryGetValue(key, out var v) ? v : null;
+
+    public object? this[string key] => Get(key);
 }
 
 public sealed class FilterOption(string key, string label)
 {
     public static FilterOption All { get; } = new("all", "All");
-
     public string Key { get; } = key;
     public string Label { get; } = label;
-
     public override string ToString() => Label;
 }
 

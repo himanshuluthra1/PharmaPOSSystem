@@ -50,35 +50,75 @@ public class SettingsViewModel : ObservableObject
         IDatabaseBackupService databaseBackup,
         IGoogleDriveBackupService googleDrive,
         IConfiguration configuration,
+        IFinancialYearContext financialYear,
+        IDateTimeProvider clock,
         IDialogService dialog)
     {
         var user = currentUser;
 
         CanManageCompany = user.HasAnyPermission(
-            AppConstants.Permissions.SettingsCompany, AppConstants.Permissions.SettingsManage);
+            AppConstants.Permissions.SettingsMenuCompany,
+            AppConstants.Permissions.SettingsCompany,
+            AppConstants.Permissions.SettingsManage);
         CanManageBranches = user.HasAnyPermission(
-            AppConstants.Permissions.SettingsBranches, AppConstants.Permissions.SettingsManage);
+            AppConstants.Permissions.SettingsMenuBranches,
+            AppConstants.Permissions.SettingsBranches,
+            AppConstants.Permissions.SettingsManage);
+        CanManageCounters = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuCounters,
+            AppConstants.Permissions.SettingsMenuBranches,
+            AppConstants.Permissions.SettingsBranches,
+            AppConstants.Permissions.SettingsManage);
         CanManagePreferences = user.HasAnyPermission(
-            AppConstants.Permissions.SettingsPreferences, AppConstants.Permissions.SettingsManage);
+            AppConstants.Permissions.SettingsMenuPreferences,
+            AppConstants.Permissions.SettingsPreferences,
+            AppConstants.Permissions.SettingsManage);
         CanManageUsers = user.HasAnyPermission(
-            AppConstants.Permissions.UsersEdit, AppConstants.Permissions.UsersManage);
+            AppConstants.Permissions.SettingsMenuUsers,
+            AppConstants.Permissions.UsersEdit,
+            AppConstants.Permissions.UsersManage);
         CanManageRoles = user.HasAnyPermission(
-            AppConstants.Permissions.UsersRoles, AppConstants.Permissions.UsersManage);
-        // Medicine mapping + MedWin import: full settings access, OR any settings.* grant
-        // (so the tabs are not missing when the role has company/preferences but not settings.manage).
-        var canAccessSettingsModule = user.CanAccessModule("settings");
-        CanManageMedicineMapping = user.HasAnyPermission(AppConstants.Permissions.SettingsManage)
-            || canAccessSettingsModule;
-        CanManageMedWinImport = user.HasAnyPermission(AppConstants.Permissions.SettingsManage)
-            || canAccessSettingsModule;
-        CanAccessSettings = canAccessSettingsModule || user.CanAccessModule("users");
+            AppConstants.Permissions.SettingsMenuRoles,
+            AppConstants.Permissions.UsersRoles,
+            AppConstants.Permissions.UsersManage);
+        CanManageMedicineMapping = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuMedicineMapping,
+            AppConstants.Permissions.SettingsManage);
+        CanManageNewMedicineMapping = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuNewMedicineMapping,
+            AppConstants.Permissions.SettingsManage);
+        CanManageMedWinImport = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuMedWinImport,
+            AppConstants.Permissions.SettingsManage);
+        CanManagePassword = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuPassword,
+            AppConstants.Permissions.SettingsManage)
+            || user.CanAccessModule("settings")
+            || user.CanAccessModule("users");
+        CanManageAppearance = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuAppearance,
+            AppConstants.Permissions.SettingsManage)
+            || user.CanAccessModule("settings")
+            || user.CanAccessModule("users");
+        CanManageBackup = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuBackup,
+            AppConstants.Permissions.SettingsPreferences,
+            AppConstants.Permissions.SettingsManage);
+        CanManageUpdates = user.HasAnyPermission(
+            AppConstants.Permissions.SettingsMenuUpdates,
+            AppConstants.Permissions.SettingsPreferences,
+            AppConstants.Permissions.SettingsManage)
+            || user.CanAccessModule("settings");
+        CanAccessSettings = user.CanAccessModule("settings") || user.CanAccessModule("users");
 
         Company = new CompanyTabViewModel(settings, dialog);
         Branches = new BranchesTabViewModel(settings, dialog);
         Counters = new CountersTabViewModel(counters, currentUser, dialog);
         Preferences = new PreferencesTabViewModel(
-            settings, layout, aiSettings, billShareSettings, mySqlSyncSettings, mySqlPublisher, storeIdentity, dialog);
+            settings, layout, aiSettings, billShareSettings, mySqlSyncSettings, mySqlPublisher, storeIdentity,
+            financialYear, clock, dialog);
         MedicineMapping = new MedicineMappingTabViewModel(scopeFactory, dialog, aiSettings, geminiMedicineMatcher);
+        NewMedicineMapping = new NewMedicineMappingTabViewModel(scopeFactory, dialog);
         MedWinImport = new MedWinImportTabViewModel(configuration, dialog);
         RolePermissions = new RolePermissionsTabViewModel(settings, currentUser, dialog);
         Users = new UsersTabViewModel(settings, currentUser, dialog);
@@ -90,15 +130,20 @@ public class SettingsViewModel : ObservableObject
         // Side nav lists only allowed sections — avoids TabControl header overflow / missing tabs.
         if (CanManageCompany) Sections.Add(new SettingsSection("Company", 0));
         if (CanManageBranches) Sections.Add(new SettingsSection("Branches", 1));
-        if (CanManageBranches) Sections.Add(new SettingsSection("Counters", 2));
+        if (CanManageCounters) Sections.Add(new SettingsSection("Counters", 2));
         if (CanManagePreferences) Sections.Add(new SettingsSection("Preferences", 3));
         if (CanManageMedicineMapping) Sections.Add(new SettingsSection("Medicine Mapping", 4));
-        if (CanManageMedWinImport) Sections.Add(new SettingsSection("MedWin Import", 5));
-        if (CanManageRoles) Sections.Add(new SettingsSection("Roles & Permissions", 6));
-        if (CanManageUsers) Sections.Add(new SettingsSection("Users", 7));
-        Sections.Add(new SettingsSection("My Password", 8));
-        Sections.Add(new SettingsSection("Appearance", 9));
-        if (CanManagePreferences) Sections.Add(new SettingsSection("Backup", 10));
+        if (CanManageNewMedicineMapping) Sections.Add(new SettingsSection("New Medicine Mapping", 5));
+        if (CanManageMedWinImport) Sections.Add(new SettingsSection("MedWin Import", 6));
+        if (CanManageRoles) Sections.Add(new SettingsSection("Roles & Permissions", 7));
+        if (CanManageUsers) Sections.Add(new SettingsSection("Users", 8));
+        if (CanManagePassword) Sections.Add(new SettingsSection("My Password", 9));
+        if (CanManageAppearance) Sections.Add(new SettingsSection("Appearance", 10));
+        if (CanManageBackup) Sections.Add(new SettingsSection("Backup", 11));
+        if (CanManageUpdates) Sections.Add(new SettingsSection("Shop updates", 12));
+
+        if (Sections.Count == 0)
+            Sections.Add(new SettingsSection("My Password", 9));
 
         _selectedSection = Sections[0];
         _selectedTab = _selectedSection.TabIndex;
@@ -109,23 +154,6 @@ public class SettingsViewModel : ObservableObject
             _ = RolePermissions.EnsureLoadedAsync();
         else if (CanManageUsers)
             _ = Users.EnsureLoadedAsync();
-
-        _ = InitVendorSectionAsync();
-    }
-
-    private async Task InitVendorSectionAsync()
-    {
-        try
-        {
-            await ShopUpdates.EnsureLoadedAsync();
-            if (!ShopUpdates.IsVendor) return;
-            if (Sections.Any(s => s.TabIndex == 11)) return;
-            Sections.Add(new SettingsSection("Shop updates", 11));
-        }
-        catch
-        {
-            // Vendor tab is optional when the VPS is unreachable.
-        }
     }
 
     public ObservableCollection<SettingsSection> Sections { get; } = new();
@@ -143,17 +171,24 @@ public class SettingsViewModel : ObservableObject
     public bool CanAccessSettings { get; }
     public bool CanManageCompany { get; }
     public bool CanManageBranches { get; }
+    public bool CanManageCounters { get; }
     public bool CanManagePreferences { get; }
     public bool CanManageRoles { get; }
     public bool CanManageUsers { get; }
     public bool CanManageMedicineMapping { get; }
+    public bool CanManageNewMedicineMapping { get; }
     public bool CanManageMedWinImport { get; }
+    public bool CanManagePassword { get; }
+    public bool CanManageAppearance { get; }
+    public bool CanManageBackup { get; }
+    public bool CanManageUpdates { get; }
 
     public CompanyTabViewModel Company { get; }
     public BranchesTabViewModel Branches { get; }
     public CountersTabViewModel Counters { get; }
     public PreferencesTabViewModel Preferences { get; }
     public MedicineMappingTabViewModel MedicineMapping { get; }
+    public NewMedicineMappingTabViewModel NewMedicineMapping { get; }
     public MedWinImportTabViewModel MedWinImport { get; }
     public RolePermissionsTabViewModel RolePermissions { get; }
     public UsersTabViewModel Users { get; }
@@ -191,10 +226,11 @@ public class SettingsViewModel : ObservableObject
             case 2 when CanManageBranches: await Counters.EnsureLoadedAsync(); break;
             case 3 when CanManagePreferences: await Preferences.EnsureLoadedAsync(); break;
             case 4 when CanManageMedicineMapping: await MedicineMapping.EnsureLoadedAsync(); break;
-            case 6 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
-            case 7 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
-            case 10 when CanManagePreferences: await Backup.EnsureLoadedAsync(); break;
-            case 11: await ShopUpdates.EnsureLoadedAsync(); break;
+            case 5 when CanManageMedicineMapping: await NewMedicineMapping.EnsureLoadedAsync(); break;
+            case 7 when CanManageRoles: await RolePermissions.EnsureLoadedAsync(); break;
+            case 8 when CanManageUsers: await Users.EnsureLoadedAsync(); break;
+            case 11 when CanManagePreferences: await Backup.EnsureLoadedAsync(); break;
+            case 12: await ShopUpdates.EnsureLoadedAsync(); break;
         }
     }
 }

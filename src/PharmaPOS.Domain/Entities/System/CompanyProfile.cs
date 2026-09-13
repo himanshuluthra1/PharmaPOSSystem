@@ -42,6 +42,12 @@ public class CompanyProfile : BaseEntity
     /// <summary>Default sale-bill paper template (A4, A5, 80 mm, 58 mm).</summary>
     public InvoicePaperSize InvoicePaperSize { get; set; } = InvoicePaperSize.A4;
 
+    /// <summary>
+    /// Financial year start calendar year to view (e.g. 2024 ⇒ FY 2024-25).
+    /// Null or current year ⇒ current FY (editable).
+    /// </summary>
+    public int? ViewFinancialYearStartYear { get; set; }
+
     // Sale return policy (configurable).
     public int SaleReturnAllowedDays { get; set; } = 30;
     public decimal SaleReturnHighValueThreshold { get; set; } = 5000m;

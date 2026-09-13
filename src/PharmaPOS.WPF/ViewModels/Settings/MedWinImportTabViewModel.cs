@@ -186,16 +186,17 @@ public sealed class MedWinImportTabViewModel : ObservableObject
                     "• All sales, sale returns, payments\n" +
                     "• All purchases, purchase returns, POs\n" +
                     "• Stock batches, stock movements, adjustments, transfers\n" +
+                    "• All suppliers and customers\n" +
                     "• Related journal entries and sync outbox\n\n" +
-                    "KEPT: medicines, suppliers, customers, categories, users, company, roles.\n\n" +
-                    "Then MedWin masters + selected transactional phases will be imported.\n\n" +
+                    "KEPT: medicines (OneMG catalogue), categories, users, company, roles, branches.\n\n" +
+                    "Then MedWin suppliers/customers + selected transactional phases will be imported.\n\n" +
                     "Backup LocalDB before continuing. This cannot be undone.",
                     "Confirm wipe transactional data"))
                 return false;
 
             if (!_dialog.Confirm(
                     "Final confirmation\n\n" +
-                    "Wipe all existing sales/purchases/stock now, then import from:\n" +
+                    "Wipe all existing sales/purchases/stock/suppliers/customers now, then import from:\n" +
                     path +
                     "\n\nContinue?",
                     "Final confirmation — wipe then import"))
@@ -204,11 +205,12 @@ public sealed class MedWinImportTabViewModel : ObservableObject
         else
         {
             var warn = Force
-                ? "Force rematch is ON — medicines may be rematched to OneMG.\n\n"
+                ? "Force is ON for sales/purchases re-import.\n\n"
                 : "";
             if (!_dialog.Confirm(
                     $"{warn}Import selected phases from:\n{path}\n\ninto the local PharmaPOS database?\n\n" +
-                    "Existing POS sales/purchases will NOT be cleared.\nBackup recommended before large imports.",
+                    "If Medicines is selected: all prior MedWin links are cleared and fresh MedWin-only rows are inserted (no auto-link).\n" +
+                    "Existing POS sales/purchases will NOT be cleared unless wipe is checked.\nBackup recommended before large imports.",
                     "Confirm MedWin import"))
                 return false;
         }

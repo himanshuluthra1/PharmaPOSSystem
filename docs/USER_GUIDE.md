@@ -1,5 +1,7 @@
 # PharmaPOS — Detailed User Guide
 
+> **हिंदी गाइड:** [USER_GUIDE_HINDI.md](./USER_GUIDE_HINDI.md) — दुकान कर्मचारियों के लिए सरल, कदम-दर-कदम हिंदी उपयोगकर्ता गाइड।
+
 This guide is for **shop owners, pharmacists, and cashiers**. It explains every screen and everyday job in PharmaPOS: selling, buying, stock, GST, returns, expiry-to-company, printing, backup, and users.
 
 Menus you see depend on your **role**. If a tab is missing, you do not have that permission. Ask an administrator.

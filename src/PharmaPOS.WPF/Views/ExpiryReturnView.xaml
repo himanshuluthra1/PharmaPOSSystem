@@ -7,7 +7,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760">
-    <Grid Margin="8">
+    <Grid Margin="4">
         <TabControl>
             <TabItem Header="Eligible batches">
                 <Grid Margin="0,8,0,0">
@@ -17,35 +17,45 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <materialDesign:Card Grid.Row="0" Padding="12" UniformCornerRadius="10" Margin="0,0,0,8">
-                        <StackPanel>
-                            <TextBlock Text="Expiry to company" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="Select near-expired or expired batches, set claim qty, then post. Stock leaves and supplier credit is opened until you attach their credit note. If Supplier is blank, pick the company in that column (opening stock / unmapped batches)."
-                                       Opacity="0.7" TextWrapping="Wrap" Margin="0,4,0,8" />
-                            <StackPanel Orientation="Horizontal">
-                                <ComboBox Width="160" Margin="0,0,8,0"
+                    <materialDesign:Card Grid.Row="0" Padding="8" UniformCornerRadius="10" Margin="0,0,0,4"
+                                         ToolTip="Select near-expired or expired batches, set claim qty, then post. Stock leaves and supplier credit is opened until you attach their credit note. If Supplier is blank, pick the company in that column (opening stock / unmapped batches).">
+                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Expiry to company" FontSize="13" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="Window :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <ComboBox Width="160" Height="28"
                                           ItemsSource="{Binding HorizonOptions}"
                                           SelectedItem="{Binding SelectedHorizon}"
                                           DisplayMemberPath="Label"
                                           Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                          materialDesign:HintAssist.Hint="Window" />
-                                <ComboBox Width="220" Margin="0,0,8,0"
+                                          materialDesign:HintAssist.Hint="Window"
+                                          materialDesign:HintAssist.IsFloating="False" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="Supplier :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <ComboBox Width="220" Height="28"
                                           ItemsSource="{Binding SupplierOptions}"
-                                          SelectedItem="{Binding SelectedSupplier}"
+                                          SelectedValuePath="SupplierId"
+                                          SelectedValue="{Binding SelectedSupplierId}"
                                           DisplayMemberPath="Label"
                                           Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                          materialDesign:HintAssist.Hint="Supplier" />
-                                <Button Command="{Binding RefreshEligibleCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
-                                        Content="Refresh" />
-                                <Button Command="{Binding SelectAllCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,8,0"
-                                        Content="Claim all stock" />
-                                <Button Command="{Binding ClearQtyCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        Content="Clear qty" />
+                                          materialDesign:HintAssist.Hint="Supplier"
+                                          materialDesign:HintAssist.IsFloating="False" />
                             </StackPanel>
-                        </StackPanel>
+                            <Button Command="{Binding RefreshEligibleCommand}"
+                                    Style="{StaticResource MaterialDesignIconButton}"
+                                    Width="28" Height="28" Padding="0" Margin="0,0,4,0"
+                                    ToolTip="Refresh">
+                                <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                            </Button>
+                            <Button Command="{Binding SelectAllCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0,0,4,0"
+                                    Content="Claim all stock" Padding="8,2" Height="28" />
+                            <Button Command="{Binding ClearQtyCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Content="Clear qty" Padding="8,2" Height="28" />
+                        </WrapPanel>
                     </materialDesign:Card>
 
                     <materialDesign:Card Grid.Row="1" Padding="8" UniformCornerRadius="10">
@@ -53,6 +63,7 @@
                                   AutoGenerateColumns="False" CanUserAddRows="False"
                                   HeadersVisibility="Column">
                             <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="Sel" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="44" />
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding Source.MedicineName}" Width="2*" MinWidth="140" IsReadOnly="True" />
                                 <DataGridTextColumn Header="Batch" Binding="{Binding Source.BatchNumber}" Width="100" IsReadOnly="True" />
                                 <DataGridTextColumn Header="Expiry" Binding="{Binding Source.ExpiryDate, StringFormat=dd-MMM-yyyy}" Width="100" IsReadOnly="True" />
@@ -78,20 +89,24 @@
                         </DataGrid>
                     </materialDesign:Card>
 
-                    <materialDesign:Card Grid.Row="2" Padding="12" UniformCornerRadius="10" Margin="0,8,0,0">
+                    <materialDesign:Card Grid.Row="2" Padding="8" UniformCornerRadius="10" Margin="0,4,0,0">
                         <DockPanel>
                             <Button DockPanel.Dock="Right"
                                     Command="{Binding SubmitClaimCommand}"
                                     Style="{StaticResource MaterialDesignRaisedButton}"
-                                    Padding="16,8"
+                                    Padding="8,2" Height="28"
                                     Content="Submit claim (stock out)" />
                             <TextBlock DockPanel.Dock="Right" Margin="0,0,16,0" VerticalAlignment="Center"
                                        FontWeight="SemiBold"
                                        Text="{Binding ClaimTotal, StringFormat=Expected credit: {0:N2}}" />
-                            <TextBox Margin="0,0,12,0"
-                                     materialDesign:HintAssist.Hint="Remarks (optional)"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="Remarks :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBox MinWidth="200"
+                                         materialDesign:HintAssist.Hint="Remarks (optional)"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
                         </DockPanel>
                     </materialDesign:Card>
                 </Grid>
@@ -101,20 +116,23 @@
                 <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MinWidth="280" />
-                        <ColumnDefinition Width="320" MinWidth="240" />
+                        <ColumnDefinition Width="1.2*" MinWidth="360" />
                     </Grid.ColumnDefinitions>
 
                     <materialDesign:Card Grid.Column="0" Margin="0,0,8,0" Padding="8" UniformCornerRadius="10">
                         <DockPanel>
-                            <DockPanel DockPanel.Dock="Top" Margin="4,4,4,8">
-                                <CheckBox DockPanel.Dock="Right" Content="Awaiting credit note"
+                            <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+                                <TextBlock Text="Posted claims" FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                                <Button Command="{Binding RefreshClaimsCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}"
+                                        Width="28" Height="28" Padding="0" Margin="0,0,8,0"
+                                        ToolTip="Refresh">
+                                    <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                                </Button>
+                                <CheckBox Content="Awaiting credit note"
                                           IsChecked="{Binding AwaitingCreditOnly}" VerticalAlignment="Center" />
-                                <Button DockPanel.Dock="Right" Margin="0,0,8,0"
-                                        Command="{Binding RefreshClaimsCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        Content="Refresh" />
-                                <TextBlock Text="Posted claims" FontWeight="SemiBold" VerticalAlignment="Center" />
-                            </DockPanel>
+                            </WrapPanel>
                             <DataGrid ItemsSource="{Binding Claims}"
                                       SelectedItem="{Binding SelectedClaim}"
                                       AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
@@ -131,32 +149,77 @@
                         </DockPanel>
                     </materialDesign:Card>
 
-                    <materialDesign:Card Grid.Column="1" Padding="12" UniformCornerRadius="10">
-                        <StackPanel>
-                            <TextBlock Text="Attach credit note" FontWeight="SemiBold" FontSize="16" />
-                            <TextBlock Text="When the company issues a credit / debit note for the expiry return, record it here."
-                                       Opacity="0.7" TextWrapping="Wrap" Margin="0,4,0,12" />
-                            <TextBlock Text="{Binding ClaimDetail.ClaimNumber}" FontWeight="SemiBold" Margin="0,0,0,4" />
-                            <TextBlock Opacity="0.7" Margin="0,0,0,8">
-                                <Run Text="Return " />
-                                <Run Text="{Binding ClaimDetail.ReturnNumber, Mode=OneWay}" />
-                            </TextBlock>
-                            <TextBox Margin="0,0,0,8"
-                                     materialDesign:HintAssist.Hint="Credit note number"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding CreditNoteNumber, UpdateSourceTrigger=PropertyChanged}" />
-                            <DatePicker Margin="0,0,0,8"
-                                        materialDesign:HintAssist.Hint="Credit note date"
-                                        SelectedDate="{Binding CreditNoteDate}" />
-                            <TextBox Margin="0,0,0,12"
-                                     materialDesign:HintAssist.Hint="Credit amount (blank = expected)"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding CreditNoteAmount, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Command="{Binding AttachCreditNoteCommand}"
-                                    Style="{StaticResource MaterialDesignRaisedButton}"
-                                    Content="Save credit note" />
-                            <TextBlock Text="{Binding StatusMessage}" Opacity="0.6" Margin="0,12,0,0" TextWrapping="Wrap" />
-                        </StackPanel>
+                    <materialDesign:Card Grid.Column="1" Padding="8" UniformCornerRadius="10"
+                                         ToolTip="Select a claim to view claimed batches and attach the supplier credit note.">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Margin="0,0,0,6">
+                                <TextBlock Text="Claim lines" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,4" />
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,2">
+                                    <Run Text="{Binding ClaimDetail.ClaimNumber, Mode=OneWay}" />
+                                    <Run Text=" · " />
+                                    <Run Text="{Binding ClaimDetail.SupplierName, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Opacity="0.7" Margin="0,0,0,4">
+                                    <Run Text="Return " />
+                                    <Run Text="{Binding ClaimDetail.ReturnNumber, Mode=OneWay}" />
+                                    <Run Text=" · Expected " />
+                                    <Run Text="{Binding ClaimDetail.ExpectedCreditAmount, Mode=OneWay, StringFormat=N2}" />
+                                </TextBlock>
+                            </StackPanel>
+
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding ClaimDetail.Lines}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                                      HeadersVisibility="Column"
+                                      Visibility="{Binding HasSelectedClaim, Converter={StaticResource BoolToVisibility}}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="120" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=dd-MMM-yyyy}" Width="95" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding ClaimQuantity, StringFormat=0.##}" Width="60" />
+                                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="80" />
+                                    <DataGridTextColumn Header="Bill" Binding="{Binding PurchaseInvoiceNumber}" Width="100" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <StackPanel Grid.Row="2" Margin="0,8,0,0"
+                                        ToolTip="{Binding ManageBlockedReason}">
+                                <TextBlock Text="Attach credit note" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6" />
+                                <TextBlock Text="{Binding ManageBlockedReason}" Foreground="#C62828" FontSize="11"
+                                           Margin="0,0,0,6" TextWrapping="Wrap"
+                                           Visibility="{Binding HasManageBlockedReason, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Text="Credit note number" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                <TextBox Margin="0,0,0,6"
+                                         materialDesign:HintAssist.Hint="Credit note number"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding CreditNoteNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Text="Credit note date" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                <DatePicker Margin="0,0,0,6"
+                                            materialDesign:HintAssist.Hint="Credit note date"
+                                            materialDesign:HintAssist.IsFloating="False"
+                                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                            SelectedDate="{Binding CreditNoteDate}" />
+                                <TextBlock Text="Credit amount" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                <TextBox Margin="0,0,0,8"
+                                         materialDesign:HintAssist.Hint="Credit amount (blank = expected)"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding CreditNoteAmount, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Command="{Binding AttachCreditNoteCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Content="Save credit note" Padding="8,2" Height="28"
+                                        ToolTip="{Binding ManageBlockedReason}" />
+                                <TextBlock Text="{Binding StatusMessage}" Opacity="0.6" Margin="0,8,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
                     </materialDesign:Card>
                 </Grid>
             </TabItem>

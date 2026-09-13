@@ -1,7 +1,9 @@
 using System.Windows.Input;
+using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Shared;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
 
@@ -16,8 +18,11 @@ public class PreferencesTabViewModel : ObservableObject
     private readonly IMySqlSyncSettingsService _mySqlSyncSettings;
     private readonly IMySqlReportingPublisher _mySqlPublisher;
     private readonly IStoreIdentityService _storeIdentity;
+    private readonly IFinancialYearContext _financialYear;
+    private readonly IDateTimeProvider _clock;
     private readonly IDialogService _dialog;
     private AppPreferencesDto _editor = new();
+    private FinancialYearOption? _selectedFinancialYear;
     private bool _isBusy;
     private bool _loaded;
     private string? _statusMessage;
@@ -56,6 +61,8 @@ public class PreferencesTabViewModel : ObservableObject
         IMySqlSyncSettingsService mySqlSyncSettings,
         IMySqlReportingPublisher mySqlPublisher,
         IStoreIdentityService storeIdentity,
+        IFinancialYearContext financialYear,
+        IDateTimeProvider clock,
         IDialogService dialog)
     {
         _settings = settings;
@@ -65,7 +72,10 @@ public class PreferencesTabViewModel : ObservableObject
         _mySqlSyncSettings = mySqlSyncSettings;
         _mySqlPublisher = mySqlPublisher;
         _storeIdentity = storeIdentity;
+        _financialYear = financialYear;
+        _clock = clock;
         _dialog = dialog;
+        FinancialYearOptions = FinancialYearHelper.ListOptions(_clock.Today);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
         ResetLayoutCommand = new RelayCommand(ResetLayout);
         TestMySqlConnectionCommand = new AsyncRelayCommand(TestMySqlConnectionAsync, () => !IsBusy);
@@ -75,6 +85,18 @@ public class PreferencesTabViewModel : ObservableObject
     {
         get => _editor;
         private set => SetProperty(ref _editor, value);
+    }
+
+    public IReadOnlyList<FinancialYearOption> FinancialYearOptions { get; }
+
+    public FinancialYearOption? SelectedFinancialYear
+    {
+        get => _selectedFinancialYear;
+        set
+        {
+            if (!SetProperty(ref _selectedFinancialYear, value) || value is null) return;
+            Editor.ViewFinancialYearStartYear = value.IsCurrent ? null : value.StartYear;
+        }
     }
 
     public IReadOnlyList<InvoicePaperSizeOption> PaperSizeOptions { get; } =
@@ -275,6 +297,7 @@ public class PreferencesTabViewModel : ObservableObject
         try
         {
             Editor = await _settings.GetPreferencesAsync();
+            SyncSelectedFinancialYear();
             LoadLayoutEditor();
             LoadAiEditor();
             LoadBillShareEditor();
@@ -282,6 +305,16 @@ public class PreferencesTabViewModel : ObservableObject
             LoadStoreIdentity();
         }
         finally { IsBusy = false; }
+    }
+
+    private void SyncSelectedFinancialYear()
+    {
+        var resolved = FinancialYearHelper.Resolve(Editor.ViewFinancialYearStartYear, _clock.Today);
+        _selectedFinancialYear = FinancialYearOptions.FirstOrDefault(o => o.StartYear == resolved.StartYear)
+                                 ?? FinancialYearOptions.FirstOrDefault();
+        OnPropertyChanged(nameof(SelectedFinancialYear));
+        if (_selectedFinancialYear?.IsCurrent == true)
+            Editor.ViewFinancialYearStartYear = null;
     }
 
     private void LoadStoreIdentity()
@@ -377,6 +410,8 @@ public class PreferencesTabViewModel : ObservableObject
                 _dialog.ShowError(result.Error ?? "Could not save preferences.");
                 return;
             }
+
+            await _financialYear.RefreshAsync();
 
             _layout.SetSidePanelWidth(UiLayoutService.SalesKey, SalesSidePanelWidth);
             _layout.SetSidePanelWidth(UiLayoutService.PurchaseKey, PurchaseSidePanelWidth);

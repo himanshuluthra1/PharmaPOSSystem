@@ -10,7 +10,8 @@ public enum StockFilterKind
     LowStock,
     NearExpiry,
     Expired,
-    ZeroStock
+    ZeroStock,
+    NegativeStock
 }
 
 public sealed class StockFilterOption(StockFilterKind kind, string label)

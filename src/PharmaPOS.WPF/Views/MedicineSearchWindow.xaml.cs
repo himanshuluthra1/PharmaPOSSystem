@@ -16,7 +16,7 @@ public partial class MedicineSearchWindow : Window
     private readonly IMedicineLedgerDialogService? _medicineLedger;
     private MedicineLookupDto? _createdMedicine;
 
-    /// <summary>Selected existing medicine, or newly created from website.</summary>
+    /// <summary>Selected existing medicine, or newly created (website / copy).</summary>
     public MedicineLookupDto? ResultMedicine => _createdMedicine ?? _viewModel.SelectedMedicine;
 
     public MedicineSearchWindow(
@@ -51,8 +51,11 @@ public partial class MedicineSearchWindow : Window
     private void UpdateCreateButtonVisibility()
     {
         var allowCreate = _import is not null && _masters is not null;
+        var allowCopy = _masters is not null;
         CreateFromWebButton.Visibility = allowCreate ? Visibility.Visible : Visibility.Collapsed;
         CreateFromWebButton.IsEnabled = allowCreate;
+        CopyMedicineButton.Visibility = allowCopy ? Visibility.Visible : Visibility.Collapsed;
+        CopyMedicineButton.IsEnabled = allowCopy;
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e) => _ = HandleNavigationKeyAsync(e);
@@ -120,6 +123,26 @@ public partial class MedicineSearchWindow : Window
         if (ResultMedicine is null) return;
         DialogResult = true;
         Close();
+    }
+
+    private void CopyMedicineButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_masters is null) return;
+
+        var selected = _viewModel.SelectedMedicine;
+        var win = new MedicineCopyWindow(
+            _masters,
+            preselectMedicineId: selected?.Id,
+            suggestedSearch: selected is null ? _viewModel.SearchText : null)
+        {
+            Owner = this
+        };
+        if (win.ShowDialog() == true && win.CreatedMedicine is not null)
+        {
+            _createdMedicine = win.CreatedMedicine;
+            DialogResult = true;
+            Close();
+        }
     }
 
     private void CreateFromWebButton_Click(object sender, RoutedEventArgs e)

@@ -13,17 +13,29 @@
             <Setter Property="Margin" Value="0,0,0,3" />
         </Style>
         <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
-            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,1" />
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
             <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
         <Style x:Key="FieldCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
-            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,1" />
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
             <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
         <Style x:Key="FieldPassword" TargetType="PasswordBox" BasedOn="{StaticResource MaterialDesignOutlinedPasswordBox}">
-            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="6,1" />
             <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
             <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
         </Style>
@@ -148,9 +160,9 @@
             </Setter>
         </Style>
     </UserControl.Resources>
-    <Grid Margin="8" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-        <materialDesign:Card UniformCornerRadius="12" Padding="16"
-                             materialDesign:ElevationAssist.Elevation="Dp2"
+    <Grid Margin="4" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+        <materialDesign:Card UniformCornerRadius="8" Padding="10,8"
+                             materialDesign:ElevationAssist.Elevation="Dp1"
                              VerticalAlignment="Stretch"
                              HorizontalAlignment="Stretch">
             <DockPanel LastChildFill="True">
@@ -313,7 +325,8 @@
                                         <materialDesign:PackIcon Kind="Refresh" />
                                     </Button>
                                     <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
+                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0"
+                                            Padding="8,2" Height="28">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
                                             <TextBlock Text="New" Margin="4,0,0,0" />
@@ -437,7 +450,8 @@
                                         <materialDesign:PackIcon Kind="Refresh" />
                                     </Button>
                                     <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0">
+                                            Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0"
+                                            Padding="8,2" Height="28">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
                                             <TextBlock Text="New" Margin="4,0,0,0" />
@@ -454,10 +468,16 @@
                                         <DataGridTextColumn Header="Open by" Binding="{Binding OpenOperatorName}" Width="120" />
                                     </DataGrid.Columns>
                                 </DataGrid>
-                                <TextBlock Text="Today's cash by counter" FontWeight="SemiBold" Margin="0,12,0,6" />
-                                <Button Command="{Binding RefreshCashCommand}" Style="{StaticResource MaterialDesignFlatButton}"
-                                        Content="Refresh cash" HorizontalAlignment="Left" Margin="0,0,0,6" />
-                                <TextBlock Text="{Binding CashSummaryText}" TextWrapping="Wrap" Opacity="0.9" />
+                                <DockPanel Margin="0,8,0,4">
+                                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCashCommand}"
+                                            Style="{StaticResource MaterialDesignIconButton}"
+                                            Width="28" Height="28" ToolTip="Refresh today's cash by counter">
+                                        <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" />
+                                    </Button>
+                                    <TextBlock Text="Today's cash by counter" FontWeight="SemiBold" FontSize="12"
+                                               VerticalAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding CashSummaryText}" TextWrapping="Wrap" Opacity="0.9" FontSize="12" />
                             </StackPanel>
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
@@ -506,6 +526,16 @@
                                       HorizontalScrollBarVisibility="Disabled">
                             <StackPanel MaxWidth="520" HorizontalAlignment="Left" Margin="0,0,8,16">
                             <TextBlock Text="Inventory &amp; Billing Preferences" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12" />
+
+                            <TextBlock Text="Financial year (view)" Style="{StaticResource FieldCaption}" />
+                            <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                      ItemsSource="{Binding FinancialYearOptions}"
+                                      DisplayMemberPath="Label"
+                                      SelectedItem="{Binding SelectedFinancialYear}"
+                                      Margin="0,0,0,4" />
+                            <TextBlock Text="Prior years are view-only. Bills, returns, accounting, and reports show that FY only. Stock on hand stays current."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
+
                             <TextBlock Text="Near-expiry alert (days)" Style="{StaticResource FieldCaption}" />
                             <TextBox Style="{StaticResource FieldBox}"
                                      Text="{Binding Editor.NearExpiryDays, UpdateSourceTrigger=PropertyChanged}" />
@@ -540,14 +570,14 @@
                             <TextBlock Text="Master switch for cashier/staff edits. Users with Full Purchase/Sales Access (e.g. Super Admin) can still unlock and edit. Saved invoices lock automatically; click Unlock before changing a locked bill."
                                        Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
 
-                            <TextBlock Text="AI bill scan (Gemini)" FontWeight="SemiBold" FontSize="14" Margin="0,8,0,4" />
-                            <TextBlock Text="Uses Google Gemini to read supplier bills of different formats. Get a free/paid API key from Google AI Studio. Key is stored only on this PC."
+                            <TextBlock Text="AI (Gemini)" FontWeight="SemiBold" FontSize="14" Margin="0,8,0,4" />
+                            <TextBlock Text="Uses Google Gemini for (1) purchase bill scan and (2) MedWin → OneMG medicine matching in Settings → Medicine Mapping. Get an API key from Google AI Studio. Key is stored only on this PC."
                                        Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
-                            <CheckBox Content="Use Gemini for purchase bill scan"
+                            <CheckBox Content="Enable Gemini AI (bill scan + medicine matching)"
                                       IsChecked="{Binding UseGemini}"
                                       Margin="0,0,0,8"
                                       FontWeight="SemiBold" />
-                            <TextBlock Text="Must be checked (and API key saved) or Scan bill uses Windows OCR only."
+                            <TextBlock Text="Must be checked with an API key saved. Otherwise bill scan uses Windows OCR only, and Medicine Mapping will not auto-pick with AI."
                                        Foreground="#C62828" TextWrapping="Wrap" Margin="0,0,0,8" />
                             <TextBlock Text="Gemini API key" Style="{StaticResource FieldCaption}" />
                             <TextBox Style="{StaticResource FieldBox}"
@@ -791,6 +821,153 @@
                         </Grid>
                     </TabItem>
 
+                    <!-- NEW MEDICINE MAPPING -->
+                    <TabItem Header="New Medicine Mapping">
+                        <Grid DataContext="{Binding NewMedicineMapping}" Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <CheckBox Content="Include verified"
+                                              IsChecked="{Binding IncludeVerified}"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,12,0" />
+                                    <Button Command="{Binding RefreshCommand}"
+                                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                                            Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="Refresh" VerticalAlignment="Center" />
+                                            <TextBlock Text="Refresh" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding SaveCommand}"
+                                            Style="{StaticResource MaterialDesignRaisedButton}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" />
+                                            <TextBlock Text="Save" Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Blank-ImagePath medicines (left) → type 3+ characters to suggest catalogue rows that have an ImagePath. Save stores the link and marks verified (no merge)."
+                                               Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Filter" Style="{StaticResource FieldCaption}" VerticalAlignment="Center" Margin="0,0,8,0" Width="Auto" />
+                                        <TextBox Width="280"
+                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                                 materialDesign:HintAssist.Hint="Search name / generic"
+                                                 materialDesign:HintAssist.IsFloating="False" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </DockPanel>
+
+                            <DataGrid Grid.Row="1"
+                                      ItemsSource="{Binding Rows}"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      IsReadOnly="False"
+                                      HeadersVisibility="Column"
+                                      GridLinesVisibility="Horizontal"
+                                      SelectionMode="Single"
+                                      RowHeight="36"
+                                      ColumnHeaderHeight="32"
+                                      materialDesign:DataGridAssist.CellPadding="6,2"
+                                      VirtualizingPanel.IsVirtualizing="True"
+                                      EnableRowVirtualization="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Medicine (blank ImagePath)"
+                                                        Binding="{Binding Name}"
+                                                        IsReadOnly="True"
+                                                        Width="2*"
+                                                        MinWidth="180" />
+                                    <DataGridTextColumn Header="Generic"
+                                                        Binding="{Binding GenericName}"
+                                                        IsReadOnly="True"
+                                                        Width="*"
+                                                        MinWidth="100" />
+                                    <DataGridTemplateColumn Header="Catalogue match (ImagePath set)" Width="2.5*" MinWidth="220">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <TextBox x:Name="NewMappingSuggestBox"
+                                                             Text="{Binding SuggestText, UpdateSourceTrigger=PropertyChanged}"
+                                                             VerticalAlignment="Center"
+                                                             materialDesign:HintAssist.Hint="Type 3+ chars…"
+                                                             materialDesign:HintAssist.IsFloating="False"
+                                                             PreviewKeyDown="NewMappingSuggestBox_PreviewKeyDown"
+                                                             LostKeyboardFocus="NewMappingSuggestBox_LostKeyboardFocus" />
+                                                    <Popup IsOpen="{Binding ShowSuggestions, Mode=OneWay}"
+                                                           PlacementTarget="{Binding ElementName=NewMappingSuggestBox}"
+                                                           Placement="Bottom"
+                                                           StaysOpen="False"
+                                                           AllowsTransparency="True"
+                                                           PopupAnimation="Fade">
+                                                        <Border Background="{DynamicResource MaterialDesignPaper}"
+                                                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                                BorderThickness="1"
+                                                                MinWidth="320"
+                                                                MaxHeight="220">
+                                                            <ListBox ItemsSource="{Binding Suggestions}"
+                                                                     SelectedIndex="{Binding SuggestionIndex, Mode=TwoWay}"
+                                                                     PreviewMouseLeftButtonUp="NewMappingSuggestionList_PreviewMouseLeftButtonUp"
+                                                                     PreviewKeyDown="NewMappingSuggestionList_PreviewKeyDown"
+                                                                     MaxHeight="216"
+                                                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                                                <ListBox.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <StackPanel Margin="4,2">
+                                                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                                            <TextBlock Text="{Binding GenericName}"
+                                                                                       Opacity="0.65"
+                                                                                       FontSize="11"
+                                                                                       TextTrimming="CharacterEllipsis" />
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ListBox.ItemTemplate>
+                                                            </ListBox>
+                                                        </Border>
+                                                    </Popup>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Verified" Width="90" IsReadOnly="True">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsVerified}" Value="True">
+                                                                    <Setter Property="Text" Value="Yes" />
+                                                                    <Setter Property="Foreground" Value="#2E7D32" />
+                                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="2"
+                                       Text="{Binding StatusMessage}"
+                                       Foreground="#2E7D32"
+                                       Margin="0,12,0,0"
+                                       Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
+                        </Grid>
+                    </TabItem>
+
                     <!-- MEDWIN IMPORT -->
                     <TabItem Header="MedWin Import"
                              HorizontalContentAlignment="Stretch"
@@ -825,8 +1002,10 @@
                                           HorizontalScrollBarVisibility="Disabled"
                                           VerticalAlignment="Stretch">
                                 <StackPanel Margin="0,0,8,0">
-                                    <TextBlock Text="Migrate MedWin Access data into this store's PharmaPOS database. Requires Microsoft ACE OLEDB 12.0. Backup LocalDB before wiping or Force re-import."
-                                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                    <TextBlock Text="Migrate MedWin Access data into this store's PharmaPOS database. Requires 64-bit Microsoft Access Database Engine (ACE). Backup LocalDB before wiping or Force re-import."
+                                               Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <TextBlock Opacity="0.85" TextWrapping="Wrap" Margin="0,0,0,10" FontSize="12" Foreground="#E65100"
+                                               Text="If you see “ACE.OLEDB provider is not registered”, install Access Database Engine 2016 X64 (AccessDatabaseEngine_X64.exe). With 32-bit Office already installed, run AccessDatabaseEngine_X64.exe /quiet, then restart PharmaPOS." />
 
                                     <Border Background="#FFF8E1" BorderBrush="#FFCC80" BorderThickness="1" Padding="10" CornerRadius="6" Margin="0,0,0,10">
                                         <StackPanel>
@@ -835,7 +1014,7 @@
                                                       FontWeight="SemiBold"
                                                       IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBool}}" />
                                             <TextBlock Margin="24,4,0,0" Opacity="0.75" TextWrapping="Wrap" FontSize="12"
-                                                       Text="Deletes all current sales, purchases, returns, payments, stock batches, and stock movements. Keeps medicine catalogue and other masters. Then imports MedWin masters + selected transactional phases. Requires two confirmations." />
+                                                       Text="Deletes all current sales, purchases, returns, payments, stock batches/movements, suppliers, and customers. Keeps the medicine catalogue (and company/users). Then imports parties + selected transactional phases from MedWin. Requires two confirmations." />
                                         </StackPanel>
                                     </Border>
 
@@ -996,7 +1175,8 @@
                                     </Button>
                                     <Button DockPanel.Dock="Right" Command="{Binding NewCommand}"
                                             Style="{StaticResource MaterialDesignOutlinedButton}" Margin="4,0,0,0"
-                                            IsEnabled="{Binding CanManageUsers}">
+                                            IsEnabled="{Binding CanManageUsers}"
+                                            Padding="8,2" Height="28">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" />
                                             <TextBlock Text="New" Margin="4,0,0,0" />
@@ -1144,17 +1324,17 @@
                                 <WrapPanel Margin="0,0,0,16">
                                     <Button Command="{Binding ManualBackupCommand}"
                                             Style="{StaticResource MaterialDesignRaisedButton}"
-                                            HorizontalAlignment="Left" Padding="16,8" Margin="0,0,8,4">
+                                            HorizontalAlignment="Left" Padding="8,2" Height="28" Margin="0,0,8,4">
                                         <TextBlock Text="Backup now…" />
                                     </Button>
                                     <Button Command="{Binding RestoreFromFileCommand}"
                                             Style="{StaticResource MaterialDesignOutlinedButton}"
-                                            HorizontalAlignment="Left" Padding="16,8" Margin="0,0,8,4">
+                                            HorizontalAlignment="Left" Padding="8,2" Height="28" Margin="0,0,8,4">
                                         <TextBlock Text="Restore from this computer…" />
                                     </Button>
                                     <Button Command="{Binding RestoreFromDriveCommand}"
                                             Style="{StaticResource MaterialDesignOutlinedButton}"
-                                            HorizontalAlignment="Left" Padding="16,8" Margin="0,0,0,4">
+                                            HorizontalAlignment="Left" Padding="8,2" Height="28" Margin="0,0,0,4">
                                         <TextBlock Text="Restore from Google Drive…" />
                                     </Button>
                                 </WrapPanel>
@@ -1182,17 +1362,17 @@
                                 <WrapPanel Margin="0,0,0,12">
                                     <Button Command="{Binding ConnectGoogleCommand}"
                                             Style="{StaticResource MaterialDesignOutlinedButton}"
-                                            Margin="0,0,8,4" Padding="14,6">
+                                            Margin="0,0,8,4" Padding="8,2" Height="28">
                                         <TextBlock Text="Connect Google Drive" />
                                     </Button>
                                     <Button Command="{Binding DisconnectGoogleCommand}"
                                             Style="{StaticResource MaterialDesignFlatButton}"
-                                            Margin="0,0,8,4" Padding="14,6">
+                                            Margin="0,0,8,4" Padding="8,2" Height="28">
                                         <TextBlock Text="Disconnect" />
                                     </Button>
                                     <Button Command="{Binding SaveSettingsCommand}"
                                             Style="{StaticResource MaterialDesignRaisedButton}"
-                                            Margin="0,0,0,4" Padding="14,6">
+                                            Margin="0,0,0,4" Padding="8,2" Height="28">
                                         <TextBlock Text="Save backup settings" />
                                     </Button>
                                 </WrapPanel>
@@ -1221,6 +1401,7 @@
                                         <TextBlock Text="Notes (optional)" Style="{StaticResource FieldCaption}" />
                                         <TextBox Style="{StaticResource FieldBox}"
                                                  Text="{Binding PackageNotes, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Text="Installer package" Style="{StaticResource FieldCaption}" />
                                         <DockPanel Margin="0,0,0,8">
                                             <Button DockPanel.Dock="Right" Command="{Binding BrowsePackageCommand}"
                                                     Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8,0,0,0">

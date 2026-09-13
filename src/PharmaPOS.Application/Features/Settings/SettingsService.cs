@@ -73,7 +73,8 @@ public class SettingsService : ISettingsService
                 PurchaseInvoicePrefix = c.PurchaseInvoicePrefix,
                 AllowEditSalesBills = c.AllowEditSalesBills,
                 AllowEditPurchaseBills = c.AllowEditPurchaseBills,
-                InvoicePaperSize = c.InvoicePaperSize
+                InvoicePaperSize = c.InvoicePaperSize,
+                ViewFinancialYearStartYear = c.ViewFinancialYearStartYear
             })
             .FirstOrDefaultAsync(ct);
 
@@ -112,6 +113,7 @@ public class SettingsService : ISettingsService
         entity.AllowEditSalesBills = dto.AllowEditSalesBills;
         entity.AllowEditPurchaseBills = dto.AllowEditPurchaseBills;
         entity.InvoicePaperSize = dto.InvoicePaperSize;
+        entity.ViewFinancialYearStartYear = dto.ViewFinancialYearStartYear;
         _uow.Repository<CompanyProfile>().Update(entity);
         await _uow.SaveChangesAsync(ct);
         return Result.Success();

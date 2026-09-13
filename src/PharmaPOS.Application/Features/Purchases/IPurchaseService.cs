@@ -8,6 +8,9 @@ public interface IPurchaseService
     Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default);
     Task<List<SupplierLookupDto>> SearchSuppliersAsync(string term, CancellationToken ct = default);
 
+    /// <summary>Load one active supplier by id (for scan apply / exact selection).</summary>
+    Task<SupplierLookupDto?> GetSupplierAsync(int supplierId, CancellationToken ct = default);
+
     Task<PurchaseMedicineDto?> GetMedicineAsync(int medicineId, CancellationToken ct = default);
 
     /// <summary>Exact barcode match for USB / camera scan on goods receipt.</summary>

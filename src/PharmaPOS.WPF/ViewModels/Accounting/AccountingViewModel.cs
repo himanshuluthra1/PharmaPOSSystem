@@ -25,13 +25,15 @@ public class AccountingViewModel : ObservableObject
         IBillShareService billShare,
         IInvoicePrintService print,
         ICurrentUserService currentUser,
+        IFinancialYearContext financialYear,
         IDialogService dialog)
     {
         _scopeFactory = scopeFactory;
         _branchId = currentUser.CurrentUser?.BranchId;
 
         CanCreateVouchers = currentUser.HasAnyPermission(
-            AppConstants.Permissions.AccountingVouchers, AppConstants.Permissions.AccountingManage);
+            AppConstants.Permissions.AccountingVouchers, AppConstants.Permissions.AccountingManage)
+            && financialYear.CanEditTransactions;
         CanViewJournal = currentUser.HasAnyPermission(
             AppConstants.Permissions.AccountingJournal, AppConstants.Permissions.AccountingView,
             AppConstants.Permissions.AccountingManage);

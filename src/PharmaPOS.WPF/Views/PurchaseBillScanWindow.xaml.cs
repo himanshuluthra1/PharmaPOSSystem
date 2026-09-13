@@ -10,46 +10,64 @@ using PharmaPOS.WPF.ViewModels.Purchases;
 
 namespace PharmaPOS.WPF.Views;
 
-public partial class PurchaseBillScanWindow : Window
+public partial class PurchaseBillScanWindow : Window, INotifyPropertyChanged
 {
     private readonly ObservableCollection<ScannedLineRow> _lines = new();
-    private readonly ScannedPurchaseDraftDto _draft;
+    private ScannedPurchaseDraftDto _draft = new();
     private readonly IMedicinePickerService _medicinePicker;
+    private readonly IPurchaseService _purchases;
+    private bool _isScanning;
 
     public ScannedPurchaseDraftDto? AcceptedDraft { get; private set; }
+
+    public bool IsScanning
+    {
+        get => _isScanning;
+        private set
+        {
+            if (_isScanning == value) return;
+            _isScanning = value;
+            OnPropertyChanged();
+            ScanningOverlay.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    public PurchaseBillScanWindow(
+        IPurchaseService purchases,
+        IMedicinePickerService medicinePicker)
+    {
+        InitializeComponent();
+        _purchases = purchases;
+        _medicinePicker = medicinePicker;
+
+        LinesGrid.ItemsSource = _lines;
+    }
 
     public PurchaseBillScanWindow(
         ScannedPurchaseDraftDto draft,
         string imagePath,
         IPurchaseService purchases,
         IMedicinePickerService medicinePicker)
+        : this(purchases, medicinePicker)
     {
-        InitializeComponent();
+        ApplyDraft(draft, imagePath);
+    }
+
+    public void ShowScanning() => IsScanning = true;
+
+    public void ApplyDraft(ScannedPurchaseDraftDto draft, string imagePath)
+    {
         _draft = draft;
-        _medicinePicker = medicinePicker;
-        _ = purchases;
 
         SupplierBox.Text = draft.SupplierName ?? string.Empty;
         InvoiceNoBox.Text = draft.SupplierInvoiceNumber ?? string.Empty;
         InvoiceDatePicker.SelectedDate = draft.InvoiceDate ?? DateTime.Today;
 
-        var matchedCount = draft.Lines.Count(l => l.IsMatched);
-        var hints = new List<string>(draft.Warnings);
-        if (draft.Lines.Count > 0 && matchedCount == 0)
-        {
-            hints.Add(
-                "No lines matched your medicine master. Click Pick on each row to map the OCR name to a medicine in your catalog, then Apply.");
-        }
-        else if (matchedCount < draft.Lines.Count)
-        {
-            hints.Add(
-                $"{matchedCount}/{draft.Lines.Count} lines matched. Use Pick on unmatched rows (OK column empty) before Apply.");
-        }
-        WarningText.Text = string.Join(" ", hints);
-
+        _lines.Clear();
         foreach (var line in draft.Lines)
             _lines.Add(new ScannedLineRow(line));
-        LinesGrid.ItemsSource = _lines;
+
+        WarningText.Text = BuildWarningText(draft);
 
         try
         {
@@ -62,8 +80,34 @@ public partial class PurchaseBillScanWindow : Window
         }
         catch
         {
-            // Image preview is optional.
+            BillImage.Source = null;
         }
+
+        IsScanning = false;
+    }
+
+    public Task ApplyDraftAsync(ScannedPurchaseDraftDto draft, string imagePath)
+    {
+        ApplyDraft(draft, imagePath);
+        return Task.CompletedTask;
+    }
+
+    private static string BuildWarningText(ScannedPurchaseDraftDto draft)
+    {
+        var matchedCount = draft.Lines.Count(l => l.IsMatched);
+        var hints = new List<string>(draft.Warnings);
+        if (draft.Lines.Count > 0 && matchedCount == 0)
+        {
+            hints.Add(
+                "No lines matched your medicine master. Click Pick on each row to map the OCR name to a medicine in your catalog, then Apply.");
+        }
+        else if (matchedCount < draft.Lines.Count)
+        {
+            hints.Add(
+                $"{matchedCount}/{draft.Lines.Count} lines matched. Use Pick on unmatched rows (OK column empty) before Apply.");
+        }
+
+        return string.Join(" ", hints);
     }
 
     private async void PickMedicine_Click(object sender, RoutedEventArgs e)
@@ -79,7 +123,7 @@ public partial class PurchaseBillScanWindow : Window
         // Keep bill rate/MRP from OCR/Gemini; catalog prices are only a last resort later on Apply.
     }
 
-    private void ApplyButton_Click(object sender, RoutedEventArgs e)
+    private async void ApplyButton_Click(object sender, RoutedEventArgs e)
     {
         var matched = _lines.Where(l => l.IsMatched).Select(l => l.ToDto()).ToList();
         if (matched.Count == 0)
@@ -113,27 +157,54 @@ public partial class PurchaseBillScanWindow : Window
             if (go != MessageBoxResult.Yes) return;
         }
 
+        var supplierName = SupplierBox.Text.Trim();
+        var matchedSupplierId = _draft.MatchedSupplierId;
+        var matchedSupplierPhone = _draft.MatchedSupplierPhone;
+        try
+        {
+            var hits = await _purchases.SearchSuppliersAsync(supplierName);
+            var best = hits.FirstOrDefault(s =>
+                           string.Equals(s.Name, supplierName, StringComparison.OrdinalIgnoreCase))
+                       ?? hits.FirstOrDefault();
+            if (best is not null)
+            {
+                matchedSupplierId = best.Id;
+                matchedSupplierPhone = best.Phone;
+                supplierName = best.Name;
+            }
+        }
+        catch
+        {
+            // Keep OCR match; Purchase tab will try again.
+        }
+
+        // Window is shown with Show() (not ShowDialog) so scanning can update the UI —
+        // DialogResult cannot be set in that mode; AcceptedDraft is the accept signal.
         AcceptedDraft = new ScannedPurchaseDraftDto
         {
             RawText = _draft.RawText,
-            SupplierName = SupplierBox.Text.Trim(),
-            MatchedSupplierId = _draft.MatchedSupplierId,
-            MatchedSupplierPhone = _draft.MatchedSupplierPhone,
+            SupplierName = supplierName,
+            MatchedSupplierId = matchedSupplierId,
+            MatchedSupplierPhone = matchedSupplierPhone,
             SupplierInvoiceNumber = string.IsNullOrWhiteSpace(InvoiceNoBox.Text) ? null : InvoiceNoBox.Text.Trim(),
             InvoiceDate = InvoiceDatePicker.SelectedDate ?? DateTime.Today,
             GrandTotalHint = _draft.GrandTotalHint,
             Lines = matched,
             Warnings = _draft.Warnings
         };
-        DialogResult = true;
         Close();
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        AcceptedDraft = null;
         Close();
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
 /// <summary>Editable grid row wrapping a scanned line (for match / pick UI).</summary>

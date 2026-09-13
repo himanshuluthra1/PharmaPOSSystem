@@ -1,6 +1,7 @@
 ﻿<Application x:Class="PharmaPOS.WPF.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:vm="clr-namespace:PharmaPOS.WPF.ViewModels"
              xmlns:salesVm="clr-namespace:PharmaPOS.WPF.ViewModels.Sales"
@@ -40,25 +41,22 @@
             <SolidColorBrush x:Key="GridAlternatingRowBackgroundBrush" Color="#FFF8E1" />
             <SolidColorBrush x:Key="GridLineBrush" Color="#B2DFDB" />
 
-            <!-- Keyboard-focus highlight (distinct from selection blue) - used app-wide. -->
-            <SolidColorBrush x:Key="FocusHighlightBrush" Color="#FFF3E0" />
-            <SolidColorBrush x:Key="FocusBorderBrush" Color="#EF6C00" />
-            <SolidColorBrush x:Key="FocusGridCellBrush" Color="#FFE0B2" />
+            <!-- Focused field fill (no border ring) — light green. -->
+            <SolidColorBrush x:Key="FocusHighlightBrush" Color="#C8E6C9" />
+            <SolidColorBrush x:Key="FocusBorderBrush" Color="#43A047" />
+            <SolidColorBrush x:Key="FocusGridCellBrush" Color="#C8E6C9" />
 
-            <!-- Light yellow fill for all text inputs. -->
+            <!-- Idle fill for text inputs; focused fields use TextBoxFocusBackgroundBrush. -->
             <SolidColorBrush x:Key="TextBoxBackgroundBrush" Color="#FFF9C4" />
-            <SolidColorBrush x:Key="TextBoxFocusBackgroundBrush" Color="#FFF59D" />
+            <SolidColorBrush x:Key="TextBoxFocusBackgroundBrush" Color="#C8E6C9" />
             <SolidColorBrush x:Key="FieldCaptionForegroundBrush" Color="#212121" />
 
+            <!-- No dashed/outline focus ring — focus is shown by control fill color only. -->
             <Style x:Key="FocusVisual">
                 <Setter Property="Control.Template">
                     <Setter.Value>
                         <ControlTemplate>
-                            <Rectangle Margin="-3"
-                                       StrokeThickness="2"
-                                       Stroke="{StaticResource FocusBorderBrush}"
-                                       StrokeDashArray="1 0"
-                                       SnapsToDevicePixels="True" />
+                            <Rectangle StrokeThickness="0" />
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
@@ -98,26 +96,39 @@
                 </Setter>
             </Style>
 
+            <!-- Outlined inputs: floating HintAssist.Hint is the field label (stays visible when filled).
+                 Forms that use a separate FieldCaption / FormLabel TextBlock should set IsFloating=False
+                 and leave Hint empty to avoid double labels. -->
+            <!-- Compact single-line inputs: match Sales (Height 28). Labels stay outside —
+                 use FieldCaption on the left; do not float Hint over the field. -->
+            <sys:Double x:Key="CompactInputHeight">28</sys:Double>
+
             <Style x:Key="MaterialDesignOutlinedTextBox" TargetType="TextBox"
                    BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
-                <Setter Property="Padding" Value="8,2" />
-                <Setter Property="FontSize" Value="12.5" />
-                <Setter Property="Height" Value="30" />
-                <Setter Property="MinHeight" Value="30" />
-                <Setter Property="MaxHeight" Value="30" />
+                <Setter Property="Padding" Value="6,1" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Height" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MinHeight" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MaxHeight" Value="{StaticResource CompactInputHeight}" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
                 <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
                 <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
                 <Setter Property="materialDesign:TextFieldAssist.TextBoxViewMargin" Value="0" />
-                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
+                <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Style.Triggers>
+                    <Trigger Property="AcceptsReturn" Value="True">
+                        <Setter Property="Height" Value="{x:Static sys:Double.NaN}" />
+                        <Setter Property="MinHeight" Value="56" />
+                        <Setter Property="MaxHeight" Value="160" />
+                        <Setter Property="Padding" Value="6,4" />
+                        <Setter Property="VerticalContentAlignment" Value="Top" />
+                    </Trigger>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                         <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
-                        <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
-                        <Setter Property="BorderThickness" Value="2" />
-                        <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource FocusBorderBrush}" />
                     </Trigger>
                     <Trigger Property="IsReadOnly" Value="True">
                         <Setter Property="Background" Value="#FFFDE7" />
@@ -130,74 +141,85 @@
 
             <Style x:Key="MaterialDesignOutlinedComboBox" TargetType="ComboBox"
                    BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
-                <Setter Property="Padding" Value="8,2" />
-                <Setter Property="FontSize" Value="12.5" />
-                <Setter Property="Height" Value="30" />
-                <Setter Property="MinHeight" Value="30" />
-                <Setter Property="MaxHeight" Value="30" />
+                <Setter Property="Padding" Value="6,1" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Height" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MinHeight" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MaxHeight" Value="{StaticResource CompactInputHeight}" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
                 <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
                 <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
-                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
+                <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                         <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
-                        <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
-                        <Setter Property="BorderThickness" Value="2" />
-                        <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource FocusBorderBrush}" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
 
             <Style x:Key="MaterialDesignOutlinedDatePicker" TargetType="DatePicker"
                    BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}">
-                <Setter Property="Padding" Value="8,2" />
-                <Setter Property="FontSize" Value="12.5" />
-                <Setter Property="Height" Value="30" />
-                <Setter Property="MinHeight" Value="30" />
-                <Setter Property="MaxHeight" Value="30" />
+                <Setter Property="Padding" Value="6,1" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Height" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MinHeight" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MaxHeight" Value="{StaticResource CompactInputHeight}" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
                 <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
                 <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
-                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisual}" />
+                <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Setter Property="materialDesign:TransitionAssist.DisableTransitions" Value="True" />
-                <Style.Triggers>
-                    <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                        <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
-                        <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
-                        <Setter Property="BorderThickness" Value="2" />
-                    </Trigger>
-                </Style.Triggers>
+                <!-- No green focus fill — it covers the date text in MD's template. -->
             </Style>
 
             <Style TargetType="DatePicker" BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}" />
 
-            <!-- Implicit styles so local/page fields without an explicit key still highlight. -->
-            <Style TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}" />
-            <Style TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}" />
-            <Style TargetType="PasswordBox" BasedOn="{StaticResource MaterialDesignOutlinedPasswordBox}">
-                <Setter Property="Padding" Value="8,2" />
-                <Setter Property="FontSize" Value="12.5" />
-                <Setter Property="Height" Value="30" />
-                <Setter Property="MinHeight" Value="30" />
-                <Setter Property="MaxHeight" Value="30" />
+            <Style TargetType="DatePickerTextBox">
+                <Setter Property="Padding" Value="4,0" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="CaretBrush" Value="{DynamicResource MaterialDesignBody}" />
+            </Style>
+
+            <!-- Replace MD keyed PasswordBox so Style="{StaticResource MaterialDesignOutlinedPasswordBox}" is compact too. -->
+            <Style x:Key="MaterialDesignOutlinedPasswordBox" TargetType="PasswordBox"
+                   BasedOn="{StaticResource MaterialDesignOutlinedPasswordBox}">
+                <Setter Property="Padding" Value="6,1" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Height" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MinHeight" Value="{StaticResource CompactInputHeight}" />
+                <Setter Property="MaxHeight" Value="{StaticResource CompactInputHeight}" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Background" Value="{StaticResource TextBoxBackgroundBrush}" />
                 <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+                <Setter Property="materialDesign:HintAssist.Hint" Value="{x:Null}" />
                 <Setter Property="materialDesign:HintAssist.HintOpacity" Value="0.9" />
                 <Setter Property="materialDesign:HintAssist.Foreground" Value="{StaticResource FieldCaptionForegroundBrush}" />
+                <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Style.Triggers>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                         <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
-                        <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
-                        <Setter Property="materialDesign:TextFieldAssist.UnderlineBrush" Value="{StaticResource FocusBorderBrush}" />
                     </Trigger>
                 </Style.Triggers>
             </Style>
+
+            <!-- Implicit styles so local/page fields without an explicit key still highlight. -->
+            <Style TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}" />
+            <Style TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}" />
+            <Style TargetType="PasswordBox" BasedOn="{StaticResource MaterialDesignOutlinedPasswordBox}" />
 
             <!-- Compact grids app-wide with sky-blue selected row (same feel as bill dropdown). -->
             <Style x:Key="PharmaDataGridColumnHeader" TargetType="DataGridColumnHeader"
@@ -283,14 +305,11 @@
                     </Trigger>
                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
                         <Setter Property="Background" Value="{StaticResource FocusGridCellBrush}" />
-                        <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
-                        <Setter Property="BorderThickness" Value="2" />
                         <Setter Property="Foreground" Value="{StaticResource GridSelectionForegroundBrush}" />
                     </Trigger>
                     <Trigger Property="IsEditing" Value="True">
-                        <Setter Property="Background" Value="{StaticResource FocusHighlightBrush}" />
-                        <Setter Property="BorderBrush" Value="{StaticResource FocusBorderBrush}" />
-                        <Setter Property="BorderThickness" Value="2" />
+                        <Setter Property="Background" Value="{StaticResource TextBoxFocusBackgroundBrush}" />
+                        <Setter Property="Foreground" Value="{StaticResource GridSelectionForegroundBrush}" />
                     </Trigger>
                 </Style.Triggers>
             </Style>

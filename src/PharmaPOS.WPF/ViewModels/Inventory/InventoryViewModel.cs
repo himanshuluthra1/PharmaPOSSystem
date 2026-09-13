@@ -21,12 +21,15 @@ public class InventoryViewModel : ObservableObject
         ICurrentUserService currentUser,
         IMedicinePickerService medicinePicker,
         IDialogService dialog,
-        IBarcodeCameraService barcodeCamera)
+        IBarcodeCameraService barcodeCamera,
+        IFinancialYearContext financialYear)
     {
         CanAdjustStock = currentUser.HasAnyPermission(
-            AppConstants.Permissions.InventoryAdjust, AppConstants.Permissions.InventoryManage);
+            AppConstants.Permissions.InventoryAdjust, AppConstants.Permissions.InventoryManage)
+            && financialYear.CanEditTransactions;
         CanTransferStock = currentUser.HasAnyPermission(
-            AppConstants.Permissions.InventoryTransfer, AppConstants.Permissions.InventoryManage);
+            AppConstants.Permissions.InventoryTransfer, AppConstants.Permissions.InventoryManage)
+            && financialYear.CanEditTransactions;
 
         StockOnHand = new StockOnHandTabViewModel(inventory, currentUser, OnStockBatchSelected, barcodeCamera);
         StockLedger = new StockLedgerTabViewModel(inventory, currentUser);

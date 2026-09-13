@@ -18,17 +18,20 @@ public class InventoryService : IInventoryService
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
     private readonly IReportingSyncService _reportingSync;
+    private readonly IFinancialYearContext _financialYear;
 
     public InventoryService(
         IUnitOfWork uow,
         IDateTimeProvider clock,
         ISettingsService settings,
-        IReportingSyncService reportingSync)
+        IReportingSyncService reportingSync,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
         _reportingSync = reportingSync;
+        _financialYear = financialYear;
     }
 
     public async Task<StockSummaryDto> GetStockSummaryAsync(int? branchId, CancellationToken ct = default)
@@ -115,10 +118,11 @@ public class InventoryService : IInventoryService
             {
                 StockFilterKind.InStock => batches.Where(b => b.QuantityAvailable > 0),
                 StockFilterKind.ZeroStock => batches.Where(b => b.QuantityAvailable == 0),
+                StockFilterKind.NegativeStock => batches.Where(b => b.QuantityAvailable < 0),
                 StockFilterKind.Expired => batches.Where(b =>
-                    b.QuantityAvailable > 0 && b.ExpiryDate != null && b.ExpiryDate < today),
+                    b.QuantityAvailable != 0 && b.ExpiryDate != null && b.ExpiryDate < today),
                 StockFilterKind.NearExpiry => batches.Where(b =>
-                    b.QuantityAvailable > 0 &&
+                    b.QuantityAvailable != 0 &&
                     b.ExpiryDate != null &&
                     b.ExpiryDate >= today &&
                     b.ExpiryDate <= nearExpiryDate),
@@ -208,7 +212,12 @@ public class InventoryService : IInventoryService
         if (batchId is <= 0) batchId = null;
         if (medicineId is <= 0) medicineId = null;
 
-        var q = _uow.Repository<StockMovement>().Query().AsNoTracking();
+        var fy = _financialYear.Active;
+        var fyStartUtc = ToUtc(fy.Start);
+        var fyEndUtc = ToUtc(fy.EndExclusive);
+
+        var q = _uow.Repository<StockMovement>().Query().AsNoTracking()
+            .Where(m => m.MovementDateUtc >= fyStartUtc && m.MovementDateUtc < fyEndUtc);
         if (branchId.HasValue) q = q.Where(m => m.BranchId == branchId);
         if (medicineId.HasValue) q = q.Where(m => m.MedicineId == medicineId.Value);
         if (batchId.HasValue) q = q.Where(m => m.MedicineBatchId == batchId.Value);
@@ -303,13 +312,16 @@ public class InventoryService : IInventoryService
             .FirstOrDefaultAsync(ct);
         var medicineName = medicine?.Name ?? $"Medicine #{medicineId}";
 
-        var fyStartLocal = GetIndianFinancialYearStart(_clock.Today);
+        var fy = _financialYear.Active;
+        var fyStartLocal = fy.Start;
+        var fyEndLocal = fy.EndExclusive;
 
         var purchaseQuery = _uow.Repository<PurchaseItem>().Query().AsNoTracking()
             .Where(i => i.MedicineId == medicineId
                         && i.Purchase != null
                         && i.Purchase.Status == PurchaseStatus.Received
-                        && i.Purchase.InvoiceDate >= fyStartLocal);
+                        && i.Purchase.InvoiceDate >= fyStartLocal
+                        && i.Purchase.InvoiceDate < fyEndLocal);
         if (branchId.HasValue)
             purchaseQuery = purchaseQuery.Where(i => i.Purchase!.BranchId == branchId);
 
@@ -330,7 +342,8 @@ public class InventoryService : IInventoryService
                         && i.Sale != null
                         && i.Sale.Status != SaleStatus.Cancelled
                         && i.Quantity != 0
-                        && i.Sale.InvoiceDate >= fyStartLocal);
+                        && i.Sale.InvoiceDate >= fyStartLocal
+                        && i.Sale.InvoiceDate < fyEndLocal);
         if (branchId.HasValue)
             saleQuery = saleQuery.Where(i => i.Sale!.BranchId == branchId);
 
@@ -350,7 +363,8 @@ public class InventoryService : IInventoryService
             .Where(i => i.MedicineId == medicineId
                         && i.PurchaseReturn != null
                         && i.PurchaseReturn.Status == PurchaseReturnStatus.Completed
-                        && i.PurchaseReturn.ReturnDate >= fyStartLocal);
+                        && i.PurchaseReturn.ReturnDate >= fyStartLocal
+                        && i.PurchaseReturn.ReturnDate < fyEndLocal);
         if (branchId.HasValue)
             returnQuery = returnQuery.Where(i => i.PurchaseReturn!.BranchId == branchId);
 
@@ -431,7 +445,8 @@ public class InventoryService : IInventoryService
             currentStockQuery = currentStockQuery.Where(b => b.BranchId == branchId);
         var currentStock = await currentStockQuery.SumAsync(b => (decimal?)b.QuantityAvailable, ct) ?? 0m;
 
-        var fyStartLocal = GetIndianFinancialYearStart(_clock.Today);
+        var fy = _financialYear.Active;
+        var fyStartLocal = fy.Start;
         var fyStartUtc = ToUtc(fyStartLocal);
 
         var chronological = rows
@@ -471,13 +486,6 @@ public class InventoryService : IInventoryService
             .ThenByDescending(r => r.MovementId)
             .Take(take)
             .ToList();
-    }
-
-    /// <summary>Indian FY starts 1 April.</summary>
-    private static DateTime GetIndianFinancialYearStart(DateTime localDate)
-    {
-        var year = localDate.Month >= 4 ? localDate.Year : localDate.Year - 1;
-        return new DateTime(year, 4, 1, 0, 0, 0, DateTimeKind.Local);
     }
 
     private static decimal SignedLedgerQuantity(StockMovementType type, decimal quantity)
@@ -596,6 +604,9 @@ public class InventoryService : IInventoryService
         int? branchId,
         CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<StockAdjustmentReceiptDto>(_financialYear);
+
         var lines = request.Lines
             .Where(l => l.PhysicalQuantity != l.SystemQuantity)
             .ToList();

@@ -11,13 +11,19 @@ using PharmaPOS.WPF.ViewModels.Sales;
 namespace PharmaPOS.WPF.Views;
 
 /// <summary>
-/// Billing screen code-behind. Enter/Shift+Enter and arrow keys navigate the grid;
-/// F3 for customer/save; bill dropdown loads on arrow browse.
+/// Billing screen code-behind. Enter/Tab and arrow keys navigate only editable cart fields;
+/// empty (no medicine) rows only allow Item selection.
 /// </summary>
 public partial class SalesView : UserControl
 {
+    /// <summary>Numeric/text cells that support BeginEdit (Item opens the picker instead).</summary>
     private static readonly HashSet<string> EditableColumns = new(StringComparer.Ordinal)
-        { "Qty", "MRP", "Disc%" };
+        { "Batch", "Expiry", "Qty", "MRP", "Sale", "Disc %", "GST %" };
+
+    /// <summary>Focus order for a filled medicine line.</summary>
+    private static readonly string[] MedicineFocusColumns = ["Item", "Batch", "Expiry", "Qty", "MRP", "Sale", "Disc %", "GST %"];
+
+    private static readonly string[] EmptyRowFocusColumns = ["Item"];
 
     private readonly UsbBarcodeWedge _barcodeWedge = new();
 
@@ -88,6 +94,15 @@ public partial class SalesView : UserControl
             FocusQuantityColumn(line);
         else
             FocusItemColumn(line);
+
+        if (ViewModel is not null)
+            _ = ViewModel.RefreshCartLineDetailAsync(line);
+    }
+
+    private void CartGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ViewModel is null) return;
+        _ = ViewModel.RefreshCartLineDetailAsync(CartGrid.SelectedItem as CartLineViewModel);
     }
 
     private void OnRequestCustomerFocus()
@@ -97,6 +112,24 @@ public partial class SalesView : UserControl
             CustomerNameBox.Focus();
             CustomerNameBox.SelectAll();
         }));
+    }
+
+    private void CustomerField_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || sender is not System.Windows.Controls.TextBox box) return;
+
+        // Enter moves like Tab within the customer section.
+        var next = box.Name switch
+        {
+            nameof(CustomerNameBox) => DoctorNameBox,
+            nameof(DoctorNameBox) => CustomerMobileBox,
+            nameof(CustomerMobileBox) => CustomerAddressBox,
+            _ => null
+        };
+        if (next is null) return;
+        next.Focus();
+        next.SelectAll();
+        e.Handled = true;
     }
 
     private void CommitGridEdit()
@@ -143,15 +176,38 @@ public partial class SalesView : UserControl
         if (columnIndex < 0 || columnIndex >= CartGrid.Columns.Count) return;
 
         var column = CartGrid.Columns[columnIndex];
+        var header = column.Header?.ToString() ?? string.Empty;
+
+        // Empty / return lines may only land on Item — never edit other cells.
+        if (!line.IsEditable && header != "Item")
+        {
+            FocusCell(line, "Item", beginEdit: false);
+            return;
+        }
+
         CartGrid.SelectedItem = line;
         CartGrid.CurrentCell = new DataGridCellInfo(line, column);
         CartGrid.Focus();
         if (CartGrid.ItemContainerGenerator.ContainerFromItem(line) is DataGridRow row)
             row.Focus();
 
-        var header = column.Header?.ToString() ?? string.Empty;
-        if (beginEdit && EditableColumns.Contains(header))
+        if (beginEdit && CanBeginEdit(line, header))
             CartGrid.BeginEdit();
+    }
+
+    private static string[] GetFocusColumns(CartLineViewModel line)
+        => line.IsEmpty || line.IsReturnLine ? EmptyRowFocusColumns : MedicineFocusColumns;
+
+    private static bool CanBeginEdit(CartLineViewModel line, string? header)
+        => line.IsEditable && header is not null && EditableColumns.Contains(header);
+
+    private void FocusFocusColumn(CartLineViewModel line, string preferredHeader)
+    {
+        var columns = GetFocusColumns(line);
+        var header = columns.Contains(preferredHeader, StringComparer.Ordinal)
+            ? preferredHeader
+            : columns[0];
+        FocusCell(line, header, CanBeginEdit(line, header));
     }
 
     private void NavigateCell(int rowDelta, int colDelta)
@@ -159,15 +215,19 @@ public partial class SalesView : UserControl
         if (CartGrid.SelectedItem is not CartLineViewModel line) return;
 
         var rowIndex = CartGrid.Items.IndexOf(line);
-        var colIndex = GetColumnIndex();
-        var newRow = Math.Clamp(rowIndex + rowDelta, 0, CartGrid.Items.Count - 1);
-        var newCol = Math.Clamp(colIndex + colDelta, 0, CartGrid.Columns.Count - 1);
+        if (rowDelta != 0)
+        {
+            var newRow = Math.Clamp(rowIndex + rowDelta, 0, CartGrid.Items.Count - 1);
+            if (CartGrid.Items[newRow] is not CartLineViewModel newLine) return;
+            var preferred = CartGrid.CurrentColumn?.Header?.ToString() ?? "Item";
+            FocusFocusColumn(newLine, preferred);
+            return;
+        }
 
-        if (CartGrid.Items[newRow] is not CartLineViewModel newLine) return;
-
-        var header = CartGrid.Columns[newCol].Header?.ToString() ?? string.Empty;
-        var beginEdit = EditableColumns.Contains(header);
-        FocusCell(newLine, newCol, beginEdit);
+        if (colDelta > 0)
+            MoveToNextCellLikeTab(line);
+        else if (colDelta < 0)
+            MoveToPreviousCellLikeShiftTab(line);
     }
 
     private void MoveToNextRowItemColumn(CartLineViewModel current)
@@ -175,7 +235,7 @@ public partial class SalesView : UserControl
         var rowIndex = CartGrid.Items.IndexOf(current);
         if (rowIndex + 1 < CartGrid.Items.Count && CartGrid.Items[rowIndex + 1] is CartLineViewModel nextLine)
         {
-            FocusCell(nextLine, 0, beginEdit: false);
+            FocusFocusColumn(nextLine, "Item");
             return;
         }
 
@@ -183,106 +243,85 @@ public partial class SalesView : UserControl
             FocusItemColumn(empty);
     }
 
-    private void MoveToPreviousRowDiscColumn(CartLineViewModel current)
+    private void MoveToPreviousRowLastEditable(CartLineViewModel current)
     {
         var rowIndex = CartGrid.Items.IndexOf(current);
-        if (rowIndex > 0 && CartGrid.Items[rowIndex - 1] is CartLineViewModel prevLine)
-            FocusCell(prevLine, "Disc%", beginEdit: true);
-    }
+        if (rowIndex <= 0) return;
+        if (CartGrid.Items[rowIndex - 1] is not CartLineViewModel prevLine) return;
 
-    private void MoveToNextColumn(CartLineViewModel line)
-    {
-        var colIndex = GetColumnIndex();
-        if (colIndex + 1 >= CartGrid.Columns.Count)
-        {
-            MoveToNextRowItemColumn(line);
-            return;
-        }
-
-        var header = CartGrid.Columns[colIndex + 1].Header?.ToString() ?? string.Empty;
-        FocusCell(line, colIndex + 1, EditableColumns.Contains(header));
-    }
-
-    private void MoveToPreviousColumn(CartLineViewModel line)
-    {
-        var colIndex = GetColumnIndex();
-        if (colIndex <= 0)
-        {
-            MoveToPreviousRowDiscColumn(line);
-            return;
-        }
-
-        var header = CartGrid.Columns[colIndex - 1].Header?.ToString() ?? string.Empty;
-        FocusCell(line, colIndex - 1, EditableColumns.Contains(header));
-    }
-
-    private bool IsLastGridColumn()
-    {
-        var currentColumn = CartGrid.CurrentColumn;
-        if (currentColumn is null) return false;
-        return CartGrid.Columns.IndexOf(currentColumn) == CartGrid.Columns.Count - 1;
+        var columns = GetFocusColumns(prevLine);
+        FocusFocusColumn(prevLine, columns[^1]);
     }
 
     private void MoveToNextCellLikeTab(CartLineViewModel line)
     {
-        var columnHeader = CartGrid.CurrentColumn?.Header?.ToString();
+        var columns = GetFocusColumns(line);
+        var current = CartGrid.CurrentColumn?.Header?.ToString() ?? "Item";
+        var idx = Array.FindIndex(columns, h => h == current);
 
-        if (columnHeader == "Qty")
+        if (idx < 0)
         {
-            FocusCell(line, "MRP", beginEdit: true);
+            var colIndex = GetColumnIndex();
+            for (var i = colIndex + 1; i < CartGrid.Columns.Count; i++)
+            {
+                var header = CartGrid.Columns[i].Header?.ToString() ?? string.Empty;
+                if (columns.Contains(header, StringComparer.Ordinal))
+                {
+                    FocusFocusColumn(line, header);
+                    return;
+                }
+            }
+
+            MoveToNextRowItemColumn(line);
             return;
         }
 
-        if (columnHeader == "MRP")
-        {
-            FocusCell(line, "Disc%", beginEdit: true);
-            return;
-        }
-
-        if (columnHeader == "Disc%")
+        if (idx >= columns.Length - 1)
         {
             MoveToNextRowItemColumn(line);
             return;
         }
 
-        MoveToNextColumn(line);
+        FocusFocusColumn(line, columns[idx + 1]);
     }
 
     private void MoveToPreviousCellLikeShiftTab(CartLineViewModel line)
     {
-        var columnHeader = CartGrid.CurrentColumn?.Header?.ToString();
+        var columns = GetFocusColumns(line);
+        var current = CartGrid.CurrentColumn?.Header?.ToString() ?? "Item";
+        var idx = Array.FindIndex(columns, h => h == current);
 
-        if (columnHeader == "Disc%")
+        if (idx < 0)
         {
-            FocusCell(line, "MRP", beginEdit: true);
+            var colIndex = GetColumnIndex();
+            for (var i = colIndex - 1; i >= 0; i--)
+            {
+                var header = CartGrid.Columns[i].Header?.ToString() ?? string.Empty;
+                if (columns.Contains(header, StringComparer.Ordinal))
+                {
+                    FocusFocusColumn(line, header);
+                    return;
+                }
+            }
+
+            MoveToPreviousRowLastEditable(line);
             return;
         }
 
-        if (columnHeader == "MRP")
+        if (idx <= 0)
         {
-            FocusCell(line, "Qty", beginEdit: true);
+            MoveToPreviousRowLastEditable(line);
             return;
         }
 
-        if (columnHeader == "Qty")
-        {
-            FocusCell(line, "Item", beginEdit: false);
-            return;
-        }
+        FocusFocusColumn(line, columns[idx - 1]);
+    }
 
-        if (columnHeader == "Item")
-        {
-            MoveToPreviousRowDiscColumn(line);
-            return;
-        }
-
-        if (IsLastGridColumn() || columnHeader == "Amount")
-        {
-            MoveToPreviousColumn(line);
-            return;
-        }
-
-        MoveToPreviousColumn(line);
+    private bool IsLastFocusColumn(CartLineViewModel line)
+    {
+        var columns = GetFocusColumns(line);
+        var current = CartGrid.CurrentColumn?.Header?.ToString();
+        return current is not null && columns[^1] == current;
     }
 
     private bool IsCustomerSectionFocused()
@@ -456,7 +495,21 @@ public partial class SalesView : UserControl
 
     private void CartGrid_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
     {
-        if (e.Row.Item is CartLineViewModel { IsReturnLine: true })
+        if (e.Row.Item is not CartLineViewModel line)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        // Empty rows (no medicine) and return lines are not editable.
+        if (!line.IsEditable)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        var header = e.Column.Header?.ToString();
+        if (!CanBeginEdit(line, header))
             e.Cancel = true;
     }
 
@@ -488,6 +541,43 @@ public partial class SalesView : UserControl
             return;
         }
 
+        if (key == Key.Tab)
+        {
+            e.Handled = true;
+            CommitGridEdit();
+            if (Keyboard.Modifiers == ModifierKeys.Shift)
+                MoveToPreviousCellLikeShiftTab(line);
+            else
+                MoveToNextCellLikeTab(line);
+            return;
+        }
+
+        // Empty row: only Item + Enter/Space to pick medicine — no other cell input.
+        if (line.IsEmpty)
+        {
+            if (columnHeader != "Item")
+            {
+                e.Handled = true;
+                FocusFocusColumn(line, "Item");
+                return;
+            }
+
+            if (key is Key.Enter or Key.Space)
+            {
+                e.Handled = true;
+                await ViewModel.BeginItemSelectionAsync(line);
+                return;
+            }
+
+            // Swallow typing so empty qty/price cells never receive input if focus drifted.
+            if (key is not (Key.Escape or Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down
+                or Key.F3 or Key.F4 or Key.F5 or Key.System or Key.LeftAlt or Key.RightAlt
+                or Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift))
+                e.Handled = true;
+
+            return;
+        }
+
         if (key == Key.Space && columnHeader == "Item")
         {
             e.Handled = true;
@@ -511,12 +601,6 @@ public partial class SalesView : UserControl
         if (columnHeader == "Item")
         {
             await ViewModel.BeginItemSelectionAsync(line);
-            return;
-        }
-
-        if (IsLastGridColumn() || columnHeader == "Amount")
-        {
-            MoveToNextRowItemColumn(line);
             return;
         }
 
@@ -695,10 +779,7 @@ public partial class SalesView : UserControl
                         vm.PrintCommand.Execute(null);
                     e.Handled = true;
                     return;
-                case Key.Escape:
-                    vm.NewBillCommand.Execute(null);
-                    e.Handled = true;
-                    return;
+                // Escape does not clear the bill — use New / Cancel button.
             }
         }
 

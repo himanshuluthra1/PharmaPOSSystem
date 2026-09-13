@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddTransient<IBillingCounterService, BillingCounterService>();
         services.AddTransient<IMastersService, MastersService>();
         services.AddTransient<IMedicineMappingService, MedicineMappingService>();
+        services.AddTransient<INewMedicineMappingService, NewMedicineMappingService>();
         services.AddTransient<IInventoryService, InventoryService>();
         services.AddTransient<IShortageBookService, ShortageBookService>();
         services.AddTransient<IStockTransferService, StockTransferService>();

@@ -7,6 +7,43 @@ public static class RolePermissionDefaults
 {
     private static readonly string[] All = PermissionCatalog.All.Select(p => p.Key).ToArray();
 
+    private static readonly string[] PurchaseMenus =
+    [
+        AppConstants.Permissions.PurchaseMenuInvoice,
+        AppConstants.Permissions.PurchaseMenuOrder,
+        AppConstants.Permissions.PurchaseMenuReturn,
+        AppConstants.Permissions.PurchaseMenuExpiry,
+    ];
+
+    private static readonly string[] InventoryMenus =
+    [
+        AppConstants.Permissions.InventoryMenuOnhand,
+        AppConstants.Permissions.InventoryMenuLedger,
+        AppConstants.Permissions.InventoryMenuAdjustment,
+        AppConstants.Permissions.InventoryMenuTransfer,
+        AppConstants.Permissions.InventoryMenuTransferHistory,
+        AppConstants.Permissions.InventoryMenuShortage,
+    ];
+
+    private static readonly string[] MastersMenus =
+    [
+        AppConstants.Permissions.MastersMenuSuppliers,
+        AppConstants.Permissions.MastersMenuCustomers,
+        AppConstants.Permissions.MastersMenuDoctors,
+        AppConstants.Permissions.MastersMenuManufacturers,
+        AppConstants.Permissions.MastersMenuEmployees,
+        AppConstants.Permissions.MastersMenuMedicines,
+    ];
+
+    private static readonly string[] AccountingMenus =
+    [
+        AppConstants.Permissions.AccountingMenuParties,
+        AppConstants.Permissions.AccountingMenuDues,
+        AppConstants.Permissions.AccountingMenuVouchers,
+        AppConstants.Permissions.AccountingMenuCashbook,
+        AppConstants.Permissions.AccountingMenuJournal,
+    ];
+
     public static IReadOnlyDictionary<string, string[]> Map { get; } = new Dictionary<string, string[]>
     {
         [AppConstants.Roles.SuperAdmin] = All,
@@ -29,13 +66,19 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.PurchaseUnlock,
             AppConstants.Permissions.PurchaseSearch,
             AppConstants.Permissions.PurchaseReturn,
+            ..PurchaseMenus,
             AppConstants.Permissions.InventoryView,
             AppConstants.Permissions.InventoryAdjust,
             AppConstants.Permissions.InventoryTransfer,
+            ..InventoryMenus,
             AppConstants.Permissions.MastersView,
             AppConstants.Permissions.MastersEdit,
+            ..MastersMenus,
             AppConstants.Permissions.ReportsView,
             AppConstants.Permissions.ReportsExport,
+            ..ReportMenuPermissions.AllKeys,
+            AppConstants.Permissions.SettingsMenuPassword,
+            AppConstants.Permissions.SettingsMenuAppearance,
         ],
         [AppConstants.Roles.Pharmacist] =
         [
@@ -46,7 +89,14 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.SalesPrint,
             AppConstants.Permissions.SalesReturn,
             AppConstants.Permissions.InventoryView,
+            AppConstants.Permissions.InventoryMenuOnhand,
+            AppConstants.Permissions.InventoryMenuLedger,
             AppConstants.Permissions.MastersView,
+            AppConstants.Permissions.MastersMenuMedicines,
+            AppConstants.Permissions.MastersMenuCustomers,
+            AppConstants.Permissions.MastersMenuDoctors,
+            AppConstants.Permissions.SettingsMenuPassword,
+            AppConstants.Permissions.SettingsMenuAppearance,
         ],
         [AppConstants.Roles.Cashier] =
         [
@@ -55,6 +105,8 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.SalesCreate,
             AppConstants.Permissions.SalesPrint,
             AppConstants.Permissions.SalesReturn,
+            AppConstants.Permissions.SettingsMenuPassword,
+            AppConstants.Permissions.SettingsMenuAppearance,
         ],
         [AppConstants.Roles.Accountant] =
         [
@@ -63,11 +115,16 @@ public static class RolePermissionDefaults
             AppConstants.Permissions.PurchaseCreate,
             AppConstants.Permissions.PurchaseSearch,
             AppConstants.Permissions.PurchaseReturn,
+            ..PurchaseMenus,
             AppConstants.Permissions.AccountingView,
             AppConstants.Permissions.AccountingVouchers,
             AppConstants.Permissions.AccountingJournal,
+            ..AccountingMenus,
             AppConstants.Permissions.ReportsView,
             AppConstants.Permissions.ReportsExport,
+            ..ReportMenuPermissions.AllKeys,
+            AppConstants.Permissions.SettingsMenuPassword,
+            AppConstants.Permissions.SettingsMenuAppearance,
         ],
     };
 

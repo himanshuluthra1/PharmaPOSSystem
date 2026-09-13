@@ -61,5 +61,16 @@ public class Medicine : BaseEntity
     public string? Notes { get; set; }
     public EntityStatus Status { get; set; } = EntityStatus.Active;
 
+    /// <summary>
+    /// New Medicine Mapping: user verified a catalogue match for a blank-ImagePath (MedWin-style) row.
+    /// </summary>
+    public bool IsNewMappingVerified { get; set; }
+
+    /// <summary>
+    /// Catalogue medicine (ImagePath set) chosen in New Medicine Mapping.
+    /// </summary>
+    public int? MappedCatalogueMedicineId { get; set; }
+    public Medicine? MappedCatalogueMedicine { get; set; }
+
     public ICollection<MedicineBatch> Batches { get; set; } = new List<MedicineBatch>();
 }

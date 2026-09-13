@@ -55,9 +55,24 @@ public record PartyBillRowDto(
     DateTime InvoiceDate,
     decimal GrandTotal,
     decimal PaidAmount,
-    decimal BalanceDue)
+    decimal BalanceDue,
+    string? SupplierBillNumber = null)
 {
     public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
+}
+
+public record PartyBillsSummaryDto(
+    int TotalBills,
+    int PendingBills,
+    decimal TotalAmount,
+    decimal PendingAmount,
+    DateTime? FirstPendingBillDate,
+    DateTime? LastPendingBillDate)
+{
+    public static PartyBillsSummaryDto Empty { get; } = new(0, 0, 0, 0, null, null);
+
+    public string FirstPendingBillDateLabel => FirstPendingBillDate?.ToString("dd-MMM-yyyy") ?? "—";
+    public string LastPendingBillDateLabel => LastPendingBillDate?.ToString("dd-MMM-yyyy") ?? "—";
 }
 
 public record AccountLookupDto(

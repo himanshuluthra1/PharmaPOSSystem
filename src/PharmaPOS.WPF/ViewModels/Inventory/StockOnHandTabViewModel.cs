@@ -40,9 +40,10 @@ public class StockOnHandTabViewModel : ObservableObject
             new(StockFilterKind.LowStock, "Low stock"),
             new(StockFilterKind.NearExpiry, "Near expiry"),
             new(StockFilterKind.Expired, "Expired"),
-            new(StockFilterKind.ZeroStock, "Zero stock")
+            new(StockFilterKind.ZeroStock, "Zero stock"),
+            new(StockFilterKind.NegativeStock, "Negative stock")
         ];
-        _selectedFilter = FilterOptions[1];
+        _selectedFilter = FilterOptions[0]; // All batches — includes MedWin negative qty
 
         RefreshCommand = new AsyncRelayCommand(_ => RefreshAsync(), _ => !IsBusy);
         ScanBarcodeCameraCommand = new RelayCommand(_ => ScanBarcodeCamera());

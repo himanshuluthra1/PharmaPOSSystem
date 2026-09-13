@@ -7,33 +7,36 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760">
-    <Grid Margin="8">
+    <Grid Margin="4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
-            <DockPanel LastChildFill="True">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                    <Button Margin="0,0,8,0" Command="{Binding RefreshCommand}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}" Content="Refresh" Padding="14,8" />
-                    <Button Margin="0,0,8,0" Command="{Binding GenerateReorderCommand}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}"
-                            Content="Generate reorder" ToolTip="Low stock + shortage book" Padding="14,8" />
-                    <Button Margin="0,0,8,0" Command="{Binding GenerateFromShortageCommand}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}"
-                            Content="From shortage book" Padding="14,8" />
-                    <Button Command="{Binding NewCommand}"
-                            Style="{StaticResource MaterialDesignRaisedButton}" Content="New draft" Padding="14,8" />
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Purchase Orders" FontSize="20" FontWeight="Bold" />
-                    <TextBlock Text="Draft, confirm, and receive goods against open purchase orders."
-                               Opacity="0.7" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-            </DockPanel>
+        <materialDesign:Card Grid.Row="0" Margin="0,0,0,4" UniformCornerRadius="10" Padding="8"
+                             ToolTip="Draft, confirm, and receive goods against open purchase orders.">
+            <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Purchase Orders" FontSize="14" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <Button Command="{Binding RefreshCommand}"
+                        Style="{StaticResource MaterialDesignIconButton}"
+                        Width="28" Height="28" Padding="0" Margin="0,0,4,0"
+                        ToolTip="Refresh">
+                    <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                </Button>
+                <Button Command="{Binding GenerateReorderCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Content="Generate reorder" ToolTip="Low stock + shortage book"
+                        Padding="8,2" Height="28" Margin="0,0,4,0" />
+                <Button Command="{Binding GenerateFromShortageCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Content="From shortage book"
+                        Padding="8,2" Height="28" Margin="0,0,4,0" />
+                <Button Command="{Binding NewCommand}"
+                        Style="{StaticResource MaterialDesignRaisedButton}" Content="New draft"
+                        Padding="8,2" Height="28" />
+            </WrapPanel>
         </materialDesign:Card>
 
         <Grid Grid.Row="1">
@@ -62,7 +65,7 @@
                 </DockPanel>
             </materialDesign:Card>
 
-            <materialDesign:Card Grid.Column="1" Margin="6,0,0,0" UniformCornerRadius="10" Padding="12">
+            <materialDesign:Card Grid.Column="1" Margin="6,0,0,0" UniformCornerRadius="10" Padding="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -71,28 +74,33 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
-                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                            <Button Margin="0,0,8,0" Command="{Binding ReceiveCommand}"
-                                    Style="{StaticResource MaterialDesignRaisedButton}" Content="Receive" Padding="14,8" />
-                            <Button Margin="0,0,8,0" Command="{Binding ConfirmCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" Content="Confirm" Padding="14,8" />
-                            <Button Margin="0,0,8,0" Command="{Binding CancelCommand}"
-                                    Style="{StaticResource MaterialDesignFlatButton}" Content="Cancel PO" Padding="14,8" />
+                    <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                        <WrapPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                            <Button Margin="0,0,4,0" Command="{Binding ReceiveCommand}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}" Content="Receive"
+                                    Padding="8,2" Height="28" />
+                            <Button Margin="0,0,4,0" Command="{Binding ConfirmCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Content="Confirm"
+                                    Padding="8,2" Height="28" />
+                            <Button Margin="0,0,4,0" Command="{Binding CancelCommand}"
+                                    Style="{StaticResource MaterialDesignFlatButton}" Content="Cancel PO"
+                                    Padding="8,2" Height="28" />
                             <Button Command="{Binding SaveDraftCommand}"
-                                    Style="{StaticResource MaterialDesignRaisedButton}" Content="Save draft" Padding="14,8" />
-                        </StackPanel>
+                                    Style="{StaticResource MaterialDesignRaisedButton}" Content="Save draft"
+                                    Padding="8,2" Height="28" />
+                        </WrapPanel>
                         <StackPanel>
-                            <TextBlock FontSize="18" FontWeight="Bold">
+                            <TextBlock FontSize="13" FontWeight="SemiBold">
                                 <Run Text="{Binding OrderNumber, Mode=OneWay}" />
                                 <Run Text="  ·  " />
                                 <Run Text="{Binding StatusDisplay, Mode=OneWay}" />
                             </TextBlock>
-                            <TextBlock Opacity="0.7" Margin="0,2,0,0" Text="Edit drafts, confirm to Ordered, then Receive into Purchase GRN." />
+                            <TextBlock Opacity="0.7" FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                       Text="Edit drafts, confirm to Ordered, then Receive into Purchase GRN." />
                         </StackPanel>
                     </DockPanel>
 
-                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                    <Grid Grid.Row="1" Margin="0,0,0,4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="2*" />
                             <ColumnDefinition Width="140" />
@@ -104,9 +112,15 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Column="0" Margin="0,0,8,0" IsEnabled="{Binding IsEditable}">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Supplier" Style="{StaticResource FieldCaption}" Margin="0,0,8,2" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Order date" Style="{StaticResource FieldCaption}" Margin="0,0,8,2" />
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Expected" Style="{StaticResource FieldCaption}" Margin="0,0,8,2" />
+                        <TextBlock Grid.Row="0" Grid.Column="3" Text="Remarks" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+
+                        <Grid Grid.Row="1" Grid.Column="0" Margin="0,0,8,0" IsEnabled="{Binding IsEditable}">
                             <TextBox x:Name="SupplierBox"
                                      materialDesign:HintAssist.Hint="Supplier"
+                                     materialDesign:HintAssist.IsFloating="False"
                                      Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                      Text="{Binding SupplierSearchText, UpdateSourceTrigger=PropertyChanged}"
                                      PreviewKeyDown="SupplierBox_PreviewKeyDown"
@@ -123,18 +137,21 @@
                             </Popup>
                         </Grid>
 
-                        <DatePicker Grid.Column="1" Margin="0,0,8,0"
+                        <DatePicker Grid.Row="1" Grid.Column="1" Margin="0,0,8,0"
                                     materialDesign:HintAssist.Hint="Order date"
+                                    materialDesign:HintAssist.IsFloating="False"
                                     Style="{StaticResource MaterialDesignOutlinedDatePicker}"
                                     SelectedDate="{Binding OrderDate}"
                                     IsEnabled="{Binding IsEditable}" />
-                        <DatePicker Grid.Column="2" Margin="0,0,8,0"
+                        <DatePicker Grid.Row="1" Grid.Column="2" Margin="0,0,8,0"
                                     materialDesign:HintAssist.Hint="Expected"
+                                    materialDesign:HintAssist.IsFloating="False"
                                     Style="{StaticResource MaterialDesignOutlinedDatePicker}"
                                     SelectedDate="{Binding ExpectedDate}"
                                     IsEnabled="{Binding IsEditable}" />
-                        <TextBox Grid.Column="3"
+                        <TextBox Grid.Row="1" Grid.Column="3"
                                  materialDesign:HintAssist.Hint="Remarks"
+                                 materialDesign:HintAssist.IsFloating="False"
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                  Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}"
                                  IsEnabled="{Binding IsEditable}" />
@@ -144,7 +161,7 @@
                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                             <Button DockPanel.Dock="Right" Command="{Binding AddMedicineCommand}"
                                     Style="{StaticResource MaterialDesignOutlinedButton}"
-                                    Content="Add medicine" Padding="12,6"
+                                    Content="Add medicine" Padding="8,2" Height="28"
                                     IsEnabled="{Binding IsEditable}" />
                             <TextBlock Text="Lines" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </DockPanel>
@@ -176,7 +193,7 @@
                         </DataGrid>
                     </DockPanel>
 
-                    <DockPanel Grid.Row="3" Margin="0,10,0,0">
+                    <DockPanel Grid.Row="3" Margin="0,4,0,0">
                         <TextBlock DockPanel.Dock="Right" FontSize="16" FontWeight="Bold"
                                    Text="{Binding TotalAmount, StringFormat=Total: ₹{0:N2}}" />
                         <Button Command="{Binding ClearSupplierCommand}"

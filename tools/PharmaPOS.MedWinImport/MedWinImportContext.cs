@@ -14,7 +14,7 @@ public sealed class MedWinImportContext
     public string? ReportCsvPath { get; init; }
 
     /// <summary>Optional sink for UI progress (CLI still writes to Console).</summary>
-    public Action<string>? LogSink { get; init; }
+    public Action<string>? LogSink { get; set; }
 
     public CancellationToken CancellationToken { get; init; }
 
@@ -30,10 +30,58 @@ public sealed class MedWinImportContext
     public Dictionary<string, int> BatchMap { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<int, int> SaleMap { get; } = new();
 
-    public string MedWinConnectionString =>
-        $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={MedWinPath};Jet OLEDB:Database Password={MedWinPassword};";
+    private static readonly string[] AceProviders =
+    [
+        "Microsoft.ACE.OLEDB.16.0",
+        "Microsoft.ACE.OLEDB.15.0",
+        "Microsoft.ACE.OLEDB.12.0"
+    ];
 
-    public OleDbConnection OpenMedWin() => new(MedWinConnectionString);
+    private string? _resolvedProvider;
+
+    public string MedWinConnectionString => BuildConnectionString(ResolveAceProvider());
+
+    public OleDbConnection OpenMedWin()
+        => new(BuildConnectionString(ResolveAceProvider()));
+
+    private string BuildConnectionString(string provider) =>
+        $"Provider={provider};Data Source={MedWinPath};Jet OLEDB:Database Password={MedWinPassword};";
+
+    private string ResolveAceProvider()
+    {
+        if (_resolvedProvider is not null)
+            return _resolvedProvider;
+
+        Exception? last = null;
+        foreach (var provider in AceProviders)
+        {
+            try
+            {
+                using var probe = new OleDbConnection(BuildConnectionString(provider));
+                probe.Open();
+                _resolvedProvider = provider;
+                Log($"  Using OLEDB provider: {provider}");
+                return provider;
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Microsoft Access Database Engine (ACE OLEDB) is not installed on this PC.\n\n" +
+            "PharmaPOS is 64-bit and needs the 64-bit ACE redistributable to read MedWin data.mdb.\n\n" +
+            "Install:\n" +
+            "  Microsoft Access Database Engine 2016 Redistributable (64-bit)\n" +
+            "  https://www.microsoft.com/en-us/download/details.aspx?id=54920\n" +
+            "  Choose AccessDatabaseEngine_X64.exe\n\n" +
+            "If 32-bit Office is already installed, run from an elevated Command Prompt:\n" +
+            "  AccessDatabaseEngine_X64.exe /quiet\n\n" +
+            "Then restart PharmaPOS and run MedWin Import again.\n\n" +
+            $"Technical detail: {last?.Message}",
+            last);
+    }
 
     public async Task<SqlConnection> OpenTargetAsync()
     {

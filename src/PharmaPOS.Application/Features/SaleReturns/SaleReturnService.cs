@@ -17,12 +17,18 @@ public class SaleReturnService : ISaleReturnService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly IReportingSyncService _reportingSync;
+    private readonly IFinancialYearContext _financialYear;
 
-    public SaleReturnService(IUnitOfWork uow, IDateTimeProvider clock, IReportingSyncService reportingSync)
+    public SaleReturnService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        IReportingSyncService reportingSync,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
         _reportingSync = reportingSync;
+        _financialYear = financialYear;
     }
 
     public async Task<SaleReturnPolicyDto> GetPolicyAsync(CancellationToken ct = default)
@@ -54,7 +60,8 @@ public class SaleReturnService : ISaleReturnService
         var q = _uow.Repository<Sale>().Query().AsNoTracking()
             .Where(s => s.Status == SaleStatus.Completed
                         || s.Status == SaleStatus.PartiallyReturned
-                        || s.Status == SaleStatus.Returned);
+                        || s.Status == SaleStatus.Returned)
+            .WhereInFinancialYear(_financialYear.Active, s => s.InvoiceDate);
 
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
 
@@ -186,6 +193,8 @@ public class SaleReturnService : ISaleReturnService
     public async Task<Result<SaleReturnReceiptDto>> CreateReturnAsync(
         CreateSaleReturnRequest request, int? branchId, string? userName, CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<SaleReturnReceiptDto>(_financialYear);
         if (request.Lines.Count == 0 && !request.ReturnEntireInvoice)
             return Result.Failure<SaleReturnReceiptDto>("Select at least one item to return.");
 

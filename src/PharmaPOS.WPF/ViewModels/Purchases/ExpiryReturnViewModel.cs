@@ -14,9 +14,11 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     private readonly ICurrentUserService _currentUser;
     private readonly IDialogService _dialog;
     private readonly int? _branchId;
+    private readonly IFinancialYearContext _financialYear;
 
     private HorizonOption _selectedHorizon;
-    private SupplierFilterOption _selectedSupplier = SupplierFilterOption.All;
+    private int? _selectedSupplierId;
+    private bool _suppressSupplierFilterRefresh;
     private bool _isBusy;
     private string? _statusMessage;
     private string? _remarks;
@@ -30,14 +32,22 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     public ExpiryReturnViewModel(
         IExpiryReturnService service,
         ICurrentUserService currentUser,
-        IDialogService dialog)
+        IDialogService dialog,
+        IFinancialYearContext financialYear)
     {
         _service = service;
         _currentUser = currentUser;
         _dialog = dialog;
+        _financialYear = financialYear;
         _branchId = currentUser.CurrentUser?.BranchId;
-        CanManage = currentUser.HasAnyPermission(
+        var hasReturnPermission = currentUser.HasAnyPermission(
             AppConstants.Permissions.PurchaseReturn, AppConstants.Permissions.PurchaseReturnManage);
+        CanManage = hasReturnPermission && financialYear.CanEditTransactions;
+        ManageBlockedReason = !hasReturnPermission
+            ? "You do not have purchase return permission to save credit notes."
+            : !financialYear.CanEditTransactions
+                ? "Active financial year is read-only. Switch to the current year to save credit notes."
+                : null;
 
         HorizonOptions =
         [
@@ -49,17 +59,23 @@ public sealed class ExpiryReturnViewModel : ObservableObject
         _selectedHorizon = HorizonOptions[2];
 
         RefreshEligibleCommand = new AsyncRelayCommand(_ => RefreshEligibleAsync(), _ => !IsBusy);
-        SubmitClaimCommand = new AsyncRelayCommand(_ => SubmitAsync(), _ => CanManage && !IsBusy && Batches.Any(b => b.ClaimQuantity > 0));
+        SubmitClaimCommand = new AsyncRelayCommand(_ => SubmitAsync(), _ => CanManage && !IsBusy && Batches.Any(b => b.IsSelected && b.ClaimQuantity > 0));
         RefreshClaimsCommand = new AsyncRelayCommand(_ => RefreshClaimsAsync(), _ => !IsBusy);
-        AttachCreditNoteCommand = new AsyncRelayCommand(_ => AttachCreditNoteAsync(), _ => CanManage && !IsBusy && SelectedClaim is not null);
-        SelectAllCommand = new RelayCommand(_ => SetAllClaims(true), _ => Batches.Count > 0);
-        ClearQtyCommand = new RelayCommand(_ => SetAllClaims(false), _ => Batches.Count > 0);
+        AttachCreditNoteCommand = new AsyncRelayCommand(
+            _ => AttachCreditNoteAsync(),
+            _ => CanManage && !IsBusy && SelectedClaim is not null && !string.IsNullOrWhiteSpace(CreditNoteNumber));
+        SelectAllCommand = new RelayCommand(_ => SetAllClaims(true), _ => Batches.Count > 0 && CanManage);
+        ClearQtyCommand = new RelayCommand(_ => SetAllClaims(false), _ => Batches.Count > 0 && CanManage);
 
         _ = RefreshEligibleAsync();
         _ = RefreshClaimsAsync();
     }
 
     public bool CanManage { get; }
+
+    public string? ManageBlockedReason { get; }
+
+    public bool HasManageBlockedReason => !string.IsNullOrWhiteSpace(ManageBlockedReason);
 
     public IReadOnlyList<HorizonOption> HorizonOptions { get; }
 
@@ -78,13 +94,15 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     public List<SupplierFilterOption> SupplierOptions { get; private set; } =
         [SupplierFilterOption.All, SupplierFilterOption.Unmapped];
 
-    public SupplierFilterOption SelectedSupplier
+    /// <summary>null = all suppliers, -1 = unmapped only.</summary>
+    public int? SelectedSupplierId
     {
-        get => _selectedSupplier;
+        get => _selectedSupplierId;
         set
         {
-            if (!SetProperty(ref _selectedSupplier, value)) return;
-            _ = RefreshEligibleAsync();
+            if (!SetProperty(ref _selectedSupplierId, value)) return;
+            if (!_suppressSupplierFilterRefresh)
+                _ = RefreshEligibleAsync();
         }
     }
 
@@ -114,6 +132,7 @@ public sealed class ExpiryReturnViewModel : ObservableObject
         {
             if (!SetProperty(ref _selectedClaim, value)) return;
             OnPropertyChanged(nameof(HasSelectedClaim));
+            CommandManager.InvalidateRequerySuggested();
             _ = LoadClaimDetailAsync();
         }
     }
@@ -129,7 +148,11 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     public string CreditNoteNumber
     {
         get => _creditNoteNumber;
-        set => SetProperty(ref _creditNoteNumber, value);
+        set
+        {
+            if (!SetProperty(ref _creditNoteNumber, value)) return;
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     public DateTime? CreditNoteDate
@@ -144,8 +167,8 @@ public sealed class ExpiryReturnViewModel : ObservableObject
         set => SetProperty(ref _creditNoteAmount, value);
     }
 
-    public decimal ClaimTotal => Batches.Where(b => b.ClaimQuantity > 0).Sum(b => b.ClaimValue);
-    public int ClaimLineCount => Batches.Count(b => b.ClaimQuantity > 0);
+    public decimal ClaimTotal => Batches.Where(b => b.IsSelected && b.ClaimQuantity > 0).Sum(b => b.ClaimValue);
+    public int ClaimLineCount => Batches.Count(b => b.IsSelected && b.ClaimQuantity > 0);
 
     public bool IsBusy
     {
@@ -178,40 +201,46 @@ public sealed class ExpiryReturnViewModel : ObservableObject
             if (AllSuppliers.Count == 0)
                 AllSuppliers = await _service.ListSuppliersAsync();
 
-            var supplierId = SelectedSupplier.SupplierId;
+            var supplierId = SelectedSupplierId;
             var rows = await _service.ListEligibleBatchesAsync(SelectedHorizon.Days, supplierId, _branchId);
-            var keepSupplier = SelectedSupplier.SupplierId;
+            var keepSupplier = SelectedSupplierId;
 
-            var named = rows
-                .Where(r => r.SupplierId is > 0 && !string.IsNullOrWhiteSpace(r.SupplierName))
-                .GroupBy(r => r.SupplierId!.Value)
-                .OrderBy(g => g.First().SupplierName)
-                .Select(g => new SupplierFilterOption(g.Key, g.First().SupplierName!))
+            var named = AllSuppliers
+                .OrderBy(s => s.Name)
+                .Select(s => new SupplierFilterOption(s.Id, s.Name))
                 .ToList();
 
-            // When filtered, keep the current supplier in the combo even if the row set is small.
-            SupplierOptions = [SupplierFilterOption.All, SupplierFilterOption.Unmapped, .. named];
-            if (keepSupplier is > 0 && SupplierOptions.All(s => s.SupplierId != keepSupplier))
+            // Replacing ItemsSource clears WPF ComboBox SelectedValue; restore without re-query.
+            _suppressSupplierFilterRefresh = true;
+            try
             {
-                var extra = AllSuppliers.FirstOrDefault(s => s.Id == keepSupplier);
-                if (extra is not null)
-                    SupplierOptions.Insert(2, new SupplierFilterOption(extra.Id, extra.Name));
+                SupplierOptions = [SupplierFilterOption.All, SupplierFilterOption.Unmapped, .. named];
+                OnPropertyChanged(nameof(SupplierOptions));
+
+                _selectedSupplierId = keepSupplier is not null
+                    && SupplierOptions.All(s => s.SupplierId != keepSupplier)
+                    ? null
+                    : keepSupplier;
+                OnPropertyChanged(nameof(SelectedSupplierId));
             }
-            OnPropertyChanged(nameof(SupplierOptions));
-            OnPropertyChanged(nameof(AllSuppliers));
-            _selectedSupplier = SupplierOptions.FirstOrDefault(s => s.SupplierId == keepSupplier)
-                                ?? SupplierFilterOption.All;
-            OnPropertyChanged(nameof(SelectedSupplier));
+            finally
+            {
+                _suppressSupplierFilterRefresh = false;
+            }
 
             Batches.Clear();
             foreach (var r in rows)
             {
                 var line = new ExpiryClaimLineViewModel(r, AllSuppliers);
-                line.PropertyChanged += (_, _) =>
+                line.PropertyChanged += (_, e) =>
                 {
-                    OnPropertyChanged(nameof(ClaimTotal));
-                    OnPropertyChanged(nameof(ClaimLineCount));
-                    CommandManager.InvalidateRequerySuggested();
+                    if (e.PropertyName is nameof(ExpiryClaimLineViewModel.ClaimQuantity)
+                        or nameof(ExpiryClaimLineViewModel.IsSelected))
+                    {
+                        OnPropertyChanged(nameof(ClaimTotal));
+                        OnPropertyChanged(nameof(ClaimLineCount));
+                        CommandManager.InvalidateRequerySuggested();
+                    }
                 };
                 Batches.Add(line);
             }
@@ -242,7 +271,7 @@ public sealed class ExpiryReturnViewModel : ObservableObject
             return;
         }
 
-        var selected = Batches.Where(b => b.ClaimQuantity > 0).ToList();
+        var selected = Batches.Where(b => b.IsSelected && b.ClaimQuantity > 0).ToList();
         if (selected.Count == 0)
         {
             _dialog.ShowError("Enter claim quantity on at least one batch.");
@@ -335,6 +364,7 @@ public sealed class ExpiryReturnViewModel : ObservableObject
             CreditNoteNumber = result.Value?.CreditNoteNumber ?? "";
             CreditNoteDate = result.Value?.CreditNoteDate ?? DateTime.Today;
             CreditNoteAmount = result.Value?.CreditNoteAmount ?? result.Value?.ExpectedCreditAmount;
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -373,6 +403,7 @@ public sealed class ExpiryClaimLineViewModel : ObservableObject
 {
     private decimal _claimQuantity;
     private int? _supplierId;
+    private bool _isSelected = true;
 
     public ExpiryClaimLineViewModel(ExpiryEligibleBatchDto source, IReadOnlyList<ExpirySupplierOptionDto> suppliers)
     {
@@ -380,6 +411,12 @@ public sealed class ExpiryClaimLineViewModel : ObservableObject
         Suppliers = suppliers;
         _claimQuantity = source.StockQuantity;
         _supplierId = source.SupplierId;
+    }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
     }
 
     public ExpiryEligibleBatchDto Source { get; }

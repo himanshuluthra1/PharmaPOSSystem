@@ -26,6 +26,7 @@ public class PurchaseService : IPurchaseService
     private readonly IReportingSyncService _reportingSync;
     private readonly ICurrentUserService _currentUser;
     private readonly IPurchaseReturnService _purchaseReturns;
+    private readonly IFinancialYearContext _financialYear;
 
     public PurchaseService(
         IUnitOfWork uow,
@@ -33,7 +34,8 @@ public class PurchaseService : IPurchaseService
         ISettingsService settings,
         IReportingSyncService reportingSync,
         ICurrentUserService currentUser,
-        IPurchaseReturnService purchaseReturns)
+        IPurchaseReturnService purchaseReturns,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
@@ -41,6 +43,7 @@ public class PurchaseService : IPurchaseService
         _reportingSync = reportingSync;
         _currentUser = currentUser;
         _purchaseReturns = purchaseReturns;
+        _financialYear = financialYear;
     }
 
     public async Task<List<PurchaseMedicineDto>> SearchMedicinesAsync(string term, CancellationToken ct = default)
@@ -98,6 +101,14 @@ public class PurchaseService : IPurchaseService
             .ToListAsync(ct);
     }
 
+    public async Task<SupplierLookupDto?> GetSupplierAsync(int supplierId, CancellationToken ct = default)
+    {
+        return await _uow.Repository<Supplier>().Query().AsNoTracking()
+            .Where(s => s.Id == supplierId && s.Status == EntityStatus.Active)
+            .Select(s => new SupplierLookupDto(s.Id, s.Name, s.Phone, s.GstNumber, s.OutstandingBalance))
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task<PurchaseMedicineDto?> GetMedicineAsync(int medicineId, CancellationToken ct = default)
     {
         return await _uow.Repository<Medicine>().Query().AsNoTracking()
@@ -125,7 +136,8 @@ public class PurchaseService : IPurchaseService
     {
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
             .Where(p => p.Status == PurchaseStatus.Received
-                        || p.Status == PurchaseStatus.PartiallyReturned);
+                        || p.Status == PurchaseStatus.PartiallyReturned)
+            .WhereInFinancialYear(_financialYear.Active, p => p.InvoiceDate);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
         return q.OrderByDescending(p => p.InvoiceDate)
@@ -214,7 +226,8 @@ public class PurchaseService : IPurchaseService
     {
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
             .Where(p => p.Status == PurchaseStatus.Received
-                        || p.Status == PurchaseStatus.PartiallyReturned);
+                        || p.Status == PurchaseStatus.PartiallyReturned)
+            .WhereInFinancialYear(_financialYear.Active, p => p.InvoiceDate);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
         if (supplierId.HasValue) q = q.Where(p => p.SupplierId == supplierId.Value);
 
@@ -309,6 +322,8 @@ public class PurchaseService : IPurchaseService
 
     public async Task<Result<PurchaseReceiptDto>> CreatePurchaseAsync(CreatePurchaseRequest request, int? branchId, CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<PurchaseReceiptDto>(_financialYear);
         if (request.SupplierId <= 0)
             return Result.Failure<PurchaseReceiptDto>("Select a supplier for the purchase.");
         if (request.Lines.Count == 0)
@@ -336,6 +351,8 @@ public class PurchaseService : IPurchaseService
 
     public async Task<Result<PurchaseReceiptDto>> UpdatePurchaseAsync(UpdatePurchaseRequest request, int? branchId, CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<PurchaseReceiptDto>(_financialYear);
         if (request.SupplierId <= 0)
             return Result.Failure<PurchaseReceiptDto>("Select a supplier for the purchase.");
         if (request.Lines.Count == 0)
@@ -372,6 +389,9 @@ public class PurchaseService : IPurchaseService
 
     public async Task<Result> UnlockPurchaseAsync(int purchaseId, int? branchId, CancellationToken ct = default)
     {
+        var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
+        if (fyBlock.IsFailure) return fyBlock;
+
         var prefs = await _settings.GetPreferencesAsync(ct);
         if (!prefs.AllowEditPurchaseBills && !CanManagePurchases())
             return Result.Failure(

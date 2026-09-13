@@ -18,13 +18,18 @@ public class AccountingService : IAccountingService
     private const string ReceivableAccountCode = "1200";
     private const string PayableAccountCode = "2000";
 
+    /// <summary>Synthetic bill id for <see cref="Supplier.OpeningBalance"/> in party bill lists / allocations.</summary>
+    public const int SupplierOpeningBalanceBillId = 0;
+
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
+    private readonly IFinancialYearContext _financialYear;
 
-    public AccountingService(IUnitOfWork uow, IDateTimeProvider clock)
+    public AccountingService(IUnitOfWork uow, IDateTimeProvider clock, IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
+        _financialYear = financialYear;
     }
 
     public async Task<AccountingSummaryDto> GetSummaryAsync(int? branchId, CancellationToken ct = default)
@@ -167,7 +172,8 @@ public class AccountingService : IAccountingService
     }
 
     /// <summary>
-    /// Open purchase dues for all suppliers — same formula as <see cref="ListPartyBillsAsync"/>.
+    /// Open purchase dues for all suppliers, plus remaining <see cref="Supplier.OpeningBalance"/>.
+    /// Outstanding payables are not FY-scoped (prior-year unpaid bills remain due).
     /// </summary>
     private async Task<Dictionary<int, decimal>> ComputeAllSupplierOpenDuesAsync(
         int? branchId,
@@ -179,10 +185,23 @@ public class AccountingService : IAccountingService
                         && p.GrandTotal > p.PaidAmount);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
-        return await q
+        var dueByPurchase = await q
             .GroupBy(p => p.SupplierId)
             .Select(g => new { SupplierId = g.Key, Due = g.Sum(p => p.GrandTotal - p.PaidAmount) })
             .ToDictionaryAsync(x => x.SupplierId, x => x.Due, ct);
+
+        var suppliersQ = _uow.Repository<Supplier>().Query().AsNoTracking()
+            .Where(s => s.Status == EntityStatus.Active && s.OpeningBalance > 0.009m);
+        if (branchId.HasValue) suppliersQ = suppliersQ.Where(s => s.BranchId == branchId);
+
+        var openings = await suppliersQ
+            .Select(s => new { s.Id, s.OpeningBalance })
+            .ToListAsync(ct);
+
+        foreach (var row in openings)
+            dueByPurchase[row.Id] = dueByPurchase.GetValueOrDefault(row.Id) + row.OpeningBalance;
+
+        return dueByPurchase;
     }
 
     /// <summary>
@@ -206,10 +225,19 @@ public class AccountingService : IAccountingService
                             && p.GrandTotal > p.PaidAmount);
             if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
-            return await q
+            var dueByPurchase = await q
                 .GroupBy(p => p.SupplierId)
                 .Select(g => new { SupplierId = g.Key, Due = g.Sum(p => p.GrandTotal - p.PaidAmount) })
                 .ToDictionaryAsync(x => x.SupplierId, x => x.Due, ct);
+
+            var openings = await _uow.Repository<Supplier>().Query().AsNoTracking()
+                .Where(s => ids.Contains(s.Id) && s.OpeningBalance > 0.009m)
+                .Select(s => new { s.Id, s.OpeningBalance })
+                .ToListAsync(ct);
+            foreach (var row in openings)
+                dueByPurchase[row.Id] = dueByPurchase.GetValueOrDefault(row.Id) + row.OpeningBalance;
+
+            return dueByPurchase;
         }
 
         var all = await ComputeAllSupplierOpenDuesAsync(branchId, ct);
@@ -350,7 +378,7 @@ public class AccountingService : IAccountingService
             return map.GetValueOrDefault(partyId);
         }
 
-        var bills = await ListPartyBillsAsync(PartyLedgerKind.Customer, partyId, branchId, ct);
+        var bills = await ListPartyBillsAsync(PartyLedgerKind.Customer, partyId, branchId, openOnly: true, ct);
         return bills.Sum(b => b.BalanceDue);
     }
 
@@ -358,18 +386,20 @@ public class AccountingService : IAccountingService
         PartyLedgerKind kind,
         int partyId,
         int? branchId,
+        bool openOnly = true,
         CancellationToken ct = default)
     {
         if (kind == PartyLedgerKind.Supplier)
         {
+            // Open payables are not FY-scoped — unpaid prior-year bills (and opening balances) stay due.
             var q = _uow.Repository<Purchase>().Query().AsNoTracking()
                 .Where(p => p.SupplierId == partyId
                             && p.Status != PurchaseStatus.Cancelled
                             && p.Status != PurchaseStatus.Draft);
             if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+            if (openOnly) q = q.Where(p => p.GrandTotal > p.PaidAmount);
 
-            return await q
-                .Where(p => p.GrandTotal > p.PaidAmount)
+            var bills = await q
                 .OrderByDescending(p => p.InvoiceDate)
                 .Select(p => new PartyBillRowDto(
                     p.Id,
@@ -377,12 +407,28 @@ public class AccountingService : IAccountingService
                     p.InvoiceDate,
                     p.GrandTotal,
                     p.PaidAmount,
-                    p.GrandTotal - p.PaidAmount))
+                    p.GrandTotal - p.PaidAmount,
+                    p.SupplierInvoiceNumber))
                 .ToListAsync(ct);
+
+            var supplier = await _uow.Repository<Supplier>().Query().AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == partyId, ct);
+            if (supplier is not null && supplier.OpeningBalance > 0.009m)
+            {
+                bills.Insert(0, new PartyBillRowDto(
+                    SupplierOpeningBalanceBillId,
+                    "OPENING",
+                    supplier.CreatedAtUtc == default ? _clock.Today : supplier.CreatedAtUtc,
+                    supplier.OpeningBalance,
+                    0m,
+                    supplier.OpeningBalance));
+            }
+
+            return bills;
         }
 
         // Receivables: include completed and partially-returned invoices that still have due.
-        // Fully returned / cancelled / draft bills are excluded.
+        // Fully returned / cancelled / draft bills are excluded. Not FY-scoped.
         var openStatuses = new[] { SaleStatus.Completed, SaleStatus.PartiallyReturned };
 
         var customer = await _uow.Repository<Customer>().Query().AsNoTracking()
@@ -426,8 +472,49 @@ public class AccountingService : IAccountingService
                     s.PaidAmount,
                     due > 0 ? due : 0m);
             })
-            .Where(b => b.BalanceDue > 0)
+            .Where(b => !openOnly || b.BalanceDue > 0)
             .ToList();
+    }
+
+    public async Task<PartyBillsSummaryDto> GetPartyBillsSummaryAsync(
+        PartyLedgerKind kind,
+        int partyId,
+        int? branchId,
+        CancellationToken ct = default)
+    {
+        var bills = await ListPartyBillsAsync(kind, partyId, branchId, openOnly: false, ct);
+        return SummarizeBills(bills);
+    }
+
+    public async Task<PartyBillsSummaryDto> GetPartiesBillsSummaryAsync(
+        PartyLedgerKind kind,
+        IReadOnlyList<int> partyIds,
+        int? branchId,
+        CancellationToken ct = default)
+    {
+        if (partyIds.Count == 0)
+            return PartyBillsSummaryDto.Empty;
+
+        var all = new List<PartyBillRowDto>();
+        foreach (var id in partyIds)
+            all.AddRange(await ListPartyBillsAsync(kind, id, branchId, openOnly: false, ct));
+
+        return SummarizeBills(all);
+    }
+
+    private static PartyBillsSummaryDto SummarizeBills(IReadOnlyList<PartyBillRowDto> bills)
+    {
+        if (bills.Count == 0)
+            return PartyBillsSummaryDto.Empty;
+
+        var pending = bills.Where(b => b.BalanceDue > 0.009m).ToList();
+        return new PartyBillsSummaryDto(
+            bills.Count,
+            pending.Count,
+            bills.Sum(b => b.GrandTotal),
+            pending.Sum(b => b.BalanceDue),
+            pending.Count > 0 ? pending.Min(b => b.InvoiceDate) : null,
+            pending.Count > 0 ? pending.Max(b => b.InvoiceDate) : null);
     }
 
     public async Task<List<AccountLookupDto>> ListAccountsAsync(
@@ -461,7 +548,8 @@ public class AccountingService : IAccountingService
 
         var q = _uow.Repository<JournalLine>().Query().AsNoTracking()
             .Include(l => l.JournalEntry)
-            .Where(l => l.AccountId == cash.Id && l.JournalEntry != null);
+            .Where(l => l.AccountId == cash.Id && l.JournalEntry != null)
+            .WhereInFinancialYear(_financialYear.Active, l => l.JournalEntry!.EntryDate);
 
         if (branchId.HasValue)
             q = q.Where(l => l.JournalEntry!.BranchId == branchId);
@@ -506,7 +594,8 @@ public class AccountingService : IAccountingService
         CancellationToken ct = default)
     {
         term = term?.Trim() ?? string.Empty;
-        var q = _uow.Repository<JournalEntry>().Query().AsNoTracking();
+        var q = _uow.Repository<JournalEntry>().Query().AsNoTracking()
+            .WhereInFinancialYear(_financialYear.Active, e => e.EntryDate);
         if (branchId.HasValue) q = q.Where(e => e.BranchId == branchId);
 
         if (!string.IsNullOrWhiteSpace(term))
@@ -602,6 +691,8 @@ public class AccountingService : IAccountingService
         int? branchId,
         CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<VoucherReceiptDto>(_financialYear);
         if (request.Amount <= 0)
             return Result.Failure<VoucherReceiptDto>("Enter a valid expense amount.");
 
@@ -669,6 +760,8 @@ public class AccountingService : IAccountingService
         IReadOnlyList<BillPaymentAllocationDto>? billAllocations = null,
         IReadOnlyList<BillReceiptAllocationDto>? receiptAllocations = null)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<VoucherReceiptDto>(_financialYear);
         if (amount <= 0)
             return Result.Failure<VoucherReceiptDto>("Enter a valid amount.");
 
@@ -717,10 +810,18 @@ public class AccountingService : IAccountingService
                     partyAccount = await RequireAccountByCodeAsync(ReceivableAccountCode, token);
                     partyName = customer.Name;
 
+                    var cashAccountForReceipt = await _uow.Repository<Account>().GetByIdAsync(cashOrBankAccountId, token);
+                    if (cashAccountForReceipt is null || cashAccountForReceipt.Type != AccountType.Asset)
+                        throw new AccountingException("Select a valid cash or bank account.");
+                    var receiptMethod = ResolveReceiptPaymentMethod(cashAccountForReceipt);
+                    var receiptVoucherPreview = await GenerateVoucherNumberAsync(kind, branchId, token);
+
                     if (allocationMode == PaymentAllocationMode.BillWise)
-                        await AllocateCustomerReceiptToBillsAsync(partyId, amount, receiptAllocations, branchId, token);
+                        await AllocateCustomerReceiptToBillsAsync(
+                            partyId, amount, receiptAllocations, branchId, receiptMethod, receiptVoucherPreview, token);
                     else
-                        await AllocateCustomerReceiptAsync(partyId, amount, branchId, token);
+                        await AllocateCustomerReceiptAsync(
+                            partyId, amount, branchId, receiptMethod, receiptVoucherPreview, token);
 
                     customer.OutstandingBalance = await ComputePartyOutstandingAsync(
                         PartyLedgerKind.Customer, partyId, branchId, token);
@@ -799,6 +900,19 @@ public class AccountingService : IAccountingService
         int supplierId, decimal amount, int? branchId, CancellationToken ct)
     {
         var remaining = amount;
+
+        // Opening balance is oldest payable — apply FIFO here first.
+        var supplier = await _uow.Repository<Supplier>().GetByIdAsync(supplierId, ct);
+        if (supplier is not null && supplier.OpeningBalance > 0.009m && remaining > 0)
+        {
+            var appliedOpening = Math.Min(remaining, supplier.OpeningBalance);
+            supplier.OpeningBalance = Math.Round(supplier.OpeningBalance - appliedOpening, 2);
+            _uow.Repository<Supplier>().Update(supplier);
+            remaining -= appliedOpening;
+        }
+
+        if (remaining <= 0) return;
+
         var openStatuses = new[] { PurchaseStatus.Received, PurchaseStatus.PartiallyReturned };
         var q = _uow.Repository<Purchase>().Query()
             .Where(p => p.SupplierId == supplierId
@@ -851,17 +965,37 @@ public class AccountingService : IAccountingService
         if (ids.Count != positive.Count)
             throw new AccountingException("Duplicate purchase bills in the allocation list.");
 
+        var openingAlloc = positive.FirstOrDefault(a => a.PurchaseId == SupplierOpeningBalanceBillId);
+        var purchaseIds = positive
+            .Where(a => a.PurchaseId != SupplierOpeningBalanceBillId)
+            .Select(a => a.PurchaseId)
+            .ToList();
+
+        if (openingAlloc is not null)
+        {
+            var supplier = await _uow.Repository<Supplier>().GetByIdAsync(supplierId, ct)
+                ?? throw new AccountingException("Supplier not found.");
+            if (openingAlloc.Amount > supplier.OpeningBalance + 0.01m)
+                throw new AccountingException(
+                    $"Amount for OPENING exceeds balance due (₹{supplier.OpeningBalance:N2}).");
+            supplier.OpeningBalance = Math.Round(supplier.OpeningBalance - openingAlloc.Amount, 2);
+            if (supplier.OpeningBalance < 0) supplier.OpeningBalance = 0;
+            _uow.Repository<Supplier>().Update(supplier);
+        }
+
+        if (purchaseIds.Count == 0) return;
+
         var openStatuses = new[] { PurchaseStatus.Received, PurchaseStatus.PartiallyReturned };
         var q = _uow.Repository<Purchase>().Query()
-            .Where(p => ids.Contains(p.Id) && p.SupplierId == supplierId && openStatuses.Contains(p.Status));
+            .Where(p => purchaseIds.Contains(p.Id) && p.SupplierId == supplierId && openStatuses.Contains(p.Status));
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
         var bills = await q.ToListAsync(ct);
-        if (bills.Count != ids.Count)
+        if (bills.Count != purchaseIds.Count)
             throw new AccountingException("One or more selected purchase bills are invalid or closed.");
 
         var byId = bills.ToDictionary(b => b.Id);
-        foreach (var alloc in positive)
+        foreach (var alloc in positive.Where(a => a.PurchaseId != SupplierOpeningBalanceBillId))
         {
             var bill = byId[alloc.PurchaseId];
             var due = bill.GrandTotal - bill.PaidAmount;
@@ -878,11 +1012,17 @@ public class AccountingService : IAccountingService
     }
 
     private async Task AllocateCustomerReceiptAsync(
-        int customerId, decimal amount, int? branchId, CancellationToken ct)
+        int customerId,
+        decimal amount,
+        int? branchId,
+        PaymentMethod receiptMethod,
+        string? voucherReference,
+        CancellationToken ct)
     {
         var remaining = amount;
         var openStatuses = new[] { SaleStatus.Completed, SaleStatus.PartiallyReturned };
         var q = _uow.Repository<Sale>().Query()
+            .Include(s => s.Payments)
             .Where(s => s.CustomerId == customerId
                         && openStatuses.Contains(s.Status));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
@@ -910,11 +1050,7 @@ public class AccountingService : IAccountingService
             if (due <= 0) continue;
 
             var applied = Math.Min(remaining, due);
-            bill.PaidAmount += applied;
-            bill.PaymentStatus = bill.PaidAmount + returned >= bill.GrandTotal
-                ? PaymentStatus.Paid
-                : PaymentStatus.PartiallyPaid;
-            _uow.Repository<Sale>().Update(bill);
+            await ApplyCustomerReceiptToSaleAsync(bill, applied, returned, receiptMethod, voucherReference, ct);
             remaining -= applied;
         }
     }
@@ -924,6 +1060,8 @@ public class AccountingService : IAccountingService
         decimal amount,
         IReadOnlyList<BillReceiptAllocationDto>? allocations,
         int? branchId,
+        PaymentMethod receiptMethod,
+        string? voucherReference,
         CancellationToken ct)
     {
         if (allocations is null || allocations.Count == 0)
@@ -944,6 +1082,7 @@ public class AccountingService : IAccountingService
 
         var openStatuses = new[] { SaleStatus.Completed, SaleStatus.PartiallyReturned };
         var q = _uow.Repository<Sale>().Query()
+            .Include(s => s.Payments)
             .Where(s => ids.Contains(s.Id) && openStatuses.Contains(s.Status)
                         && (s.CustomerId == null || s.CustomerId == customerId));
         if (branchId.HasValue) q = q.Where(s => s.BranchId == branchId);
@@ -971,12 +1110,72 @@ public class AccountingService : IAccountingService
             if (bill.CustomerId is null)
                 bill.CustomerId = customerId;
 
-            bill.PaidAmount += alloc.Amount;
-            bill.PaymentStatus = bill.PaidAmount + returned >= bill.GrandTotal
-                ? PaymentStatus.Paid
-                : PaymentStatus.PartiallyPaid;
-            _uow.Repository<Sale>().Update(bill);
+            await ApplyCustomerReceiptToSaleAsync(bill, alloc.Amount, returned, receiptMethod, voucherReference, ct);
         }
+    }
+
+    /// <summary>
+    /// Updates <see cref="Sale.PaidAmount"/> and keeps <see cref="SalePayment"/> tenders aligned
+    /// so Sales UI Balance Due matches Customer Dues after collection.
+    /// </summary>
+    private async Task ApplyCustomerReceiptToSaleAsync(
+        Sale bill,
+        decimal applied,
+        decimal returned,
+        PaymentMethod receiptMethod,
+        string? voucherReference,
+        CancellationToken ct)
+    {
+        if (applied <= 0) return;
+
+        bill.PaidAmount = Math.Round(bill.PaidAmount + applied, 2);
+        bill.PaymentStatus = bill.PaidAmount + returned >= bill.GrandTotal - 0.009m
+            ? PaymentStatus.Paid
+            : PaymentStatus.PartiallyPaid;
+
+        var method = receiptMethod == PaymentMethod.Credit ? PaymentMethod.Cash : receiptMethod;
+        var payment = new SalePayment
+        {
+            SaleId = bill.Id,
+            Method = method,
+            Amount = Math.Round(applied, 2),
+            ReferenceNumber = voucherReference,
+            PaymentDateUtc = _clock.UtcNow
+        };
+        bill.Payments.Add(payment);
+        await _uow.Repository<SalePayment>().AddAsync(payment, ct);
+
+        // Shrink original Credit tender so non-credit + credit still ≈ grand total.
+        var creditLeft = Math.Round(applied, 2);
+        foreach (var credit in bill.Payments
+                     .Where(p => p.Method == PaymentMethod.Credit && p.Amount > 0 && !ReferenceEquals(p, payment))
+                     .OrderByDescending(p => p.Id)
+                     .ToList())
+        {
+            if (creditLeft <= 0) break;
+            var reduce = Math.Min(credit.Amount, creditLeft);
+            credit.Amount = Math.Round(credit.Amount - reduce, 2);
+            creditLeft = Math.Round(creditLeft - reduce, 2);
+            if (credit.Amount <= 0.009m)
+            {
+                bill.Payments.Remove(credit);
+                _uow.Repository<SalePayment>().Remove(credit);
+            }
+        }
+
+        _uow.Repository<Sale>().Update(bill);
+    }
+
+    private static PaymentMethod ResolveReceiptPaymentMethod(Account cashOrBank)
+    {
+        if (string.Equals(cashOrBank.Code, BankAccountCode, StringComparison.OrdinalIgnoreCase))
+            return PaymentMethod.BankTransfer;
+
+        if (!string.IsNullOrWhiteSpace(cashOrBank.Name)
+            && cashOrBank.Name.Contains("bank", StringComparison.OrdinalIgnoreCase))
+            return PaymentMethod.BankTransfer;
+
+        return PaymentMethod.Cash;
     }
 
     private async Task AddLineAsync(

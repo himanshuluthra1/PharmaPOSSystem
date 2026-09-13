@@ -114,16 +114,14 @@ public static class MedWinTransactionImporter
             var batchNo = ImportHelpers.Trunc(Convert.ToString(r["dpbatch"]), 60) ?? "BATCH";
             int? batchId = await ResolveBatchIdAsync(ctx, target, medWinId, medicineId, batchNo);
 
-            // Keep MedWin units (same as stockmas / item ledger). Do NOT divide by dpsize.
-            var qty = ImportHelpers.Dec(r["dpqty"]);
-            var free = ImportHelpers.Dec(r["dpfree"]);
             var pack = Math.Max(1, ImportHelpers.Int(r["dpsize"]));
+            // MedWin dpqty is loose units; PharmaPOS sale qty is packs.
+            var qty = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(r["dpqty"]), pack);
+            var free = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(r["dpfree"]), pack);
 
             var mrp = ImportHelpers.Dec(r["mrprate"]);
             if (mrp <= 0) mrp = ImportHelpers.Dec(r["dpfmrp"]);
-            // MedWin MRP is usually per pack; store per-unit to match unit qty.
-            if (pack > 1 && mrp > 0)
-                mrp = Math.Round(mrp / pack, 4);
+            // MRP/rates stay per pack (matches pack qty). Do not divide by dpsize.
 
             var lineTotal = ImportHelpers.Dec(r["dpamt"]);
             if (lineTotal <= 0 && qty > 0) lineTotal = ImportHelpers.Dec(r["dnetamt"]);
@@ -376,8 +374,9 @@ public static class MedWinTransactionImporter
 
             var batchNo = ImportHelpers.Trunc(Convert.ToString(r["dpbatch"]), 60) ?? "BATCH";
             int? batchId = await ResolveBatchIdAsync(ctx, target, medWinId, medicineId, batchNo);
-            var qty = ImportHelpers.Dec(r["dpqty"]); // units (same as purchase / stock)
-            var free = ImportHelpers.Dec(r["dpfree"]);
+            var pack = Math.Max(1, ImportHelpers.Int(r["dpsize"]));
+            var qty = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(r["dpqty"]), pack);
+            var free = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(r["dpfree"]), pack);
             var purchasePrice = ImportHelpers.Dec(r["dpinvrat"]);
             var gstPercent = ImportHelpers.Dec(r["dptax"]);
             var lineTotal = ImportHelpers.Dec(r["dpamt"]);
@@ -434,9 +433,10 @@ public static class MedWinTransactionImporter
 
             var batchNo = ImportHelpers.Trunc(Convert.ToString(r["dpbatch"]), 60) ?? "BATCH";
             int? batchId = await ResolveBatchIdAsync(ctx, target, medWinId, medicineId, batchNo);
-            // Purchase qty is already in units (matches MedWin item ledger / stockmas).
-            var qty = ImportHelpers.Dec(r["dpqty"]);
-            var free = ImportHelpers.Dec(r["dpfree"]);
+            var pack = Math.Max(1, ImportHelpers.Int(r["dpsize"]));
+            // MedWin dpqty is loose units; PharmaPOS purchase qty is packs.
+            var qty = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(r["dpqty"]), pack);
+            var free = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(r["dpfree"]), pack);
             var purchasePrice = ImportHelpers.Dec(r["dpinvrat"]);
             var mrp = ImportHelpers.Dec(r["mrprate"]);
             if (mrp <= 0) mrp = ImportHelpers.Dec(r["dpfmrp"]);
@@ -587,11 +587,12 @@ public static class MedWinTransactionImporter
         }
 
         ctx.Log($"  Sale payment rows added: {added:N0}.");
-        ctx.Log("  Purchase receipts are stored on purchase headers (pcheqamt / pcredit).");
+        ctx.Log("  Purchase settlement uses header pcheqamt (cash) + pcredit (debit note).");
     }
 
     /// <summary>
     /// Repairs PaidAmount / PaymentStatus on imported MW-P purchases from MedWin header fields.
+    /// Also clears stale MedWin <c>subopbal</c> openings that MedWin does not keep current.
     /// </summary>
     public static async Task BackfillPurchasePaymentsAsync(MedWinImportContext ctx, SqlConnection target)
     {
@@ -635,24 +636,33 @@ public static class MedWinTransactionImporter
             updated += await upd.ExecuteNonQueryAsync();
         }
 
-        await using (var resetSuppliers = new SqlCommand(
-                         "UPDATE Suppliers SET OutstandingBalance = 0, ModifiedAtUtc = @Now", target))
+        // Clear stale MedWin openings (subopbal). MedWin leaves this field static and does not
+        // maintain balanceamt; live payables are open purchase dues after cash + debit-note settlement.
+        await using (var clearOpenings = new SqlCommand("""
+            UPDATE Suppliers
+            SET OpeningBalance = 0,
+                ModifiedAtUtc = @Now
+            WHERE IsDeleted = 0
+              AND OpeningBalance <> 0
+            """, target))
         {
-            resetSuppliers.Parameters.AddWithValue("@Now", ctx.NowUtc);
-            await resetSuppliers.ExecuteNonQueryAsync();
+            clearOpenings.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            var cleared = await clearOpenings.ExecuteNonQueryAsync();
+            ctx.Log($"  Cleared stale MedWin opening balances on {cleared:N0} supplier(s).");
         }
 
         await using (var syncSuppliers = new SqlCommand("""
             UPDATE s
-            SET s.OutstandingBalance = x.Due,
+            SET s.OutstandingBalance = ISNULL(x.Due, 0),
                 s.ModifiedAtUtc = @Now
             FROM Suppliers s
-            INNER JOIN (
+            LEFT JOIN (
                 SELECT SupplierId, SUM(GrandTotal - PaidAmount) AS Due
                 FROM Purchases
-                WHERE Status = 3 AND GrandTotal > PaidAmount
+                WHERE Status = 3 AND GrandTotal > PaidAmount AND IsDeleted = 0
                 GROUP BY SupplierId
             ) x ON x.SupplierId = s.Id
+            WHERE s.IsDeleted = 0
             """, target))
         {
             syncSuppliers.Parameters.AddWithValue("@Now", ctx.NowUtc);
@@ -660,7 +670,7 @@ public static class MedWinTransactionImporter
         }
 
         ctx.Log($"  Purchase payment rows updated: {updated:N0} ({examined - updated:N0} already correct).");
-        ctx.Log("  Supplier outstanding balances recalculated from open purchase dues.");
+        ctx.Log("  Supplier outstanding = open purchase dues (cash + debit-note settlements applied).");
     }
 
     private static async Task<int> InsertSalePaymentIfMissingAsync(

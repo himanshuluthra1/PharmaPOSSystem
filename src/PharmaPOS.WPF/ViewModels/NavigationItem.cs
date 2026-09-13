@@ -13,7 +13,8 @@ public class NavigationItem : ObservableObject
         Type targetViewModel,
         string module,
         int? tabIndex = null,
-        ReportKind? reportKind = null)
+        ReportKind? reportKind = null,
+        string? requiredPermission = null)
     {
         Label = label;
         IconKind = iconKind;
@@ -21,6 +22,7 @@ public class NavigationItem : ObservableObject
         Module = module;
         TabIndex = tabIndex;
         ReportKind = reportKind;
+        RequiredPermission = requiredPermission;
     }
 
     public string Label { get; }
@@ -33,6 +35,9 @@ public class NavigationItem : ObservableObject
 
     /// <summary>Optional report kind when targeting the Reports module.</summary>
     public ReportKind? ReportKind { get; }
+
+    /// <summary>Permission key required to show this menu leaf (<c>{module}.manage</c> still grants all).</summary>
+    public string? RequiredPermission { get; }
 }
 
 /// <summary>

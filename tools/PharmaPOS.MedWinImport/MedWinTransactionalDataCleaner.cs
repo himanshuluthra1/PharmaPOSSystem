@@ -3,8 +3,9 @@ using Microsoft.Data.SqlClient;
 namespace PharmaPOS.MedWinImport;
 
 /// <summary>
-/// Permanently removes POS transactional / stock data so MedWin sales, purchases, and stock can be imported cleanly.
-/// Keeps masters: medicines, suppliers, customers, categories, manufacturers, users, roles, company, branches, chart of accounts, return reasons.
+/// Permanently removes POS transactional / stock / party data so MedWin can be imported cleanly.
+/// Keeps: medicines, categories, manufacturers, users, roles, company, branches, chart of accounts, return reasons.
+/// Deletes: sales, purchases, stock, journals, sync outbox, customers, suppliers.
 /// </summary>
 public static class MedWinTransactionalDataCleaner
 {
@@ -34,12 +35,15 @@ public static class MedWinTransactionalDataCleaner
         "MedicineBatches",
         "JournalLines",
         "JournalEntries",
-        "SyncOutboxEntries"
+        "SyncOutboxEntries",
+        // Parties last — FKs from sales/purchases/claims cleared above.
+        "Customers",
+        "Suppliers"
     ];
 
     public static async Task RunAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        ctx.Log("\n[clear-transactions] Removing existing sales, purchases, stock, and related movements...");
+        ctx.Log("\n[clear-transactions] Removing existing sales, purchases, stock, customers, and suppliers...");
         ctx.ThrowIfCancellationRequested();
 
         await using var tx = (SqlTransaction)await target.BeginTransactionAsync(ctx.CancellationToken);
@@ -62,24 +66,8 @@ public static class MedWinTransactionalDataCleaner
                     ctx.Log($"  Deleted {deleted:N0} from {table}");
             }
 
-            await using (var cust = new SqlCommand(
-                             "UPDATE Customers SET OutstandingBalance = 0 WHERE OutstandingBalance <> 0",
-                             target, tx))
-            {
-                var n = await cust.ExecuteNonQueryAsync(ctx.CancellationToken);
-                if (n > 0) ctx.Log($"  Reset OutstandingBalance on {n:N0} customer(s)");
-            }
-
-            await using (var sup = new SqlCommand(
-                             "UPDATE Suppliers SET OutstandingBalance = 0 WHERE OutstandingBalance <> 0",
-                             target, tx))
-            {
-                var n = await sup.ExecuteNonQueryAsync(ctx.CancellationToken);
-                if (n > 0) ctx.Log($"  Reset OutstandingBalance on {n:N0} supplier(s)");
-            }
-
             await tx.CommitAsync(ctx.CancellationToken);
-            ctx.Log("  Transactional data cleared. Masters (medicines, parties, users, company) kept.");
+            ctx.Log("  Cleared. Kept: medicines, company, users, roles, branches, chart of accounts.");
         }
         catch
         {

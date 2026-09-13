@@ -18,12 +18,14 @@ public sealed class BillAllocationLineViewModel : ObservableObject
     {
         PurchaseId = bill.TransactionId;
         InvoiceNumber = bill.InvoiceNumber;
+        SupplierBillNumber = bill.SupplierBillNumber;
         InvoiceDateLabel = bill.InvoiceDateLabel;
         BalanceDue = bill.BalanceDue;
     }
 
     public int PurchaseId { get; }
     public string InvoiceNumber { get; }
+    public string? SupplierBillNumber { get; }
     public string InvoiceDateLabel { get; }
     public decimal BalanceDue { get; }
 

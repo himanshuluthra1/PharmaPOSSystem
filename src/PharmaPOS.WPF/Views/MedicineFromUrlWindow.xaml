@@ -62,6 +62,14 @@
                     </StackPanel>
                 </Grid>
 
+                <TextBlock Text="Location (rack / shelf)" Style="{StaticResource FieldCaption}" />
+                <TextBox x:Name="LocationBox" Margin="0,2,0,8" Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                         materialDesign:HintAssist.Hint="Optional rack / shelf" />
+
+                <TextBlock Text="HSN" Style="{StaticResource FieldCaption}" />
+                <TextBox x:Name="HsnBox" Margin="0,2,0,8" MaxLength="8"
+                         Style="{StaticResource MaterialDesignOutlinedTextBox}" />
+
                 <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="#E65100" Margin="0,4,0,0" />
             </StackPanel>
         </ScrollViewer>

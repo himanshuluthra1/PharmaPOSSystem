@@ -6,8 +6,7 @@
              d:DataContext="{d:DesignInstance Type=invVm:InventoryViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
-             SizeChanged="UserControl_SizeChanged">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
     <UserControl.Resources>
         <Style x:Key="InvDataGrid" TargetType="DataGrid" BasedOn="{StaticResource PharmaDataGrid}">
             <Setter Property="AutoGenerateColumns" Value="False" />
@@ -20,115 +19,131 @@
             <Setter Property="IsReadOnly" Value="True" />
         </Style>
         <Style x:Key="InvOutlinedBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="Padding" Value="8,3" />
-            <Setter Property="FontSize" Value="12.5" />
-            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
         </Style>
         <Style x:Key="InvOutlinedCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="Padding" Value="8,3" />
-            <Setter Property="FontSize" Value="12.5" />
-            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
         </Style>
         <Style x:Key="InvToolbarButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Height" Value="28" />
             <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <!-- ~50 characters at 12.5pt; ellipsis + tooltip for longer names. -->
         <Style x:Key="MedicineNameCell" TargetType="TextBlock">
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="ToolTip" Value="{Binding MedicineName}" />
         </Style>
-        <Style x:Key="KpiLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10" />
-            <Setter Property="Opacity" Value="0.55" />
-            <Setter Property="Margin" Value="0,0,0,2" />
-        </Style>
-        <Style x:Key="KpiValue" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+        <Style x:Key="KpiChip" TargetType="Border">
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="CornerRadius" Value="4" />
         </Style>
     </UserControl.Resources>
 
     <Grid Margin="4">
-        <materialDesign:Card UniformCornerRadius="8" Padding="10,8"
+        <materialDesign:Card UniformCornerRadius="8" Padding="8,6"
                              materialDesign:ElevationAssist.Elevation="Dp1">
             <DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False"
-                           HorizontalAlignment="Right">
-                    <Button Command="{Binding StockOnHand.RefreshCommand}"
-                            Style="{StaticResource InvToolbarButton}" Padding="8,4" Height="30"
-                            ToolTip="Refresh stock on hand">
-                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
-                    </Button>
-                </DockPanel>
-
                 <TabControl SelectedIndex="{Binding SelectedTab}" Style="{StaticResource HeaderlessTabControl}">
                     <!-- STOCK ON HAND -->
-                    <TabItem Header="On Hand" Padding="10,4">
-                        <Grid DataContext="{Binding StockOnHand}" Margin="0,6,0,0">
+                    <TabItem Header="On Hand" Padding="8,2">
+                        <Grid DataContext="{Binding StockOnHand}" Margin="0,2,0,0">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <UniformGrid x:Name="StockKpiGrid" Grid.Row="0" Columns="4" Margin="0,0,0,8">
-                                <StackPanel Margin="4,0">
-                                    <TextBlock Text="Medicines" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock Text="{Binding Summary.TotalMedicines}" Style="{StaticResource KpiValue}" />
-                                </StackPanel>
-                                <StackPanel Margin="4,0">
-                                    <TextBlock Text="Total qty" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock Text="{Binding Summary.TotalQuantity, StringFormat=N0}" Style="{StaticResource KpiValue}" />
-                                </StackPanel>
-                                <StackPanel Margin="4,0">
-                                    <TextBlock Text="Stock value" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock Text="{Binding Summary.StockValue, Converter={StaticResource Currency}}"
-                                               Style="{StaticResource KpiValue}" />
-                                </StackPanel>
-                                <StackPanel Margin="4,0">
-                                    <TextBlock Text="Alerts" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock Text="{Binding AlertsSummaryText, Mode=OneWay}"
-                                               Style="{StaticResource KpiValue}" FontSize="13" />
-                                </StackPanel>
-                            </UniformGrid>
+                            <!-- KPI + search/actions on one compact block -->
+                            <StackPanel Grid.Row="0" Margin="0,0,0,4">
+                                <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
+                                    <Border Style="{StaticResource KpiChip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Medicines" FontSize="11" Opacity="0.55" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock Text="{Binding Summary.TotalMedicines}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource KpiChip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Qty" FontSize="11" Opacity="0.55" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock Text="{Binding Summary.TotalQuantity, StringFormat=N0}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource KpiChip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Value" FontSize="11" Opacity="0.55" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock Text="{Binding Summary.StockValue, Converter={StaticResource Currency}}"
+                                                       FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Style="{StaticResource KpiChip}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Alerts" FontSize="11" Opacity="0.55" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                            <TextBlock Text="{Binding AlertsSummaryText, Mode=OneWay}"
+                                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </WrapPanel>
 
-                            <DockPanel Grid.Row="1" Margin="0,0,0,6" LastChildFill="True">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <TextBlock Text="Search :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <TextBox Width="240" MaxLength="50"
+                                                 materialDesign:HintAssist.Hint="Search medicine, batch, barcode..."
+                                                 materialDesign:HintAssist.IsFloating="False"
+                                                 Style="{StaticResource InvOutlinedBox}"
+                                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <TextBlock Text="Filter :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                        <ComboBox Width="130"
+                                                  ItemsSource="{Binding FilterOptions}"
+                                                  SelectedItem="{Binding SelectedFilter}"
+                                                  DisplayMemberPath="Label"
+                                                  materialDesign:HintAssist.Hint="Filter"
+                                                  materialDesign:HintAssist.IsFloating="False"
+                                                  Style="{StaticResource InvOutlinedCombo}" />
+                                    </StackPanel>
                                     <Button Command="{Binding ScanBarcodeCameraCommand}"
-                                            Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            Style="{StaticResource InvToolbarButton}"
                                             ToolTip="Scan barcode with camera">
                                         <materialDesign:PackIcon Kind="BarcodeScan" Width="14" Height="14" />
                                     </Button>
                                     <Button Command="{Binding DataContext.ViewLedgerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
+                                            Style="{StaticResource InvToolbarButton}"
                                             ToolTip="View ledger for selected batch">
                                         <StackPanel Orientation="Horizontal">
                                             <materialDesign:PackIcon Kind="BookOpenPageVariant" Width="14" Height="14" VerticalAlignment="Center" />
                                             <TextBlock Text="Ledger" Margin="4,0,0,0" VerticalAlignment="Center" />
                                         </StackPanel>
                                     </Button>
-                                    <ComboBox Width="140"
-                                              ItemsSource="{Binding FilterOptions}"
-                                              SelectedItem="{Binding SelectedFilter}"
-                                              DisplayMemberPath="Label"
-                                              materialDesign:HintAssist.Hint="Filter"
-                                              Style="{StaticResource InvOutlinedCombo}" />
-                                </StackPanel>
-                                <TextBox materialDesign:HintAssist.Hint="Search medicine, batch, barcode..."
-                                         Style="{StaticResource InvOutlinedBox}"
-                                         Margin="0,0,8,0"
-                                         MaxLength="50"
-                                         MaxWidth="375"
-                                         HorizontalAlignment="Left"
-                                         Width="375"
-                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                            </DockPanel>
+                                    <Button Command="{Binding RefreshCommand}"
+                                            Style="{StaticResource MaterialDesignIconButton}"
+                                            Width="28" Height="28" ToolTip="Refresh stock on hand">
+                                        <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" />
+                                    </Button>
+                                </WrapPanel>
+                            </StackPanel>
 
-                            <DataGrid Grid.Row="2" Style="{StaticResource InvReadOnlyGrid}"
+                            <DataGrid Grid.Row="1" Style="{StaticResource InvReadOnlyGrid}"
                                       ItemsSource="{Binding Items}"
                                       SelectedItem="{Binding SelectedItem}">
                                 <DataGrid.Columns>
@@ -150,40 +165,38 @@
                     </TabItem>
 
                     <!-- STOCK LEDGER -->
-                    <TabItem Header="Ledger" Padding="10,4">
-                        <Grid DataContext="{Binding StockLedger}" Margin="0,6,0,0">
+                    <TabItem Header="Ledger" Padding="8,2">
+                        <Grid DataContext="{Binding StockLedger}" Margin="0,2,0,0">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Command="{Binding RefreshCommand}"
-                                            Style="{StaticResource MaterialDesignIconButton}" Width="30" Height="30"
-                                            ToolTip="Refresh">
-                                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
-                                    </Button>
-                                    <Button Command="{Binding ClearFilterCommand}"
-                                            Style="{StaticResource InvToolbarButton}" Margin="4,0,0,0"
-                                            Visibility="{Binding HasFilter, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Clear" />
-                                    </Button>
+                            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Search :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBox Width="240" MaxLength="50"
+                                             materialDesign:HintAssist.Hint="Search medicine or reference..."
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Style="{StaticResource InvOutlinedBox}"
+                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
-                                <TextBox materialDesign:HintAssist.Hint="Search medicine or reference..."
-                                         Style="{StaticResource InvOutlinedBox}"
-                                         MaxLength="50"
-                                         MaxWidth="375"
-                                         HorizontalAlignment="Left"
-                                         Width="375"
-                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                            </DockPanel>
+                                <TextBlock Text="{Binding FilterLabel}" FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"
+                                           Visibility="{Binding FilterLabel, Converter={StaticResource StringToVisibility}}" />
+                                <Button Command="{Binding ClearFilterCommand}"
+                                        Style="{StaticResource InvToolbarButton}"
+                                        Visibility="{Binding HasFilter, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Clear" />
+                                </Button>
+                                <Button Command="{Binding RefreshCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28"
+                                        ToolTip="Refresh">
+                                    <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" />
+                                </Button>
+                            </WrapPanel>
 
-                            <TextBlock Grid.Row="1" Text="{Binding FilterLabel}" FontSize="11" Opacity="0.55" Margin="0,0,0,4"
-                                       Visibility="{Binding FilterLabel, Converter={StaticResource StringToVisibility}}" />
-
-                            <DataGrid Grid.Row="2" Style="{StaticResource InvReadOnlyGrid}" ItemsSource="{Binding Items}">
+                            <DataGrid Grid.Row="1" Style="{StaticResource InvReadOnlyGrid}" ItemsSource="{Binding Items}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Date" Binding="{Binding MovementDateLabel}" Width="130" />
                                     <DataGridTextColumn Header="Type" Binding="{Binding MovementTypeLabel}" Width="100" />
@@ -201,56 +214,57 @@
                     </TabItem>
 
                     <!-- STOCK ADJUSTMENT -->
-                    <TabItem Header="Adjustment" Padding="10,4"
+                    <TabItem Header="Adjustment" Padding="8,2"
                              Visibility="{Binding CanAdjustStock, Converter={StaticResource BoolToVisibility}}">
-                        <Grid DataContext="{Binding StockAdjustment}" Margin="0,6,0,0">
+                        <Grid DataContext="{Binding StockAdjustment}" Margin="0,2,0,0">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="140" />
-                                    <ColumnDefinition Width="130" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" Margin="0,0,6,0" IsReadOnly="True"
-                                         materialDesign:HintAssist.Hint="Adjustment #"
-                                         Style="{StaticResource InvOutlinedBox}"
-                                         Text="{Binding AdjustmentNumber, Mode=OneWay}" />
-                                <DatePicker Grid.Column="1" Margin="0,0,6,0"
-                                            materialDesign:HintAssist.Hint="Date"
-                                            SelectedDate="{Binding AdjustmentDate}" />
-                                <TextBox Grid.Column="2"
-                                         materialDesign:HintAssist.Hint="Reason"
-                                         Style="{StaticResource InvOutlinedBox}"
-                                         Text="{Binding Reason, UpdateSourceTrigger=PropertyChanged}" />
-                            </Grid>
-
-                            <DockPanel Grid.Row="1" Margin="0,0,0,6">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Command="{Binding NewCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0">
-                                        <TextBlock Text="New" />
-                                    </Button>
-                                    <Button Command="{Binding AddLineCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
-                                            <TextBlock Text="Add" Margin="4,0,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding SaveCommand}"
-                                            Style="{StaticResource MaterialDesignRaisedButton}"
-                                            Padding="12,4" Height="32">
-                                        <TextBlock Text="Save" FontSize="12" />
-                                    </Button>
+                            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center"
+                                       ToolTip="Enter physical counts and save to adjust stock.">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Adjustment # :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBox Width="130" IsReadOnly="True"
+                                             materialDesign:HintAssist.Hint="Adjustment #"
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Style="{StaticResource InvOutlinedBox}"
+                                             Text="{Binding AdjustmentNumber, Mode=OneWay}" />
                                 </StackPanel>
-                                <TextBlock Text="Enter physical counts and save to adjust stock."
-                                           FontSize="12" Opacity="0.5" VerticalAlignment="Center" />
-                            </DockPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Date :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <DatePicker Width="120" VerticalAlignment="Center"
+                                                materialDesign:HintAssist.Hint="Date"
+                                                materialDesign:HintAssist.IsFloating="False"
+                                                Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                                SelectedDate="{Binding AdjustmentDate}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Reason :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBox Width="220"
+                                             materialDesign:HintAssist.Hint="Reason"
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Style="{StaticResource InvOutlinedBox}"
+                                             Text="{Binding Reason, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <Button Command="{Binding NewCommand}" Style="{StaticResource InvToolbarButton}">
+                                    <TextBlock Text="New" />
+                                </Button>
+                                <Button Command="{Binding AddLineCommand}" Style="{StaticResource InvToolbarButton}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Add" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding SaveCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Padding="10,2" Height="28">
+                                    <TextBlock Text="Save" FontSize="12" />
+                                </Button>
+                            </WrapPanel>
 
-                            <DataGrid Grid.Row="2" Style="{StaticResource InvDataGrid}"
+                            <DataGrid Grid.Row="1" Style="{StaticResource InvDataGrid}"
                                       ItemsSource="{Binding Lines}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
@@ -282,71 +296,75 @@
                     </TabItem>
 
                     <!-- BRANCH TRANSFER (create / send) -->
-                    <TabItem Header="Transfer" Padding="10,4"
+                    <TabItem Header="Transfer" Padding="8,2"
                              Visibility="{Binding CanTransferStock, Converter={StaticResource BoolToVisibility}}">
-                        <Grid DataContext="{Binding StockTransfer}" Margin="0,6,0,0">
+                        <Grid DataContext="{Binding StockTransfer}" Margin="0,2,0,0">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" MinHeight="120" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <Grid Grid.Row="0" Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="140" />
-                                    <ColumnDefinition Width="130" />
-                                    <ColumnDefinition Width="220" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" Margin="0,0,6,0" IsReadOnly="True"
-                                         materialDesign:HintAssist.Hint="Transfer #"
-                                         Style="{StaticResource InvOutlinedBox}"
-                                         Text="{Binding TransferNumber, Mode=OneWay}" />
-                                <DatePicker Grid.Column="1" Margin="0,0,6,0"
-                                            materialDesign:HintAssist.Hint="Date"
-                                            SelectedDate="{Binding TransferDate}" />
-                                <ComboBox Grid.Column="2" Margin="0,0,6,0"
-                                          Style="{StaticResource InvOutlinedCombo}"
-                                          materialDesign:HintAssist.Hint="To store"
-                                          ItemsSource="{Binding DestinationBranches}"
-                                          SelectedItem="{Binding SelectedDestination}"
-                                          DisplayMemberPath="Name" />
-                                <TextBox Grid.Column="3"
-                                         materialDesign:HintAssist.Hint="Remarks (optional)"
-                                         Style="{StaticResource InvOutlinedBox}"
-                                         Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" />
-                            </Grid>
-
-                            <DockPanel Grid.Row="1" Margin="0,0,0,6">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Command="{Binding ImportCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
-                                            ToolTip="Import .pharmatrf package from another store">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="FileImportOutline" Width="14" Height="14" VerticalAlignment="Center" />
-                                            <TextBlock Text="Import" Margin="4,0,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding NewCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0">
-                                        <TextBlock Text="New" />
-                                    </Button>
-                                    <Button Command="{Binding AddLineCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
-                                            <TextBlock Text="Add" Margin="4,0,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding SaveCommand}"
-                                            Style="{StaticResource MaterialDesignRaisedButton}"
-                                            Padding="12,4" Height="32">
-                                        <TextBlock Text="Send + export file" FontSize="12" />
-                                    </Button>
+                            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center"
+                                       ToolTip="Each store keeps its own DB. Send creates a .pharmatrf file — the other store uses Import. Partner stores: Settings → Branches (same Code on both PCs).">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Transfer # :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBox Width="130" IsReadOnly="True"
+                                             materialDesign:HintAssist.Hint="Transfer #"
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Style="{StaticResource InvOutlinedBox}"
+                                             Text="{Binding TransferNumber, Mode=OneWay}" />
                                 </StackPanel>
-                                <TextBlock Text="Each store keeps its own DB. Send creates a .pharmatrf file — the other store uses Import. Partner stores: Settings → Branches (same Code on both PCs)."
-                                           FontSize="12" Opacity="0.55" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
-                            </DockPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Date :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <DatePicker Width="120" VerticalAlignment="Center"
+                                                materialDesign:HintAssist.Hint="Date"
+                                                materialDesign:HintAssist.IsFloating="False"
+                                                Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                                SelectedDate="{Binding TransferDate}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="To store :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <ComboBox Width="180"
+                                              Style="{StaticResource InvOutlinedCombo}"
+                                              materialDesign:HintAssist.Hint="To store"
+                                              materialDesign:HintAssist.IsFloating="False"
+                                              ItemsSource="{Binding DestinationBranches}"
+                                              SelectedItem="{Binding SelectedDestination}"
+                                              DisplayMemberPath="Name" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Remarks :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBox Width="180"
+                                             materialDesign:HintAssist.Hint="Remarks (optional)"
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Style="{StaticResource InvOutlinedBox}"
+                                             Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <Button Command="{Binding ImportCommand}" Style="{StaticResource InvToolbarButton}"
+                                        ToolTip="Import .pharmatrf package from another store">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="FileImportOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Import" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding NewCommand}" Style="{StaticResource InvToolbarButton}">
+                                    <TextBlock Text="New" />
+                                </Button>
+                                <Button Command="{Binding AddLineCommand}" Style="{StaticResource InvToolbarButton}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Add" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding SaveCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Padding="10,2" Height="28">
+                                    <TextBlock Text="Send + export" FontSize="12" />
+                                </Button>
+                            </WrapPanel>
 
-                            <DataGrid Grid.Row="2" Style="{StaticResource InvDataGrid}"
+                            <DataGrid Grid.Row="1" Style="{StaticResource InvDataGrid}"
                                       ItemsSource="{Binding Lines}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
@@ -373,43 +391,42 @@
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <TextBlock Grid.Row="3" Margin="0,8,0,0" Opacity="0.7" Text="{Binding StatusMessage}" />
+                            <TextBlock Grid.Row="2" Margin="0,4,0,0" FontSize="11" Opacity="0.7" Text="{Binding StatusMessage}" />
                         </Grid>
                     </TabItem>
 
                     <!-- RECENT TRANSFERS (history + lines side by side) -->
-                    <TabItem Header="Recent Transfer" Padding="10,4"
+                    <TabItem Header="Recent Transfer" Padding="8,2"
                              Visibility="{Binding CanTransferStock, Converter={StaticResource BoolToVisibility}}">
-                        <Grid DataContext="{Binding StockTransfer}" Margin="0,6,0,0">
+                        <Grid DataContext="{Binding StockTransfer}" Margin="0,2,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Command="{Binding CancelCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
-                                            ToolTip="Cancel selected sent package and restore stock">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Undo" Width="14" Height="14" VerticalAlignment="Center" />
-                                            <TextBlock Text="Cancel / rollback" Margin="4,0,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding ReExportCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
-                                            ToolTip="Re-export selected sent package">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Export" Width="14" Height="14" VerticalAlignment="Center" />
-                                            <TextBlock Text="Re-export" Margin="4,0,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding RefreshHistoryCommand}"
-                                            Style="{StaticResource InvToolbarButton}" ToolTip="Refresh history">
-                                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
-                                    </Button>
-                                </StackPanel>
-                                <TextBlock Text="Recent transfers (this store)" FontWeight="SemiBold" FontSize="13"
-                                           VerticalAlignment="Center" />
-                            </DockPanel>
+                            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+                                <TextBlock Text="Recent transfers" FontSize="11" Opacity="0.55"
+                                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Button Command="{Binding CancelCommand}" Style="{StaticResource InvToolbarButton}"
+                                        ToolTip="Cancel selected sent package and restore stock">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Undo" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Cancel" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding ReExportCommand}" Style="{StaticResource InvToolbarButton}"
+                                        ToolTip="Re-export selected sent package">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Export" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Re-export" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding RefreshHistoryCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28"
+                                        ToolTip="Refresh history">
+                                    <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" />
+                                </Button>
+                            </WrapPanel>
 
                             <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
@@ -438,11 +455,11 @@
                                               Background="{DynamicResource MaterialDesignDivider}" />
 
                                 <DockPanel Grid.Column="2">
-                                    <TextBlock DockPanel.Dock="Top" Margin="0,0,0,4"
-                                               FontWeight="SemiBold" FontSize="13"
+                                    <TextBlock DockPanel.Dock="Top" Margin="0,0,0,2"
+                                               FontSize="11" Opacity="0.55"
                                                Text="{Binding SelectedTransferSummary, TargetNullValue=Select a transfer to see medicines,
                                                               FallbackValue=Select a transfer to see medicines}"
-                                               TextWrapping="Wrap" Opacity="0.85" />
+                                               TextTrimming="CharacterEllipsis" />
                                     <DataGrid Style="{StaticResource InvReadOnlyGrid}"
                                               ItemsSource="{Binding SelectedTransferLines}">
                                         <DataGrid.Columns>
@@ -463,50 +480,53 @@
                     </TabItem>
 
                     <!-- SHORTAGE BOOK -->
-                    <TabItem Header="Shortage book" Padding="10,4">
-                        <Grid DataContext="{Binding ShortageBook}" Margin="0,6,0,0">
+                    <TabItem Header="Shortage book" Padding="8,2">
+                        <Grid DataContext="{Binding ShortageBook}" Margin="0,2,0,0"
+                              ToolTip="Lost sales when stock was unavailable. Use with Purchase Order → Generate reorder / From shortage book.">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Margin="0,0,0,8" Opacity="0.7" TextWrapping="Wrap"
-                                       Text="Lost sales when stock was unavailable. Use these with Purchase Order → Generate reorder / From shortage book." />
-
-                            <DockPanel Grid.Row="1" Margin="0,0,0,6">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Command="{Binding RecordManualCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
-                                            ToolTip="Manually record a shortage">
-                                        <StackPanel Orientation="Horizontal">
-                                            <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
-                                            <TextBlock Text="Record" Margin="4,0,0,0" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Command="{Binding CancelEntryCommand}" Style="{StaticResource InvToolbarButton}" Margin="0,0,4,0"
-                                            ToolTip="Cancel selected open/ordered entry">
-                                        <TextBlock Text="Cancel entry" />
-                                    </Button>
-                                    <Button Command="{Binding RefreshCommand}" Style="{StaticResource InvToolbarButton}" ToolTip="Refresh">
-                                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
-                                    </Button>
+                            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Search :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBox Width="220" MaxLength="50"
+                                             Style="{StaticResource InvOutlinedBox}"
+                                             materialDesign:HintAssist.Hint="Search medicine / customer"
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
-                                <ComboBox Width="140" Margin="0,0,8,0"
-                                          Style="{StaticResource InvOutlinedCombo}"
-                                          ItemsSource="{Binding FilterOptions}"
-                                          SelectedItem="{Binding SelectedFilter}"
-                                          DisplayMemberPath="Label" />
-                                <TextBox Style="{StaticResource InvOutlinedBox}"
-                                         materialDesign:HintAssist.Hint="Search medicine / customer"
-                                         MaxLength="50"
-                                         MaxWidth="375"
-                                         HorizontalAlignment="Left"
-                                         Width="375"
-                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                            </DockPanel>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="Filter :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <ComboBox Width="130"
+                                              Style="{StaticResource InvOutlinedCombo}"
+                                              ItemsSource="{Binding FilterOptions}"
+                                              SelectedItem="{Binding SelectedFilter}"
+                                              DisplayMemberPath="Label"
+                                              materialDesign:HintAssist.Hint="Filter"
+                                              materialDesign:HintAssist.IsFloating="False" />
+                                </StackPanel>
+                                <Button Command="{Binding RecordManualCommand}" Style="{StaticResource InvToolbarButton}"
+                                        ToolTip="Manually record a shortage">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Record" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Command="{Binding CancelEntryCommand}" Style="{StaticResource InvToolbarButton}"
+                                        ToolTip="Cancel selected open/ordered entry">
+                                    <TextBlock Text="Cancel" />
+                                </Button>
+                                <Button Command="{Binding RefreshCommand}"
+                                        Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28"
+                                        ToolTip="Refresh">
+                                    <materialDesign:PackIcon Kind="Refresh" Width="14" Height="14" />
+                                </Button>
+                            </WrapPanel>
 
-                            <DataGrid Grid.Row="2" Style="{StaticResource InvReadOnlyGrid}"
+                            <DataGrid Grid.Row="1" Style="{StaticResource InvReadOnlyGrid}"
                                       ItemsSource="{Binding Items}"
                                       SelectedItem="{Binding SelectedItem}"
                                       SelectionMode="Single">
@@ -526,7 +546,7 @@
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <TextBlock Grid.Row="3" Margin="0,8,0,0" Opacity="0.7" Text="{Binding StatusMessage}" />
+                            <TextBlock Grid.Row="2" Margin="0,4,0,0" FontSize="11" Opacity="0.7" Text="{Binding StatusMessage}" />
                         </Grid>
                     </TabItem>
                 </TabControl>

@@ -40,26 +40,89 @@ public sealed class PurchaseBillScanService : IPurchaseBillScanService
 
     public async Task<ScannedPurchaseDraftDto?> ScanAndReviewAsync(int? branchId, CancellationToken ct = default)
     {
-        var imagePath = PromptForImage();
-        if (imagePath is null) return null;
+        var imagePaths = PromptForImages();
+        if (imagePaths is null || imagePaths.Count == 0) return null;
+
+        var window = new PurchaseBillScanWindow(_purchases, _medicinePicker)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+
+        var closed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult(true);
+
+        window.ShowScanning();
+        window.Show();
 
         ScannedPurchaseDraftDto draft;
         try
         {
-            draft = await ExtractDraftAsync(imagePath, ct);
+            draft = await ExtractAndMergeDraftsAsync(imagePaths, ct);
             await MatchSupplierAndMedicinesAsync(draft, ct);
+            await window.Dispatcher.InvokeAsync(() => window.ApplyDraft(draft, imagePaths[0]));
         }
         catch (Exception ex)
         {
             _dialog.ShowError($"Could not read the bill: {ex.Message}");
+            window.Close();
             return null;
         }
 
-        var window = new PurchaseBillScanWindow(draft, imagePath, _purchases, _medicinePicker)
+        await closed.Task;
+        return window.AcceptedDraft;
+    }
+
+    private async Task<ScannedPurchaseDraftDto> ExtractAndMergeDraftsAsync(
+        IReadOnlyList<string> imagePaths,
+        CancellationToken ct)
+    {
+        if (imagePaths.Count == 1)
+            return await ExtractDraftAsync(imagePaths[0], ct);
+
+        var parts = new List<ScannedPurchaseDraftDto>(imagePaths.Count);
+        foreach (var path in imagePaths)
         {
-            Owner = System.Windows.Application.Current.MainWindow
-        };
-        return window.ShowDialog() == true ? window.AcceptedDraft : null;
+            ct.ThrowIfCancellationRequested();
+            parts.Add(await ExtractDraftAsync(path, ct));
+        }
+
+        return MergeDrafts(parts, imagePaths.Count);
+    }
+
+    private static ScannedPurchaseDraftDto MergeDrafts(IReadOnlyList<ScannedPurchaseDraftDto> parts, int pageCount)
+    {
+        var merged = new ScannedPurchaseDraftDto();
+        var rawChunks = new List<string>();
+
+        foreach (var part in parts)
+        {
+            if (string.IsNullOrWhiteSpace(merged.SupplierName) && !string.IsNullOrWhiteSpace(part.SupplierName))
+                merged.SupplierName = part.SupplierName;
+            if (string.IsNullOrWhiteSpace(merged.SupplierInvoiceNumber)
+                && !string.IsNullOrWhiteSpace(part.SupplierInvoiceNumber))
+                merged.SupplierInvoiceNumber = part.SupplierInvoiceNumber;
+            if (merged.InvoiceDate is null && part.InvoiceDate is not null)
+                merged.InvoiceDate = part.InvoiceDate;
+            if (merged.MatchedSupplierId is null && part.MatchedSupplierId is not null)
+                merged.MatchedSupplierId = part.MatchedSupplierId;
+            if (string.IsNullOrWhiteSpace(merged.MatchedSupplierPhone)
+                && !string.IsNullOrWhiteSpace(part.MatchedSupplierPhone))
+                merged.MatchedSupplierPhone = part.MatchedSupplierPhone;
+            if (merged.GrandTotalHint is null && part.GrandTotalHint is not null)
+                merged.GrandTotalHint = part.GrandTotalHint;
+
+            merged.Lines.AddRange(part.Lines);
+            merged.Warnings.AddRange(part.Warnings);
+
+            if (!string.IsNullOrWhiteSpace(part.RawText))
+                rawChunks.Add(part.RawText);
+        }
+
+        merged.RawText = rawChunks.Count > 0 ? string.Join("\n\n---\n\n", rawChunks) : null;
+        if (pageCount > 1)
+            merged.Warnings.Insert(0, $"Merged {pageCount} scanned page(s).");
+
+        return merged;
     }
 
     private async Task<ScannedPurchaseDraftDto> ExtractDraftAsync(string imagePath, CancellationToken ct)
@@ -102,7 +165,7 @@ public sealed class PurchaseBillScanService : IPurchaseBillScanService
         return ocrDraft;
     }
 
-    private string? PromptForImage()
+    private IReadOnlyList<string>? PromptForImages()
     {
         var choice = System.Windows.MessageBox.Show(
             "Scan a supplier purchase bill.\n\nYes = Browse image / PDF scan\nNo = Capture with camera\nCancel = Abort",
@@ -112,14 +175,21 @@ public sealed class PurchaseBillScanService : IPurchaseBillScanService
 
         if (choice == System.Windows.MessageBoxResult.Cancel) return null;
         if (choice == System.Windows.MessageBoxResult.No)
-            return CaptureWithCamera();
+        {
+            var captured = CaptureWithCamera();
+            return captured is null ? null : [captured];
+        }
 
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Open scanned purchase bill",
-            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.webp|All files|*.*"
+            Title = "Open scanned purchase bill (you can select multiple pages)",
+            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff;*.webp|All files|*.*",
+            Multiselect = true
         };
-        return dlg.ShowDialog() == true ? dlg.FileName : null;
+        if (dlg.ShowDialog() != true || dlg.FileNames.Length == 0)
+            return null;
+
+        return dlg.FileNames;
     }
 
     private string? CaptureWithCamera()

@@ -1,7 +1,17 @@
+using PharmaPOS.Application.Features.SaleReturns;
+
 namespace PharmaPOS.Application.Features.Reports;
 
 public interface IReportsService
 {
+    Task<ReportTableDto> GetReportTableAsync(
+        ReportKind kind,
+        DateTime from,
+        DateTime to,
+        int? branchId,
+        ScheduleRegisterFilter scheduleFilter = ScheduleRegisterFilter.HAndH1,
+        CancellationToken ct = default);
+
     Task<(ReportSummaryDto Summary, List<SalesReportRowDto> Rows)> GetSalesReportAsync(
         DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
 
@@ -32,13 +42,20 @@ public interface IReportsService
     Task<(ReportSummaryDto Summary, List<LowStockReportRowDto> Rows)> GetLowStockReportAsync(
         int? branchId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Schedule H / H1 sales register for inspectors: date, patient, doctor, qty, invoice.
-    /// </summary>
     Task<(ReportSummaryDto Summary, ScheduleRegisterReportDto Report)> GetScheduleRegisterAsync(
         DateTime from,
         DateTime to,
         int? branchId,
         ScheduleRegisterFilter filter = ScheduleRegisterFilter.HAndH1,
         CancellationToken ct = default);
+}
+
+/// <summary>Optional sale-return data provider used by the unified report table pipeline.</summary>
+public interface IReportSaleReturnSource
+{
+    Task<(ReportSummaryDto Summary, List<SaleReturnSummaryRowDto> Rows)> GetSaleReturnsAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
+
+    Task<(ReportSummaryDto Summary, List<MedicineReturnReportRowDto> Rows)> GetMedicineReturnsAsync(
+        DateTime from, DateTime to, int? branchId, CancellationToken ct = default);
 }

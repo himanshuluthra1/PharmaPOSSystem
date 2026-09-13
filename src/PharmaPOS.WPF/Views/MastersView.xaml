@@ -15,8 +15,8 @@
             <Setter Property="Margin" Value="0,0,6,0" />
         </Style>
         <Style x:Key="SearchBox" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
-            <Setter Property="Width" Value="280" />
-            <Setter Property="MinWidth" Value="200" />
+            <Setter Property="Width" Value="240" />
+            <Setter Property="MinWidth" Value="180" />
             <Setter Property="Height" Value="28" />
             <Setter Property="MinHeight" Value="28" />
             <Setter Property="MaxHeight" Value="28" />
@@ -64,7 +64,7 @@
 
                 <TabItem Header="Suppliers">
                     <DockPanel DataContext="{Binding Suppliers}" Margin="0,4,0,0">
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                                     Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
                                 <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
@@ -99,7 +99,7 @@
 
                 <TabItem Header="Customers">
                     <DockPanel DataContext="{Binding Customers}" Margin="0,4,0,0">
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                                     Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
                                 <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
@@ -134,7 +134,7 @@
 
                 <TabItem Header="Doctors">
                     <DockPanel DataContext="{Binding Doctors}" Margin="0,4,0,0">
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                                     Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
                                 <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
@@ -169,7 +169,7 @@
 
                 <TabItem Header="Manufacturers">
                     <DockPanel DataContext="{Binding Manufacturers}" Margin="0,4,0,0">
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                                     Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
                                 <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
@@ -204,7 +204,7 @@
 
                 <TabItem Header="Employees">
                     <DockPanel DataContext="{Binding Employees}" Margin="0,4,0,0">
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                                     Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
                                 <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
@@ -239,7 +239,7 @@
 
                 <TabItem Header="Medicines">
                     <DockPanel DataContext="{Binding Medicines}" Margin="0,4,0,0">
-                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8" LastChildFill="False">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4" LastChildFill="False">
                             <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                                     Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28" Margin="4,0,0,0">
                                 <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />

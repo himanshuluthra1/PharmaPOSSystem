@@ -54,16 +54,50 @@ public class CartLineViewModel : ObservableObject
     public string BatchNumber
     {
         get => _batchNumber;
-        private set => SetProperty(ref _batchNumber, value);
+        set
+        {
+            if (SetProperty(ref _batchNumber, value ?? string.Empty))
+                Changed?.Invoke();
+        }
     }
 
     public DateTime? ExpiryDate
     {
         get => _expiryDate;
-        private set
+        set
         {
             if (SetProperty(ref _expiryDate, value))
+            {
                 OnPropertyChanged(nameof(ExpiryDisplay));
+                Changed?.Invoke();
+            }
+        }
+    }
+
+    public string ExpiryDisplay
+    {
+        get => ExpiryDate?.ToString("MM/yy") ?? "";
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Trim() == "-")
+            {
+                ExpiryDate = null;
+                return;
+            }
+
+            var raw = value.Trim();
+            if (DateTime.TryParseExact(raw, ["MM/yy", "M/yy", "MM/yyyy", "M/yyyy", "dd/MM/yyyy"],
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var parsed)
+                || DateTime.TryParse(raw, out parsed))
+            {
+                // Store as last day of month for MM/yy style entries.
+                ExpiryDate = new DateTime(parsed.Year, parsed.Month, DateTime.DaysInMonth(parsed.Year, parsed.Month));
+            }
+            else
+            {
+                OnPropertyChanged(nameof(ExpiryDisplay));
+            }
         }
     }
 
@@ -87,7 +121,12 @@ public class CartLineViewModel : ObservableObject
     public decimal GstPercent
     {
         get => _gstPercent;
-        private set => SetProperty(ref _gstPercent, value);
+        set
+        {
+            var clamped = Math.Clamp(value, 0m, 100m);
+            if (SetProperty(ref _gstPercent, clamped))
+                Recalculate();
+        }
     }
 
     public decimal AvailableStock
@@ -147,8 +186,6 @@ public class CartLineViewModel : ObservableObject
 
     public decimal OriginalQuantity { get; private set; }
 
-    public string ExpiryDisplay => ExpiryDate?.ToString("MM/yy") ?? "-";
-
     public static CartLineViewModel CreateEmpty()
     {
         var line = new CartLineViewModel();
@@ -176,7 +213,14 @@ public class CartLineViewModel : ObservableObject
         else
             UpdateDiscountFromPrices();
 
-        if (Quantity <= 0) Quantity = 1;
+        // Never invent stock qty: clamp to available (0 when out of stock).
+        if (AvailableStock <= 0)
+            Quantity = 0;
+        else if (Quantity <= 0)
+            Quantity = 1;
+        else if (Quantity > AvailableStock)
+            Quantity = AvailableStock;
+
         OriginalQuantity = 0;
         Recalculate();
     }

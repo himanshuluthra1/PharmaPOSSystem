@@ -8,16 +8,12 @@ public static class MedWinMasterImporter
 {
     public static async Task ImportMedicinesAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        ctx.Log("\n[medicines] Importing active MedWin medicines (in stock or sold), matching OneMG catalogue...");
+        ctx.Log("\n[medicines] Importing active MedWin medicines as fresh MedWin-only rows (clears prior MedWin links; no auto-link)...");
         await LoadCategoriesAsync(ctx, target);
         await LoadManufacturersAsync(ctx, target);
 
-        if (ctx.ForceMedicines)
-            await RemoveOrphanMedWinMedicinesAsync(ctx, target);
-        else
-            await LoadExistingMedicineMapAsync(ctx, target);
-
-        var matcher = await MedicineCatalogMatcher.LoadAsync(target);
+        // Always wipe prior MedWin↔medicine links so import never reuses Notes / MedicineMedWinMappings.
+        await ClearAllMedWinMedicineLinksAsync(ctx, target);
 
         using var med = ctx.OpenMedWin();
         med.Open();
@@ -39,8 +35,7 @@ public static class MedWinMasterImporter
         using var reader = cmd.ExecuteReader();
 
         var table = CreateMedicineTable();
-        var pendingUpdates = new List<MedicinePriceUpdate>();
-        int read = 0, skipped = 0, matched = 0, inserted = 0;
+        int read = 0, skipped = 0, inserted = 0;
 
         while (reader.Read())
         {
@@ -50,7 +45,6 @@ public static class MedWinMasterImporter
             var name = ImportHelpers.Trunc(Convert.ToString(reader["medname"]), 200);
             if (string.IsNullOrWhiteSpace(name)) { skipped++; continue; }
 
-            var medName1 = Convert.ToString(reader["medname1"]);
             // mgamma is a salt-group code (ATO/MIN/...), not the actual salt.
             // Real salt/composition is itemgrp.itemgrds via medgrp.
             var saltGroupCode = Convert.ToString(reader["mgamma"]);
@@ -64,23 +58,6 @@ public static class MedWinMasterImporter
             var purchase = ImportHelpers.Dec(reader["fpurrat"]);
             if (purchase <= 0) purchase = ImportHelpers.Dec(reader["purrate"]);
             var selling = ResolveSellingPrice(medWinId, reader, stockSelling, saleSelling, mrp);
-
-            if (ctx.MedicineMap.TryGetValue(medWinId, out var alreadyMapped))
-            {
-                pendingUpdates.Add(new MedicinePriceUpdate(alreadyMapped, medWinId, mrp, purchase, selling, null));
-                if (pendingUpdates.Count >= 1000) { await FlushMedicineUpdatesAsync(ctx, target, pendingUpdates); pendingUpdates.Clear(); }
-                continue;
-            }
-
-            var existingId = matcher.TryMatch(name, medName1, genericName, barcode);
-            if (existingId.HasValue)
-            {
-                pendingUpdates.Add(new MedicinePriceUpdate(existingId.Value, medWinId, mrp, purchase, selling, matcher.GetNotesFor(existingId.Value)));
-                ctx.MedicineMap[medWinId] = existingId.Value;
-                matched++;
-                if (pendingUpdates.Count >= 1000) { await FlushMedicineUpdatesAsync(ctx, target, pendingUpdates); pendingUpdates.Clear(); }
-                continue;
-            }
 
             var mcomp = Convert.ToString(reader["mcomp"])?.Trim();
             int? manufacturerId = null;
@@ -139,11 +116,10 @@ public static class MedWinMasterImporter
 
         if (table.Rows.Count > 0)
             await FlushMedicinesAsync(target, table);
-        if (pendingUpdates.Count > 0)
-            await FlushMedicineUpdatesAsync(ctx, target, pendingUpdates);
 
+        // Map is rebuilt only from the fresh MedWin-only rows just inserted (for stock/sales phases).
         await LoadExistingMedicineMapAsync(ctx, target);
-        ctx.Log($"  Active scanned {read:N0}: matched OneMG {matched:N0}, new inserts {inserted:N0}, mapped {ctx.MedicineMap.Count:N0}, skipped {skipped:N0}.");
+        ctx.Log($"  Active scanned {read:N0}: new inserts {inserted:N0}, mapped {ctx.MedicineMap.Count:N0}, skipped {skipped:N0} (no auto-link — use Settings → Medicine Mapping).");
     }
 
     /// <summary>
@@ -232,8 +208,6 @@ public static class MedWinMasterImporter
         ctx.Log($"  Salt/pack backfill updated {updated:N0} of {rows.Count:N0} MedWin medicine(s).");
     }
 
-    private sealed record MedicinePriceUpdate(int MedicineId, int MedWinId, decimal Mrp, decimal Purchase, decimal Selling, string? ExistingNotes);
-
     public static HashSet<int> LoadActiveMedicineIds(OleDbConnection med)
     {
         var ids = new HashSet<int>();
@@ -278,30 +252,6 @@ public static class MedWinMasterImporter
             if (gst > 0) map[code] = gst;
         }
         return map;
-    }
-
-    private static async Task FlushMedicineUpdatesAsync(MedWinImportContext ctx, SqlConnection target, List<MedicinePriceUpdate> updates)
-    {
-        foreach (var u in updates)
-        {
-            var notes = MedicineCatalogMatcher.AppendMedWinNote(u.ExistingNotes, u.MedWinId);
-            await using var upd = new SqlCommand("""
-                UPDATE Medicines SET
-                    Mrp = CASE WHEN @Mrp > 0 THEN @Mrp ELSE Mrp END,
-                    PurchasePrice = CASE WHEN @Purchase > 0 THEN @Purchase ELSE PurchasePrice END,
-                    SellingPrice = CASE WHEN @Selling > 0 THEN @Selling ELSE SellingPrice END,
-                    Notes = @Notes,
-                    ModifiedAtUtc = @Now
-                WHERE Id = @Id
-                """, target);
-            upd.Parameters.AddWithValue("@Id", u.MedicineId);
-            upd.Parameters.AddWithValue("@Mrp", u.Mrp);
-            upd.Parameters.AddWithValue("@Purchase", u.Purchase);
-            upd.Parameters.AddWithValue("@Selling", u.Selling);
-            upd.Parameters.AddWithValue("@Notes", (object?)notes ?? DBNull.Value);
-            upd.Parameters.AddWithValue("@Now", ctx.NowUtc);
-            await upd.ExecuteNonQueryAsync();
-        }
     }
 
     public static decimal ResolveSellingPrice(
@@ -424,8 +374,10 @@ public static class MedWinMasterImporter
             ins.Parameters.AddWithValue("@Pincode", (object?)ImportHelpers.Trunc(Convert.ToString(reader["pincode"]), 20) ?? DBNull.Value);
             ins.Parameters.AddWithValue("@Phone", (object?)ImportHelpers.Trunc(Convert.ToString(reader["mobileno"]) ?? Convert.ToString(reader["subphone"]), 30) ?? DBNull.Value);
             ins.Parameters.AddWithValue("@Email", (object?)ImportHelpers.Trunc(Convert.ToString(reader["emailid"]), 200) ?? DBNull.Value);
-            ins.Parameters.AddWithValue("@Opening", ImportHelpers.Dec(reader["subopbal"]));
-            ins.Parameters.AddWithValue("@Outstanding", ImportHelpers.Dec(reader["balanceamt"]));
+            // MedWin subopbal is a static opening figure that is not cleared when the party
+            // is settled; balanceamt is typically null. Live payables come from purchase headers.
+            ins.Parameters.AddWithValue("@Opening", 0m);
+            ins.Parameters.AddWithValue("@Outstanding", 0m);
             ins.Parameters.AddWithValue("@BranchId", ctx.BranchId);
             ins.Parameters.AddWithValue("@Now", ctx.NowUtc);
             var id = (int)await ins.ExecuteScalarAsync();
@@ -518,12 +470,17 @@ public static class MedWinMasterImporter
             await LoadExistingMedicineMapAsync(ctx, target);
 
         var gstByMedicine = new Dictionary<int, decimal>();
+        var packByMedicine = new Dictionary<int, int>();
         await using (var gstCmd = new SqlCommand(
-                         "SELECT Id, GstPercent FROM Medicines WHERE IsDeleted = 0", target))
+                         "SELECT Id, GstPercent, UnitsPerPack FROM Medicines WHERE IsDeleted = 0", target))
         await using (var gstReader = await gstCmd.ExecuteReaderAsync())
         {
             while (await gstReader.ReadAsync())
-                gstByMedicine[gstReader.GetInt32(0)] = gstReader.GetDecimal(1);
+            {
+                var id = gstReader.GetInt32(0);
+                gstByMedicine[id] = gstReader.GetDecimal(1);
+                packByMedicine[id] = Math.Max(1, gstReader.IsDBNull(2) ? 1 : gstReader.GetInt32(2));
+            }
         }
 
         using var med = ctx.OpenMedWin();
@@ -532,11 +489,11 @@ public static class MedWinMasterImporter
             SELECT stkcode, stkbatch, stkqty, stkfpurt, stkfnmrp, stkinvrate, mrprate,
                    stkexyr, stkexmn, stksize, stockno, manfdate
             FROM stockmas
-            WHERE stkqty > 0
+            WHERE stkqty <> 0
             """, med);
         using var reader = cmd.ExecuteReader();
 
-        int added = 0, skipped = 0;
+        int added = 0, skipped = 0, negative = 0;
         while (reader.Read())
         {
             var medWinId = ImportHelpers.Int(reader["stkcode"]);
@@ -556,7 +513,13 @@ public static class MedWinMasterImporter
             var purchase = ImportHelpers.Dec(reader["stkfpurt"]);
             var selling = ImportHelpers.Dec(reader["stkinvrate"]);
             if (selling <= 0) selling = mrp;
-            var qty = ImportHelpers.Dec(reader["stkqty"]);
+            // MedWin stkqty is loose units; PharmaPOS QuantityAvailable is packs.
+            // Prefer stockmas.stksize; fall back to medicine UnitsPerPack (sizefact).
+            var packSize = Math.Max(1, ImportHelpers.Int(reader["stksize"]));
+            if (packSize <= 1 && packByMedicine.TryGetValue(medicineId, out var medPack))
+                packSize = medPack;
+            var qty = ImportHelpers.ToPackQuantity(ImportHelpers.Dec(reader["stkqty"]), packSize);
+            if (qty < 0) negative++;
 
             var gst = gstByMedicine.TryGetValue(medicineId, out var g) ? g : 12m;
 
@@ -604,7 +567,7 @@ public static class MedWinMasterImporter
             added++;
         }
 
-        ctx.Log($"  Stock batches imported: {added:N0} ({skipped:N0} skipped — medicine not mapped).");
+        ctx.Log($"  Stock batches imported: {added:N0} (negative qty: {negative:N0}; {skipped:N0} skipped — medicine not mapped).");
     }
 
     private static async Task LoadCategoriesAsync(MedWinImportContext ctx, SqlConnection target)
@@ -663,24 +626,80 @@ public static class MedWinMasterImporter
         }
     }
 
-    private static async Task RemoveOrphanMedWinMedicinesAsync(MedWinImportContext ctx, SqlConnection target)
+    /// <summary>
+    /// Soft-deletes MedWin-only medicine rows, strips <c>MedWinId:</c> from catalogue Notes,
+    /// and soft-deletes <c>MedicineMedWinMappings</c> so import never reuses prior links.
+    /// </summary>
+    private static async Task ClearAllMedWinMedicineLinksAsync(MedWinImportContext ctx, SqlConnection target)
     {
-        ctx.Log("  --force: removing prior MedWin-only medicine rows for rematch...");
-        await using var cmd = new SqlCommand("""
+        ctx.Log("  Clearing all prior MedWin medicine links...");
+        ctx.MedicineMap.Clear();
+
+        await using (var orphanCmd = new SqlCommand("""
             UPDATE Medicines SET IsDeleted = 1, DeletedAtUtc = @Now
             WHERE IsDeleted = 0
               AND Notes LIKE 'MedWinId:%'
               AND Notes NOT LIKE '%|%'
               AND Notes NOT LIKE '%OneMG%'
-            """, target);
-        cmd.Parameters.AddWithValue("@Now", ctx.NowUtc);
-        var removed = await cmd.ExecuteNonQueryAsync();
-        ctx.Log($"  Soft-deleted {removed:N0} orphan MedWin-only medicines.");
-        ctx.MedicineMap.Clear();
+            """, target))
+        {
+            orphanCmd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            var removed = await orphanCmd.ExecuteNonQueryAsync();
+            ctx.Log($"  Soft-deleted {removed:N0} prior MedWin-only medicine row(s).");
+        }
+
+        var stripped = 0;
+        await using (var readCmd = new SqlCommand("""
+            SELECT Id, Notes FROM Medicines
+            WHERE IsDeleted = 0 AND Notes LIKE '%MedWinId:%'
+            """, target))
+        await using (var reader = await readCmd.ExecuteReaderAsync())
+        {
+            var updates = new List<(int Id, string? Notes)>();
+            while (await reader.ReadAsync())
+            {
+                var id = reader.GetInt32(0);
+                var notes = reader.IsDBNull(1) ? null : reader.GetString(1);
+                var cleaned = ImportHelpers.StripAllMedWinIds(notes);
+                if (!string.Equals(notes, cleaned, StringComparison.Ordinal))
+                    updates.Add((id, cleaned));
+            }
+
+            await reader.CloseAsync();
+
+            foreach (var batch in updates.Chunk(200))
+            {
+                foreach (var (id, notes) in batch)
+                {
+                    await using var upd = new SqlCommand("""
+                        UPDATE Medicines SET Notes = @Notes, ModifiedAtUtc = @Now WHERE Id = @Id
+                        """, target);
+                    upd.Parameters.AddWithValue("@Id", id);
+                    upd.Parameters.AddWithValue("@Notes", (object?)notes ?? DBNull.Value);
+                    upd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+                    await upd.ExecuteNonQueryAsync();
+                    stripped++;
+                }
+            }
+        }
+
+        if (stripped > 0)
+            ctx.Log($"  Stripped MedWinId tags from {stripped:N0} catalogue medicine Notes row(s).");
+
+        await using (var mapCmd = new SqlCommand("""
+            UPDATE MedicineMedWinMappings SET IsDeleted = 1, DeletedAtUtc = @Now
+            WHERE IsDeleted = 0
+            """, target))
+        {
+            mapCmd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            var mappings = await mapCmd.ExecuteNonQueryAsync();
+            ctx.Log($"  Soft-deleted {mappings:N0} MedicineMedWinMappings row(s).");
+        }
     }
 
     public static async Task LoadExistingMedicineMapAsync(MedWinImportContext ctx, SqlConnection target)
     {
+        ctx.MedicineMap.Clear();
         await using var cmd = new SqlCommand("SELECT Id, Notes FROM Medicines WHERE Notes LIKE '%MedWinId:%' AND IsDeleted = 0", target);
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())

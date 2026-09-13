@@ -14,9 +14,25 @@ public record MedicineLookupDto(
     bool PrescriptionRequired,
     decimal TotalStock,
     string? RackNumber = null,
-    string? BinNumber = null)
+    string? BinNumber = null,
+    string? Brand = null,
+    ScheduleDrugType ScheduleType = ScheduleDrugType.None,
+    string? PackLabel = null,
+    decimal Cost = 0m,
+    string? HsnCode = null,
+    decimal Mrp = 0m)
 {
     public string? LocationLabel => StockLocation.Format(RackNumber, BinNumber);
+
+    public string ScheduleLabel => ScheduleType switch
+    {
+        ScheduleDrugType.ScheduleH => "H",
+        ScheduleDrugType.ScheduleH1 => "H1",
+        ScheduleDrugType.ScheduleX => "X",
+        ScheduleDrugType.ScheduleG => "G",
+        ScheduleDrugType.Otc => "OTC",
+        _ => "—"
+    };
 }
 
 /// <summary>Substitute medicine row for same-salt picker (F5).</summary>
@@ -53,7 +69,8 @@ public record CustomerLookupDto(
     string? Phone,
     CustomerType Type,
     decimal OutstandingBalance,
-    decimal CreditLimit);
+    decimal CreditLimit,
+    string? Address = null);
 
 /// <summary>A doctor match for the doctor picker.</summary>
 public record DoctorLookupDto(int Id, string Name, string? Specialization);
@@ -173,6 +190,9 @@ public class SaleEditDto
     public string? LockedBy { get; set; }
     public DateTime? LockedAtUtc { get; set; }
     public List<SalePaymentRequest> Payments { get; set; } = new();
+    /// <summary>Header paid amount (non-credit collections including dues receipts).</summary>
+    public decimal PaidAmount { get; set; }
+    public decimal GrandTotal { get; set; }
     public List<SaleEditLineDto> Lines { get; set; } = new();
 }
 
@@ -251,7 +271,7 @@ public record SaleReceiptLineDto(
     decimal Amount,
     bool IsReturnLine = false);
 
-/// <summary>Medicine snapshot shown from the billing grid (F4).</summary>
+/// <summary>Medicine snapshot shown from the billing grid (F4 / cart detail strip).</summary>
 public record SaleMedicineDetailDto(
     string MedicineName,
     string? Salt,
@@ -260,7 +280,13 @@ public record SaleMedicineDetailDto(
     decimal Mrp,
     string? Location,
     string PackingSize,
-    string PackingType);
+    string PackingType,
+    string? Brand = null,
+    string ScheduleLabel = "-",
+    string? Strength = null,
+    bool PrescriptionRequired = false,
+    string? CategoryName = null,
+    string? HsnCode = null);
 
 /// <summary>A recent patient bill match for last-sale / refill search.</summary>
 public record LastSalePatientMatchDto(

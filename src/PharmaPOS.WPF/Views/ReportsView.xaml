@@ -6,7 +6,9 @@
              d:DataContext="{d:DesignInstance Type=repVm:ReportsViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700">
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             DataContextChanged="ReportsView_OnDataContextChanged"
+             Unloaded="ReportsView_OnUnloaded">
     <UserControl.Resources>
         <Style x:Key="KpiCard" TargetType="materialDesign:Card">
             <Setter Property="UniformCornerRadius" Value="6" />
@@ -37,39 +39,39 @@
         <materialDesign:Card UniformCornerRadius="8" Padding="10,8"
                              materialDesign:ElevationAssist.Elevation="Dp1">
             <DockPanel>
-                <!-- Compact toolbar: description + dates + actions on minimal rows -->
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
                     <TextBlock Text="{Binding SelectedReportDescription}"
                                FontSize="11" Opacity="0.55" Margin="0,0,0,4"
                                TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="Double-click a row (or press Enter) to open the invoice."
+                    <TextBlock Text="Double-click a row (or press Enter) to open the related invoice."
                                FontSize="10" Opacity="0.45" Margin="0,0,0,4"
-                               Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="Double-click a row (or press Enter) to open the purchase invoice."
-                               FontSize="10" Opacity="0.45" Margin="0,0,0,4"
-                               Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="Double-click a row to open the sale invoice. Print / PDF for inspector copy."
-                               FontSize="10" Opacity="0.45" Margin="0,0,0,4"
-                               Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}" />
+                               Visibility="{Binding CanOpenInvoiceHint, Converter={StaticResource BoolToVisibility}}" />
                     <TextBlock Text="{Binding GstReturnDisclaimer}"
                                FontSize="10" Opacity="0.65" TextWrapping="Wrap" Margin="0,0,0,4"
                                Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}" />
 
-                    <!-- Single row: dates + presets + run/export -->
                     <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
                         <StackPanel Orientation="Horizontal"
                                     Visibility="{Binding UsesDateRange, Converter={StaticResource BoolToVisibility}}"
                                     Margin="0,0,8,0" VerticalAlignment="Center">
-                            <DatePicker Width="130" Margin="0,0,4,0"
-                                        VerticalAlignment="Center"
-                                        materialDesign:HintAssist.Hint="From"
-                                        Style="{StaticResource MaterialDesignOutlinedDatePicker}"
-                                        SelectedDate="{Binding FromDate}" />
-                            <DatePicker Width="130" Margin="0,0,6,0"
-                                        VerticalAlignment="Center"
-                                        materialDesign:HintAssist.Hint="To"
-                                        Style="{StaticResource MaterialDesignOutlinedDatePicker}"
-                                        SelectedDate="{Binding ToDate}" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="From :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <DatePicker Width="130"
+                                            VerticalAlignment="Center"
+                                            materialDesign:HintAssist.Hint="From"
+                                            materialDesign:HintAssist.IsFloating="False"
+                                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                            SelectedDate="{Binding FromDate}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+                                <TextBlock Text="To :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <DatePicker Width="130"
+                                            VerticalAlignment="Center"
+                                            materialDesign:HintAssist.Hint="To"
+                                            materialDesign:HintAssist.IsFloating="False"
+                                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                            SelectedDate="{Binding ToDate}" />
+                            </StackPanel>
                             <Button Command="{Binding ApplyTodayCommand}" Content="Today"
                                     Style="{StaticResource CompactToolbarButton}" />
                             <Button Command="{Binding ApplyThisMonthCommand}" Content="Month"
@@ -84,17 +86,21 @@
                                 <TextBlock Text="Run" Margin="4,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
-                        <ComboBox Width="120" Height="28" Margin="0,0,4,0"
-                                  VerticalAlignment="Center"
-                                  ItemsSource="{Binding ScheduleFilterOptions}"
-                                  SelectedItem="{Binding SelectedScheduleFilter}"
-                                  DisplayMemberPath="Label"
-                                  materialDesign:HintAssist.Hint="Schedule"
-                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                  Visibility="{Binding ShowScheduleFilter, Converter={StaticResource BoolToVisibility}}" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"
+                                    Visibility="{Binding ShowScheduleFilter, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Schedule :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <ComboBox Width="120" Height="28"
+                                      VerticalAlignment="Center"
+                                      ItemsSource="{Binding ScheduleFilterOptions}"
+                                      SelectedItem="{Binding SelectedScheduleFilter}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Schedule"
+                                      materialDesign:HintAssist.IsFloating="False"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                        </StackPanel>
                         <Button Command="{Binding PrintScheduleRegisterCommand}"
                                 Style="{StaticResource CompactToolbarButton}"
-                                Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}">
+                                Visibility="{Binding ShowScheduleActions, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Printer" Width="14" Height="14" VerticalAlignment="Center" />
                                 <TextBlock Text="Print" Margin="4,0,0,0" VerticalAlignment="Center" />
@@ -107,12 +113,26 @@
                                 <TextBlock Text="CSV" Margin="4,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
+                        <Button Command="{Binding ExportExcelCommand}" IsEnabled="{Binding CanExport}"
+                                Style="{StaticResource CompactToolbarButton}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FileExcel" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Excel" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ExportPdfCommand}" IsEnabled="{Binding CanExport}"
+                                Style="{StaticResource CompactToolbarButton}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FilePdfBox" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="PDF" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button Command="{Binding ExportGstExcelCommand}"
                                 Style="{StaticResource CompactToolbarButton}"
                                 Visibility="{Binding ShowGstReturnExport, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="FileExcel" Width="14" Height="14" VerticalAlignment="Center" />
-                                <TextBlock Text="Excel" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                <TextBlock Text="GST Excel" Margin="4,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding ExportGstJsonCommand}"
@@ -124,30 +144,42 @@
                             </StackPanel>
                         </Button>
 
-                        <TextBox Width="200" Height="28" Margin="8,0,4,0"
-                                 VerticalAlignment="Center"
-                                 VerticalContentAlignment="Center"
-                                 materialDesign:HintAssist.Hint="{Binding FilterTextHint}"
-                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                 Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
-                                 Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}" />
-                        <ComboBox Width="120" Height="28" Margin="0,0,4,0"
-                                  VerticalAlignment="Center"
-                                  ItemsSource="{Binding FilterOptions}"
-                                  SelectedItem="{Binding SelectedFilterOption}"
-                                  DisplayMemberPath="Label"
-                                  materialDesign:HintAssist.Hint="Expiry window"
-                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                  Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}" />
-                        <ComboBox MinWidth="140" Height="28" Margin="0,0,4,0"
-                                  VerticalAlignment="Center"
-                                  ItemsSource="{Binding ExpirySupplierOptions}"
-                                  SelectedValuePath="Key"
-                                  SelectedValue="{Binding SelectedExpirySupplierKey}"
-                                  DisplayMemberPath="Label"
-                                  materialDesign:HintAssist.Hint="Supplier"
-                                  Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                  Visibility="{Binding ShowExpirySupplierFilter, Converter={StaticResource BoolToVisibility}}" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,4,0"
+                                    Visibility="{Binding ShowFilters, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Filter :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <TextBox Width="200" Height="28"
+                                     VerticalAlignment="Center"
+                                     VerticalContentAlignment="Center"
+                                     materialDesign:HintAssist.Hint="{Binding FilterTextHint}"
+                                     materialDesign:HintAssist.IsFloating="False"
+                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                     Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"
+                                    Visibility="{Binding ShowFilterOption, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Option :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <ComboBox Width="130" Height="28"
+                                      VerticalAlignment="Center"
+                                      ItemsSource="{Binding FilterOptions}"
+                                      SelectedItem="{Binding SelectedFilterOption}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Filter"
+                                      materialDesign:HintAssist.IsFloating="False"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"
+                                    Visibility="{Binding ShowExpirySupplierFilter, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Supplier :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                            <ComboBox MinWidth="140" Height="28"
+                                      VerticalAlignment="Center"
+                                      ItemsSource="{Binding ExpirySupplierOptions}"
+                                      SelectedValuePath="Key"
+                                      SelectedValue="{Binding SelectedExpirySupplierKey}"
+                                      DisplayMemberPath="Label"
+                                      materialDesign:HintAssist.Hint="Supplier"
+                                      materialDesign:HintAssist.IsFloating="False"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                        </StackPanel>
                         <Button Command="{Binding ClearFilterCommand}"
                                 Style="{StaticResource CompactToolbarButton}"
                                 Visibility="{Binding HasActiveFilter, Converter={StaticResource BoolToVisibility}}">
@@ -163,8 +195,42 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Compact KPI strip (single-line values) -->
-                <StackPanel x:Name="GenericKpiPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                            Visibility="{Binding ShowPaymentSummaryKpis, Converter={StaticResource BoolToVisibility}}">
+                    <Border Padding="10,8" Margin="0,0,8,0" CornerRadius="8" MinWidth="100"
+                            Background="#E3F2FD">
+                        <StackPanel>
+                            <TextBlock Text="Records" FontSize="11" FontWeight="SemiBold" Foreground="#1565C0" Opacity="0.9" />
+                            <TextBlock Text="{Binding Summary.RecordCount}" FontSize="15" FontWeight="Bold" Foreground="#0D47A1" />
+                        </StackPanel>
+                    </Border>
+                    <Border Padding="10,8" Margin="0,0,8,0" CornerRadius="8" MinWidth="120"
+                            Background="#EFEBE9">
+                        <StackPanel>
+                            <TextBlock Text="Bill total" FontSize="11" FontWeight="SemiBold" Foreground="#5D4037" Opacity="0.9" />
+                            <TextBlock Text="{Binding Summary.TotalAmount, Converter={StaticResource Currency}}"
+                                       FontSize="15" FontWeight="Bold" Foreground="#3E2723" />
+                        </StackPanel>
+                    </Border>
+                    <Border Padding="10,8" Margin="0,0,8,0" CornerRadius="8" MinWidth="120"
+                            Background="#E8F5E9">
+                        <StackPanel>
+                            <TextBlock Text="Paid amount" FontSize="11" FontWeight="SemiBold" Foreground="#2E7D32" Opacity="0.9" />
+                            <TextBlock Text="{Binding Summary.TotalTax, Converter={StaticResource Currency}}"
+                                       FontSize="15" FontWeight="Bold" Foreground="#1B5E20" />
+                        </StackPanel>
+                    </Border>
+                    <Border Padding="10,8" Margin="0,0,8,0" CornerRadius="8" MinWidth="120"
+                            Background="#FFEBEE">
+                        <StackPanel>
+                            <TextBlock Text="Balance due" FontSize="11" FontWeight="SemiBold" Foreground="#C62828" Opacity="0.9" />
+                            <TextBlock Text="{Binding Summary.TotalDiscount, Converter={StaticResource Currency}}"
+                                       FontSize="15" FontWeight="Bold" Foreground="#B71C1C" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
                             Visibility="{Binding ShowGenericSummaryKpis, Converter={StaticResource BoolToVisibility}}">
                     <materialDesign:Card Style="{StaticResource KpiCard}">
                         <StackPanel Orientation="Horizontal">
@@ -214,7 +280,7 @@
                     </materialDesign:Card>
                 </StackPanel>
 
-                <StackPanel x:Name="StockKpiPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
                             Visibility="{Binding ShowStockSummaryKpis, Converter={StaticResource BoolToVisibility}}">
                     <materialDesign:Card Style="{StaticResource KpiCard}">
                         <StackPanel Orientation="Horizontal">
@@ -262,7 +328,7 @@
                     </materialDesign:Card>
                 </StackPanel>
 
-                <StackPanel x:Name="GstKpiPanel" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6"
                             Visibility="{Binding ShowGstSummary, Converter={StaticResource BoolToVisibility}}">
                     <materialDesign:Card Style="{StaticResource KpiCard}">
                         <StackPanel Orientation="Horizontal">
@@ -290,184 +356,15 @@
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusMessage}" Opacity="0.6" FontSize="11" Margin="0,4,0,0"
                                Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
-                    <Grid>
-                        <DataGrid ItemsSource="{Binding SalesRows}" Visibility="{Binding ShowSalesGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
-                                  Cursor="Hand"
-                                  MouseDoubleClick="SalesGrid_MouseDoubleClick"
-                                  PreviewKeyDown="SalesGrid_PreviewKeyDown">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
-                                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="60" />
-                                <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Balance due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding PurchaseRows}" Visibility="{Binding ShowPurchaseGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
-                                  Cursor="Hand"
-                                  MouseDoubleClick="PurchaseGrid_MouseDoubleClick"
-                                  PreviewKeyDown="PurchaseGrid_PreviewKeyDown">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="120" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="140" />
-                                <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="100" />
-                                <DataGridTextColumn Header="Items" Binding="{Binding ItemCount}" Width="50" />
-                                <DataGridTextColumn Header="Tax" Binding="{Binding TaxAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Cash Paid" Binding="{Binding CashPaid, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Return Cr." Binding="{Binding ReturnCreditApplied, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Net Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Due Reason" Binding="{Binding DueReason}" Width="*" MinWidth="120" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding GstRows}" Visibility="{Binding ShowGstGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Type" Binding="{Binding DocumentType}" Width="80" />
-                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="120" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="100" />
-                                <DataGridTextColumn Header="Party" Binding="{Binding PartyName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Taxable" Binding="{Binding TaxableAmount, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="CGST" Binding="{Binding CgstAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="SGST" Binding="{Binding SgstAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="IGST" Binding="{Binding IgstAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="90" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding GstReturnRows}" Visibility="{Binding ShowGstReturnGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Section" Binding="{Binding Section}" Width="90" />
-                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="120" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="100" />
-                                <DataGridTextColumn Header="Party" Binding="{Binding PartyName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="GSTIN" Binding="{Binding Gstin}" Width="130" />
-                                <DataGridTextColumn Header="POS" Binding="{Binding PlaceOfSupply}" Width="50" />
-                                <DataGridTextColumn Header="Rate" Binding="{Binding GstRate, StringFormat=N0}" Width="50" />
-                                <DataGridTextColumn Header="Taxable" Binding="{Binding TaxableAmount, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="CGST" Binding="{Binding CgstAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="SGST" Binding="{Binding SgstAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="IGST" Binding="{Binding IgstAmount, StringFormat=N2}" Width="70" />
-                                <DataGridTextColumn Header="Value" Binding="{Binding InvoiceValue, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="HSN" Binding="{Binding HsnCode}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding ProfitRows}" Visibility="{Binding ShowProfitGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />
-                                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Revenue" Binding="{Binding Revenue, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Cost" Binding="{Binding Cost, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Profit" Binding="{Binding GrossProfit, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Margin %" Binding="{Binding MarginPercent}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding MedicineSalesRows}" Visibility="{Binding ShowMedicineGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
-                                <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Quantity sold" Binding="{Binding QuantitySold}" Width="80" />
-                                <DataGridTextColumn Header="Revenue" Binding="{Binding Revenue, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Profit" Binding="{Binding GrossProfit, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Margin %" Binding="{Binding MarginPercent}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding StockValuationRows}" Visibility="{Binding ShowStockGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
-                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
-                                <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
-                                <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="70" />
-                                <DataGridTextColumn Header="MRP" Binding="{Binding Mrp, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Cost" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="80" />
-                                <DataGridTextColumn Header="Amount" Binding="{Binding StockAmount, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Cost Amount" Binding="{Binding StockValue, StringFormat=N2}" Width="100" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding ExpiryRows}" Visibility="{Binding ShowExpiryGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
-                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
-                                <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryLabel}" Width="100" />
-                                <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierLabel}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="70" />
-                                <DataGridTextColumn Header="Value" Binding="{Binding StockValue, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Status" Binding="{Binding ExpiryStatus}" Width="120" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding LowStockRows}" Visibility="{Binding ShowLowStockGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
-                                <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="On hand" Binding="{Binding QuantityOnHand}" Width="80" />
-                                <DataGridTextColumn Header="Reorder at" Binding="{Binding ReorderLevel}" Width="90" />
-                                <DataGridTextColumn Header="Order qty" Binding="{Binding ReorderQuantity}" Width="80" />
-                                <DataGridTextColumn Header="Shortfall" Binding="{Binding Shortfall}" Width="80" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding SaleReturnRows}" Visibility="{Binding ShowSaleReturnGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Return #" Binding="{Binding ReturnNumber}" Width="120" />
-                                <DataGridTextColumn Header="Date" Binding="{Binding ReturnDate, StringFormat=dd/MM/yyyy}" Width="100" />
-                                <DataGridTextColumn Header="Invoice" Binding="{Binding OriginalInvoiceNumber}" Width="110" />
-                                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="*" MinWidth="140" />
-                                <DataGridTextColumn Header="Refund" Binding="{Binding RefundAmount, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Mode" Binding="{Binding RefundMode}" Width="90" />
-                                <DataGridTextColumn Header="Cashier" Binding="{Binding CashierName}" Width="100" />
-                                <DataGridCheckBoxColumn Header="Full" Binding="{Binding IsFullReturn}" Width="50" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding MedicineReturnRows}" Visibility="{Binding ShowMedicineReturnGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="160" />
-                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="100" />
-                                <DataGridTextColumn Header="Quantity returned" Binding="{Binding ReturnedQuantity, StringFormat=N2}" Width="100" />
-                                <DataGridTextColumn Header="Refund" Binding="{Binding RefundAmount, StringFormat=N2}" Width="90" />
-                                <DataGridTextColumn Header="Return count" Binding="{Binding ReturnCount}" Width="90" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DataGrid ItemsSource="{Binding ScheduleRegisterRows}"
-                                  Visibility="{Binding ShowScheduleRegisterGrid, Converter={StaticResource BoolToVisibility}}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column"
-                                  Cursor="Hand"
-                                  MouseDoubleClick="ScheduleGrid_MouseDoubleClick"
-                                  PreviewKeyDown="ScheduleGrid_PreviewKeyDown">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="110" />
-                                <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="120" />
-                                <DataGridTextColumn Header="Patient" Binding="{Binding PatientName}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Phone" Binding="{Binding PatientPhone}" Width="100" />
-                                <DataGridTextColumn Header="Doctor" Binding="{Binding DoctorDisplay}" Width="*" MinWidth="120" />
-                                <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="2*" MinWidth="140" />
-                                <DataGridTextColumn Header="Sch" Binding="{Binding ScheduleLabel}" Width="45" />
-                                <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="80" />
-                                <DataGridTextColumn Header="Qty" Binding="{Binding Quantity, StringFormat=0.##}" Width="60" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </Grid>
+                    <DataGrid x:Name="ResultsGrid"
+                              ItemsSource="{Binding Rows}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              HeadersVisibility="Column"
+                              Cursor="Hand"
+                              MouseDoubleClick="ResultsGrid_MouseDoubleClick"
+                              PreviewKeyDown="ResultsGrid_PreviewKeyDown" />
                 </DockPanel>
             </DockPanel>
         </materialDesign:Card>

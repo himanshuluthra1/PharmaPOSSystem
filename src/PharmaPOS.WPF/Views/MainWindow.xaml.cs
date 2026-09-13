@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using PharmaPOS.WPF.Services;
@@ -14,6 +15,30 @@ public partial class MainWindow : Window
     {
         _medicineLedger = medicineLedger;
         InitializeComponent();
+        Closing += MainWindow_Closing;
+    }
+
+    /// <summary>
+    /// Tags that skip the exit confirmation (logout re-opens login; force-close is for updates).
+    /// </summary>
+    public static bool IsSilentCloseTag(object? tag)
+        => tag is string s && (s is "logout" or "force-close");
+
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (IsSilentCloseTag(Tag))
+            return;
+
+        var result = MessageBox.Show(
+            this,
+            "Are you sure you want to close PharmaPOS?\n\nUnsaved bills or forms will be lost.",
+            "Exit PharmaPOS",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No);
+
+        if (result != MessageBoxResult.Yes)
+            e.Cancel = true;
     }
 
     private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)

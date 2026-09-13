@@ -18,67 +18,82 @@
         </Grid.ColumnDefinitions>
 
         <!-- LEFT: cart grid -->
-        <materialDesign:Card Grid.Column="0" Margin="2" UniformCornerRadius="12" Padding="12"
-                             materialDesign:ElevationAssist.Elevation="Dp2">
+        <materialDesign:Card Grid.Column="0" Margin="2" UniformCornerRadius="8" Padding="8,6"
+                             materialDesign:ElevationAssist.Elevation="Dp1">
             <DockPanel>
-                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center"
+                           ToolTip="Enter on Item to search. F3 customer. Ctrl+T new customer. Ctrl+1–4 switch. Ctrl+W close.">
+                    <TextBlock Text="Fast Billing" FontSize="14" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
+                        <TextBlock Text="Barcode :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
                         <TextBox x:Name="BarcodeScanBox"
-                                 Width="140"
-                                 Margin="0,0,4,0"
+                                 Width="130" Height="28"
                                  VerticalAlignment="Center"
-                                 materialDesign:HintAssist.Hint="Scan barcode"
+                                 materialDesign:HintAssist.Hint="{x:Null}"
                                  materialDesign:HintAssist.IsFloating="False"
                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                  ToolTip="Focus here and scan with USB barcode reader (Enter)"
                                  PreviewKeyDown="BarcodeScanBox_PreviewKeyDown" />
-                        <Button Command="{Binding ScanBarcodeCameraCommand}"
-                                IsEnabled="{Binding CanCreate}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="6,4" Margin="0,0,4,0"
-                                VerticalAlignment="Center"
-                                ToolTip="Scan barcode with camera">
-                            <materialDesign:PackIcon Kind="BarcodeScan" Width="18" Height="18" />
-                        </Button>
-                        <Button Command="{Binding SearchBillsCommand}"
-                                IsEnabled="{Binding CanSearchBills}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="8,4" Margin="0,0,4,0"
-                                VerticalAlignment="Center"
-                                ToolTip="Search bills by patient, mobile, or medicine">
-                            <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="Magnify" Width="16" Height="16"
-                                                           VerticalAlignment="Center" Margin="0,0,4,0" />
-                                <TextBlock Text="Search" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button Command="{Binding OpenSaleReturnCommand}"
-                                IsEnabled="{Binding CanReturn}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="8,4" Margin="0,0,4,0"
-                                VerticalAlignment="Center"
-                                ToolTip="Return items from the open invoice (F8)">
-                            <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="KeyboardReturn" Width="16" Height="16"
-                                                           VerticalAlignment="Center" Margin="0,0,4,0" />
-                                <TextBlock Text="Return" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Grid Width="180" MinWidth="120" MaxWidth="220">
+                    </StackPanel>
+                    <Button Command="{Binding ScanBarcodeCameraCommand}"
+                            IsEnabled="{Binding CanCreate}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Padding="6,2" Height="28" Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            ToolTip="Scan barcode with camera">
+                        <materialDesign:PackIcon Kind="BarcodeScan" Width="16" Height="16" />
+                    </Button>
+                    <Button Command="{Binding SearchBillsCommand}"
+                            IsEnabled="{Binding CanSearchBills}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Padding="8,2" Height="28" Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            ToolTip="Search bills by patient, mobile, or medicine">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Magnify" Width="14" Height="14"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="Search" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding OpenSaleReturnCommand}"
+                            IsEnabled="{Binding CanReturn}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Padding="8,2" Height="28" Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            ToolTip="Return items from the open invoice (F8)">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="KeyboardReturn" Width="14" Height="14"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="Return" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding LastSaleRefillCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Padding="8,2" Height="28" Margin="0,0,4,0"
+                            VerticalAlignment="Center"
+                            ToolTip="F6 — clone items from a patient's last bill">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="ContentCopy" Width="14" Height="14"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="Clone Bill" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                    <Grid Width="160" MinWidth="100" MaxWidth="200" Margin="0,0,4,0" VerticalAlignment="Center">
                         <ToggleButton x:Name="BillSelectorToggle"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
-                                      Padding="8,4"
+                                      Padding="8,2" Height="28"
                                       Style="{StaticResource MaterialDesignOutlinedButton}"
                                       Checked="BillSelectorToggle_Checked"
                                       Unchecked="BillSelectorToggle_Unchecked">
                             <Grid>
                                 <TextBlock Text="{Binding SelectedBill.DisplayLabel, FallbackValue='Select bill'}"
                                            VerticalAlignment="Center" HorizontalAlignment="Left"
-                                           Margin="0,0,18,0" TextTrimming="CharacterEllipsis" />
+                                           Margin="0,0,18,0" TextTrimming="CharacterEllipsis" FontSize="12" />
                                 <materialDesign:PackIcon Kind="ChevronDown"
                                                            HorizontalAlignment="Right"
-                                                           VerticalAlignment="Center" Width="16" Height="16" />
+                                                           VerticalAlignment="Center" Width="14" Height="14" />
                             </Grid>
                         </ToggleButton>
                         <Popup x:Name="BillPopup"
@@ -164,22 +179,9 @@
                             </Border>
                         </Popup>
                     </Grid>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Fast Billing" FontSize="20" FontWeight="Bold"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
-                </DockPanel>
-                <TextBlock Text="Press Enter on Item to search medicine. F3 customer. Ctrl+T new customer. Ctrl+1–4 switch. Ctrl+W close."
-                           FontSize="11" Opacity="0.6" Margin="0,0,0,6" DockPanel.Dock="Top"
-                           TextTrimming="CharacterEllipsis" />
+                </WrapPanel>
 
-                <Border DockPanel.Dock="Top" Margin="0,0,0,8" Padding="6,4"
-                        Background="{DynamicResource MaterialDesignCardBackground}"
-                        CornerRadius="6"
-                        BorderBrush="{DynamicResource MaterialDesignDivider}"
-                        BorderThickness="1">
-                    <WrapPanel>
+                <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
                         <ItemsControl ItemsSource="{Binding OpenBills}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -188,14 +190,15 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type salesVm:OpenSaleBillSlot}">
-                                    <Button Margin="0,0,6,2" Padding="10,4"
-                                            MinWidth="72"
+                                    <Button Margin="0,0,4,0" Padding="8,2" Height="26"
+                                            MinWidth="64"
                                             Command="{Binding DataContext.SwitchOpenBillCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             ToolTip="{Binding ShortcutHint}">
                                         <Button.Style>
                                             <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
                                                 <Setter Property="FontWeight" Value="Normal" />
+                                                <Setter Property="FontSize" Value="11" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
                                                         <Setter Property="FontWeight" Value="Bold" />
@@ -204,21 +207,121 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Button.Style>
-                                        <TextBlock Text="{Binding ChipLabel}" TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                                        <TextBlock Text="{Binding ChipLabel}" TextTrimming="CharacterEllipsis" MaxWidth="120" />
                                     </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <Button Command="{Binding NewCustomerBillCommand}"
                                 Style="{StaticResource MaterialDesignFlatButton}"
-                                Padding="8,2" Margin="0,0,4,2"
+                                Padding="6,0" Height="26" Margin="0,0,2,0"
                                 ToolTip="Start another customer bill (Ctrl+T)"
-                                Content="New customer" />
+                                Content="New" FontSize="11" />
                         <Button Command="{Binding CloseCustomerBillCommand}"
                                 Style="{StaticResource MaterialDesignFlatButton}"
-                                Padding="8,2" Margin="0,0,0,2"
+                                Padding="6,0" Height="26"
                                 ToolTip="Close this customer bill (Ctrl+W)"
-                                Content="Close" />
+                                Content="Close" FontSize="11" />
+                </WrapPanel>
+
+                <Border DockPanel.Dock="Bottom"
+                        Margin="0,6,0,0"
+                        Padding="6,6"
+                        Background="#F1F8E9"
+                        BorderBrush="#C5E1A5"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Visibility="{Binding HasSelectedMedicineDetail, Converter={StaticResource BoolToVisibility}}">
+                    <WrapPanel Orientation="Horizontal">
+                        <Border Background="#E3F2FD" BorderBrush="#90CAF9" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Brand :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.Brand, TargetNullValue=-, FallbackValue=-}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" MaxWidth="160" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#FFF3E0" BorderBrush="#FFCC80" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Salt :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.Salt, TargetNullValue=-, FallbackValue=-}"
+                                           VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#E8F5E9" BorderBrush="#A5D6A7" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Location :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.Location, TargetNullValue=-, FallbackValue=-}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#F3E5F5" BorderBrush="#CE93D8" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Available :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.QuantityAvailable, StringFormat=0.##}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#FFEBEE" BorderBrush="#EF9A9A" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Schedule :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.ScheduleLabel, FallbackValue=-}"
+                                           FontWeight="Bold" Foreground="#C62828" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#E0F7FA" BorderBrush="#80DEEA" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Pack :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0} · {1}">
+                                            <Binding Path="SelectedMedicineDetail.PackingSize" FallbackValue="-" />
+                                            <Binding Path="SelectedMedicineDetail.PackingType" FallbackValue="-" />
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#EFEBE9" BorderBrush="#BCAAA4" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4"
+                                Visibility="{Binding SelectedMedicineDetail.HsnCode, Converter={StaticResource StringToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="HSN :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.HsnCode}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#FFFDE7" BorderBrush="#FFF59D" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4"
+                                Cursor="Hand"
+                                ToolTip="Click to show / hide cost">
+                            <Border.InputBindings>
+                                <MouseBinding Gesture="LeftClick" Command="{Binding ToggleCostMaskCommand}" />
+                            </Border.InputBindings>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Cost :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding CostDisplayText}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"
+                                           FontFamily="Consolas" MinWidth="36" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#ECEFF1" BorderBrush="#B0BEC5" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,6,4"
+                                Visibility="{Binding SelectedMedicineDetail.Strength, Converter={StaticResource StringToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Strength :" Style="{StaticResource FieldCaption}" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedMedicineDetail.Strength}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#FFF8E1" BorderBrush="#FFD54F" BorderThickness="1"
+                                CornerRadius="3" Padding="8,4" Margin="0,0,0,4"
+                                Visibility="{Binding SelectedMedicineDetail.PrescriptionRequired, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Rx required" FontWeight="Bold" Foreground="#EF6C00" VerticalAlignment="Center" />
+                        </Border>
                     </WrapPanel>
                 </Border>
 
@@ -230,6 +333,7 @@
                           ColumnHeaderHeight="30"
                           materialDesign:DataGridAssist.CellPadding="6,2"
                           SelectionMode="Single"
+                          SelectionChanged="CartGrid_SelectionChanged"
                           PreviewKeyDown="CartGrid_PreviewKeyDown"
                           MouseDoubleClick="CartGrid_MouseDoubleClick"
                           BeginningEdit="CartGrid_BeginningEdit"
@@ -262,9 +366,12 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" IsReadOnly="True" Width="0.7*" MinWidth="64" />
-                        <DataGridTextColumn Header="Rack / bin" Binding="{Binding LocationLabel}" IsReadOnly="True" Width="0.65*" MinWidth="56" />
-                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" IsReadOnly="True" Width="0.55*" MinWidth="56" />
+                        <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}"
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                            Width="0.7*" MinWidth="64" />
+                        <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay, UpdateSourceTrigger=LostFocus}"
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                            Width="0.55*" MinWidth="56" />
                         <DataGridTextColumn Header="Qty" Width="0.45*" MinWidth="44"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
@@ -272,13 +379,14 @@
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
                         <DataGridTextColumn Header="Sale" Width="0.55*" MinWidth="52"
-                                            IsReadOnly="True"
-                                            Binding="{Binding UnitPrice, StringFormat=N2}" />
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                            Binding="{Binding UnitPrice, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
                         <DataGridTextColumn Header="Disc %" Width="0.45*" MinWidth="44"
                                             IsReadOnly="{Binding DataContext.CanApplyDiscount, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding DiscountPercent, UpdateSourceTrigger=PropertyChanged}" />
-                        <DataGridTextColumn Header="GST %" IsReadOnly="True" Width="0.45*" MinWidth="44"
-                                            Binding="{Binding GstPercent, StringFormat=N2}" />
+                        <DataGridTextColumn Header="GST %" Width="0.45*" MinWidth="44"
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                            Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
                         <DataGridTextColumn Header="Amount" IsReadOnly="True" Width="0.6*" MinWidth="56"
                                             Binding="{Binding LineTotal, StringFormat=N2}" />
                         <DataGridTemplateColumn Width="40" MinWidth="40" MaxWidth="44">
@@ -358,7 +466,7 @@
                                 HorizontalAlignment="Stretch" Padding="6,6">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="FileDocumentPlusOutline" VerticalAlignment="Center" />
-                                <TextBlock Text="New (Esc)" Margin="6,0,0,0" TextWrapping="Wrap" />
+                                <TextBlock Text="New" Margin="6,0,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1" Margin="4,0,0,0" Command="{Binding PrintCommand}"
@@ -414,64 +522,7 @@
                                Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
                 </StackPanel>
 
-                <!-- Payment -->
-                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,8"
-                            IsEnabled="{Binding CanModifyBill}">
-                    <Separator Margin="0,0,0,8" />
-                    <DockPanel Margin="0,0,0,6">
-                        <Button DockPanel.Dock="Right"
-                                Command="{Binding AddPaymentCommand}"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Padding="8,2" Margin="8,0,0,0"
-                                ToolTip="Add another payment method">
-                            <TextBlock Text="+ Split" FontSize="12" />
-                        </Button>
-                        <TextBlock Text="Payment" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    </DockPanel>
-                    <ItemsControl ItemsSource="{Binding PaymentLines}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,0,0,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="82" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox Grid.Column="0" Margin="0,0,6,0"
-                                              Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                                              FontSize="12"
-                                              ItemsSource="{Binding DataContext.PaymentMethods, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              SelectedItem="{Binding Method}" />
-                                    <TextBox Grid.Column="1"
-                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                             Text="{Binding Amount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
-                                    <Button Grid.Column="2"
-                                            Command="{Binding DataContext.RemovePaymentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}"
-                                            Style="{StaticResource MaterialDesignToolButton}"
-                                            Padding="2"
-                                            ToolTip="Remove this method">
-                                        <materialDesign:PackIcon Kind="Close" Width="14" Height="14" />
-                                    </Button>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <DockPanel Margin="0,2,0,0"
-                               Visibility="{Binding ShowPaymentRemaining, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="To allocate" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding PaymentRemaining, Converter={StaticResource Currency}}"
-                                   HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="#EF6C00" />
-                    </DockPanel>
-                    <DockPanel Margin="0,2,0,0"
-                               Visibility="{Binding ShowChangeDue, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="Change" DockPanel.Dock="Left" Opacity="0.7" />
-                        <TextBlock Text="{Binding ChangeDue, Converter={StaticResource Currency}}"
-                                   HorizontalAlignment="Right" />
-                    </DockPanel>
-                </StackPanel>
-
-                <!-- Bill Summary -->
+                <!-- Bill Summary (always visible at top) -->
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                     <TextBlock Text="Bill Summary" FontWeight="SemiBold" Margin="0,0,0,6" />
 
@@ -507,47 +558,145 @@
                     </DockPanel>
                 </StackPanel>
 
-                <!-- Customer -->
-                <StackPanel x:Name="CustomerPanel" VerticalAlignment="Top">
-                    <Separator Margin="0,0,0,8" />
-                    <DockPanel Margin="0,0,0,4">
-                        <Button DockPanel.Dock="Right"
-                                Command="{Binding LastSaleRefillCommand}"
-                                Content="Last sale"
-                                ToolTip="F6 — type patient and refill from their last bill"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Padding="10,2"
-                                Margin="8,0,0,0" />
-                        <TextBlock Text="Customer" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    </DockPanel>
-                    <TextBlock Text="F6 refill from last bill" FontSize="10" Opacity="0.55" Margin="0,0,0,6" />
+                <!-- Customer + Payment: scroll when height is tight so fields never overlap -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              CanContentScroll="False"
+                              PanningMode="VerticalOnly">
+                    <StackPanel>
+                        <!-- Customer -->
+                        <StackPanel x:Name="CustomerPanel" VerticalAlignment="Top">
+                            <Separator Margin="0,0,0,8" />
+                            <TextBlock Text="Customer" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                    <TextBlock Text="Customer name" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
-                    <TextBox x:Name="CustomerNameBox"
-                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                             MaxLength="50"
-                             Text="{Binding CustomerName, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,6"
-                             ToolTip="F3 to save customer" />
+                            <DockPanel Margin="0,0,0,6" LastChildFill="True">
+                                <TextBlock Text="Name :" Style="{StaticResource FieldCaption}"
+                                           Width="56" Margin="0,0,6,0" VerticalAlignment="Center"
+                                           DockPanel.Dock="Left" />
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding SearchCustomerCommand}"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Padding="4,2" Margin="4,0,0,0"
+                                        ToolTip="Search customers by name or mobile"
+                                        VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="Magnify" Width="18" Height="18" />
+                                </Button>
+                                <TextBox x:Name="CustomerNameBox"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         MaxLength="50"
+                                         materialDesign:HintAssist.Hint="{x:Null}"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Text="{Binding CustomerName, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="CustomerField_PreviewKeyDown"
+                                         ToolTip="F3 to save customer" />
+                            </DockPanel>
 
-                    <TextBlock Text="Doctor" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
-                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                             MaxLength="50"
-                             Text="{Binding DoctorName, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,6" />
+                            <DockPanel Margin="0,0,0,6" LastChildFill="True">
+                                <TextBlock Text="Doctor :" Style="{StaticResource FieldCaption}"
+                                           Width="56" Margin="0,0,6,0" VerticalAlignment="Center"
+                                           DockPanel.Dock="Left" />
+                                <TextBox x:Name="DoctorNameBox"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         MaxLength="50"
+                                         materialDesign:HintAssist.Hint="{x:Null}"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Text="{Binding DoctorName, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="CustomerField_PreviewKeyDown" />
+                            </DockPanel>
 
-                    <TextBlock Text="Mobile" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
-                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                             MaxLength="12"
-                             behaviors:TextBoxLimits.DigitsOnly="True"
-                             Text="{Binding CustomerMobile, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,6" />
+                            <DockPanel Margin="0,0,0,6" LastChildFill="True">
+                                <TextBlock Text="Mobile :" Style="{StaticResource FieldCaption}"
+                                           Width="56" Margin="0,0,6,0" VerticalAlignment="Center"
+                                           DockPanel.Dock="Left" />
+                                <TextBox x:Name="CustomerMobileBox"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         MaxLength="12"
+                                         behaviors:TextBoxLimits.DigitsOnly="True"
+                                         materialDesign:HintAssist.Hint="{x:Null}"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Text="{Binding CustomerMobile, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="CustomerField_PreviewKeyDown" />
+                            </DockPanel>
 
-                    <TextBlock Text="Address" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
-                    <TextBox Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                             MaxLength="200"
-                             Text="{Binding CustomerAddress, UpdateSourceTrigger=PropertyChanged}" />
-                </StackPanel>
+                            <DockPanel LastChildFill="True">
+                                <TextBlock Text="Address :" Style="{StaticResource FieldCaption}"
+                                           Width="56" Margin="0,0,6,0" VerticalAlignment="Center"
+                                           DockPanel.Dock="Left" />
+                                <TextBox x:Name="CustomerAddressBox"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         MaxLength="200"
+                                         materialDesign:HintAssist.Hint="{x:Null}"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Text="{Binding CustomerAddress, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="CustomerField_PreviewKeyDown" />
+                            </DockPanel>
+                        </StackPanel>
+
+                        <!-- Payment -->
+                        <StackPanel Margin="0,0,0,8"
+                                    IsEnabled="{Binding CanModifyBill}">
+                            <Separator Margin="0,8,0,8" />
+                            <DockPanel Margin="0,0,0,6">
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding AddPaymentCommand}"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Padding="8,2" Margin="8,0,0,0"
+                                        ToolTip="Add another payment method">
+                                    <TextBlock Text="+ Split" FontSize="12" />
+                                </Button>
+                                <TextBlock Text="Payment" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding PaymentLines}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,0,0,6" LastChildFill="True">
+                                            <Button DockPanel.Dock="Right"
+                                                    Command="{Binding DataContext.RemovePaymentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource MaterialDesignToolButton}"
+                                                    Padding="2" Margin="4,0,0,0"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip="Remove this method">
+                                                <materialDesign:PackIcon Kind="Close" Width="14" Height="14" />
+                                            </Button>
+                                            <TextBox DockPanel.Dock="Right" Width="82" Margin="0,0,0,0"
+                                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                     materialDesign:HintAssist.Hint="{x:Null}"
+                                                     materialDesign:HintAssist.IsFloating="False"
+                                                     VerticalAlignment="Center"
+                                                     Text="{Binding Amount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />
+                                            <TextBlock DockPanel.Dock="Right" Text="Amount :"
+                                                       Style="{StaticResource FieldCaption}"
+                                                       Margin="8,0,6,0" VerticalAlignment="Center" />
+                                            <TextBlock DockPanel.Dock="Left" Text="Method :"
+                                                       Style="{StaticResource FieldCaption}"
+                                                       Margin="0,0,6,0" VerticalAlignment="Center" />
+                                            <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                                      FontSize="12"
+                                                      materialDesign:HintAssist.Hint="{x:Null}"
+                                                      materialDesign:HintAssist.IsFloating="False"
+                                                      VerticalAlignment="Center"
+                                                      ItemsSource="{Binding DataContext.PaymentMethods, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                      SelectedItem="{Binding Method}" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <DockPanel Margin="0,2,0,0"
+                                       Visibility="{Binding ShowPaymentRemaining, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="To allocate" DockPanel.Dock="Left" Opacity="0.7" />
+                                <TextBlock Text="{Binding PaymentRemaining, Converter={StaticResource Currency}}"
+                                           HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="#EF6C00" />
+                            </DockPanel>
+                            <DockPanel Margin="0,2,0,0"
+                                       Visibility="{Binding ShowChangeDue, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Change" DockPanel.Dock="Left" Opacity="0.7" />
+                                <TextBlock Text="{Binding ChangeDue, Converter={StaticResource Currency}}"
+                                           HorizontalAlignment="Right" />
+                            </DockPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </DockPanel>
         </materialDesign:Card>
     </Grid>

@@ -30,7 +30,7 @@ public static class MedWinMigrationRunner
     [
         ("company", "Company profile", true),
         ("gst", "GST categories", true),
-        ("medicines", "Medicines (active + OneMG match)", true),
+        ("medicines", "Medicines (active MedWin-only rows; map later in Settings)", true),
         ("suppliers", "Suppliers", true),
         ("customers", "Customers", true),
         ("stock", "Stock batches", true),
@@ -96,7 +96,7 @@ public static class MedWinMigrationRunner
         if (options.ClearExistingTransactionalData)
             ctx.Log("Clear  : existing transactional data BEFORE import");
         if (forceTransactions) ctx.Log("Force  : transactional re-import enabled");
-        if (forceMedicines) ctx.Log("Force  : medicine rematch enabled (slow)");
+        if (forceMedicines) ctx.Log("Force  : medicine phase will clear prior MedWin links and re-insert (already default for medicines)");
 
         await MedWinImporter.RunAsync(ctx, phases);
         ctx.Log("\nImport completed successfully.");

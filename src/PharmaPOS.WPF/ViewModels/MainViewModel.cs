@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using System.Windows.Media;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.ReportingSync;
 using PharmaPOS.Application.Features.Reports;
+using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels.Sales;
@@ -22,10 +24,14 @@ namespace PharmaPOS.WPF.ViewModels;
 /// </summary>
 public class MainViewModel : ObservableObject
 {
+    private static readonly SolidColorBrush CurrentFyBarBrush = CreateFrozenBrush("#2E7D32");
+    private static readonly SolidColorBrush PriorFyBarBrush = CreateFrozenBrush("#F9A825");
+
     private readonly INavigationService _navigation;
     private readonly ICurrentUserService _currentUser;
     private readonly IThemeService _themeService;
     private readonly IStoreIdentityService _storeIdentity;
+    private readonly IFinancialYearContext _financialYear;
 
     private NavigationItem? _selectedItem;
     private bool _isDarkMode;
@@ -35,12 +41,14 @@ public class MainViewModel : ObservableObject
         INavigationService navigation,
         ICurrentUserService currentUser,
         IThemeService themeService,
-        IStoreIdentityService storeIdentity)
+        IStoreIdentityService storeIdentity,
+        IFinancialYearContext financialYear)
     {
         _navigation = navigation;
         _currentUser = currentUser;
         _themeService = themeService;
         _storeIdentity = storeIdentity;
+        _financialYear = financialYear;
 
         _navigation.CurrentChanged += () =>
         {
@@ -50,12 +58,44 @@ public class MainViewModel : ObservableObject
             SyncSelectedItemToCurrentView();
         };
 
+        _financialYear.Changed += OnFinancialYearChanged;
+
         NavigateCommand = new RelayCommand(p => Navigate(p as NavigationItem));
         ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
 
         BuildMenu();
         SelectedItem = MenuItems.FirstOrDefault();
         RefreshMenuActiveStates();
+    }
+
+    private void OnFinancialYearChanged()
+    {
+        var currentType = _navigation.CurrentViewModel?.GetType();
+        _navigation.ClearSessionCache();
+        OnPropertyChanged(nameof(FinancialYearLabel));
+        OnPropertyChanged(nameof(IsPriorFinancialYear));
+        OnPropertyChanged(nameof(TopBarBackground));
+        OnPropertyChanged(nameof(ShowFinancialYearBadge));
+
+        // Refresh the open module (except Settings, which triggered the FY change).
+        if (currentType is not null && currentType != typeof(SettingsViewModel))
+            _navigation.NavigateTo(currentType);
+    }
+
+    public string FinancialYearLabel => _financialYear.Active.DisplayLabel;
+
+    public bool IsPriorFinancialYear => !_financialYear.Active.IsCurrent;
+
+    public bool ShowFinancialYearBadge => true;
+
+    public Brush TopBarBackground =>
+        IsPriorFinancialYear ? PriorFyBarBrush : CurrentFyBarBrush;
+
+    private static SolidColorBrush CreateFrozenBrush(string hex)
+    {
+        var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
+        brush.Freeze();
+        return brush;
     }
 
     /// <summary>Raised when the user chooses to sign out; the host returns to login.</summary>
@@ -116,7 +156,7 @@ public class MainViewModel : ObservableObject
 
     public bool HasActiveSectionTitle => !string.IsNullOrWhiteSpace(ActiveSectionTitle);
 
-    /// <summary>Shortcuts for the currently selected module (shown in the green app bar).</summary>
+    /// <summary>Shortcuts for the currently selected module (bottom colored strip).</summary>
     public IReadOnlyList<ShortcutHint> ActiveShortcuts =>
         SelectedItem?.TargetViewModel == typeof(PurchaseReturnViewModel)
             ? PurchaseReturnShortcuts
@@ -231,82 +271,94 @@ public class MainViewModel : ObservableObject
         SelectedItem = purchase;
     }
 
+    private static readonly (string Bg, string Border)[] ShortcutPalette =
+    [
+        ("#E3F2FD", "#90CAF9"),
+        ("#FFF3E0", "#FFCC80"),
+        ("#E8F5E9", "#A5D6A7"),
+        ("#F3E5F5", "#CE93D8"),
+        ("#FFEBEE", "#EF9A9A"),
+        ("#E0F7FA", "#80DEEA"),
+        ("#FFFDE7", "#FFF59D"),
+        ("#ECEFF1", "#B0BEC5"),
+        ("#FBE9E7", "#FFAB91"),
+        ("#E8EAF6", "#9FA8DA"),
+        ("#E0F2F1", "#80CBC4"),
+        ("#FFF8E1", "#FFD54F"),
+        ("#FCE4EC", "#F48FB1"),
+    ];
+
+    private static ShortcutHint Hint(string key, string description, int index)
+    {
+        var (bg, border) = ShortcutPalette[index % ShortcutPalette.Length];
+        return new ShortcutHint(key, description, bg, border);
+    }
+
+    private static IReadOnlyList<ShortcutHint> Hints(params (string Key, string Description)[] items)
+        => items.Select((x, i) => Hint(x.Key, x.Description, i)).ToList();
+
     private static IReadOnlyList<ShortcutHint> GetShortcutsForModule(string? module) => module switch
     {
-        "sales" =>
-        [
-            new("F2", "Sales"),
-            new("Ctrl+T", "New customer"),
-            new("Ctrl+1-4", "Switch bill"),
-            new("Ctrl+W", "Close bill"),
-            new("Esc", "Clear bill"),
-            new("F3", "Customer / Save"),
-            new("F4", "Medicine details"),
-            new("Ctrl+L", "Medicine ledger"),
-            new("F5", "Substitute"),
-            new("F6", "Refill / last sale"),
-            new("F8", "Sale return"),
-            new("F9", "Save / Print"),
-            new("Enter", "Search item")
-        ],
-        "purchase" =>
-        [
-            new("F2", "Sales"),
-            new("Esc", "New purchase"),
-            new("F9", "Save"),
-            new("Ctrl+L", "Medicine ledger"),
-            new("Enter", "Search item / barcode"),
-            new("Scan bill", "OCR supplier invoice")
-        ],
-        "inventory" =>
-        [
-            new("F2", "Sales"),
-            new("Ctrl+L", "Medicine ledger")
-        ],
-        "masters" =>
-        [
-            new("F2", "Sales"),
-            new("Ctrl+L", "Medicine ledger")
-        ],
-        "accounting" =>
-        [
-            new("F2", "Sales")
-        ],
-        "reports" =>
-        [
-            new("F2", "Sales"),
-            new("Enter", "Open bill")
-        ],
-        "settings" =>
-        [
-            new("F2", "Sales")
-        ],
-        "dashboard" =>
-        [
-            new("F2", "Sales")
-        ],
-        _ =>
-        [
-            new("F2", "Sales")
-        ]
+        "sales" => Hints(
+            ("F2", "Sales"),
+            ("Ctrl+T", "New customer"),
+            ("Ctrl+1-4", "Switch bill"),
+            ("Ctrl+W", "Close bill"),
+            ("Esc", "Clear bill"),
+            ("F3", "Customer / Save"),
+            ("F4", "Medicine details"),
+            ("Ctrl+L", "Medicine ledger"),
+            ("F5", "Substitute"),
+            ("F6", "Clone bill"),
+            ("F8", "Sale return"),
+            ("F9", "Save / Print"),
+            ("Enter", "Search item")),
+        "purchase" => Hints(
+            ("F2", "Sales"),
+            ("Esc", "New purchase"),
+            ("F9", "Save"),
+            ("Ctrl+L", "Medicine ledger"),
+            ("Enter", "Search item / barcode"),
+            ("Scan bill", "OCR supplier invoice")),
+        "inventory" => Hints(
+            ("F2", "Sales"),
+            ("Ctrl+L", "Medicine ledger")),
+        "masters" => Hints(
+            ("F2", "Sales"),
+            ("Ctrl+L", "Medicine ledger")),
+        "accounting" => Hints(
+            ("F2", "Sales")),
+        "reports" => Hints(
+            ("F2", "Sales"),
+            ("Enter", "Open bill")),
+        "settings" => Hints(
+            ("F2", "Sales")),
+        "dashboard" => Hints(
+            ("F2", "Sales")),
+        _ => Hints(
+            ("F2", "Sales"))
     };
 
-    private static readonly IReadOnlyList<ShortcutHint> PurchaseReturnShortcuts =
-    [
-        new("F2", "Sales"),
-        new("F3", "Search bill"),
-        new("F9", "Process return"),
-        new("Enter", "Search")
-    ];
+    private static readonly IReadOnlyList<ShortcutHint> PurchaseReturnShortcuts = Hints(
+        ("F2", "Sales"),
+        ("F3", "Search bill"),
+        ("F9", "Process return"),
+        ("Enter", "Search"));
 
     private void BuildMenu()
     {
-        var dashboard = Leaf("Dashboard", "ViewDashboard", typeof(DashboardViewModel), "dashboard");
-        var sales = Leaf("Sales (F2)", "PointOfSale", typeof(SalesViewModel), "sales");
-        var purchase = Leaf("Purchase invoice", "TruckDelivery", typeof(PurchaseViewModel), "purchase");
-        var purchaseOrder = Leaf("Purchase order", "ClipboardText", typeof(PurchaseOrderViewModel), "purchase");
-        var purchaseReturn = Leaf("Purchase return", "AssignmentReturn", typeof(PurchaseReturnViewModel), "purchase");
-        var expiry = Leaf("Expiry to company", "CalendarRemove", typeof(ExpiryReturnViewModel), "purchase");
+        var dashboard = Leaf("Dashboard", "ViewDashboard", typeof(DashboardViewModel), "dashboard",
+            requiredPermission: AppConstants.Permissions.DashboardView);
+        var sales = Leaf("Sales (F2)", "PointOfSale", typeof(SalesViewModel), "sales",
+            requiredPermission: AppConstants.Permissions.SalesView);
+        var purchase = Leaf("Purchase invoice", "TruckDelivery", typeof(PurchaseViewModel), "purchase",
+            requiredPermission: AppConstants.Permissions.PurchaseMenuInvoice);
+        var purchaseOrder = Leaf("Purchase order", "ClipboardText", typeof(PurchaseOrderViewModel), "purchase",
+            requiredPermission: AppConstants.Permissions.PurchaseMenuOrder);
+        var purchaseReturn = Leaf("Purchase return", "AssignmentReturn", typeof(PurchaseReturnViewModel), "purchase",
+            requiredPermission: AppConstants.Permissions.PurchaseMenuReturn);
+        var expiry = Leaf("Expiry to company", "CalendarRemove", typeof(ExpiryReturnViewModel), "purchase",
+            requiredPermission: AppConstants.Permissions.PurchaseMenuExpiry);
 
         AddTopIfAllowed(dashboard);
         AddTopIfAllowed(sales);
@@ -328,127 +380,147 @@ public class MainViewModel : ObservableObject
             "Accounting", "Calculator", "accounting", typeof(AccountingViewModel),
             BuildAccountingChildren());
 
-        AddModuleSubmenu(
-            "Reports", "ChartBar", "reports", typeof(ReportsViewModel),
-            BuildReportsChildren());
+        AddReportsSubmenu();
 
         AddModuleSubmenu(
             "Settings", "Cog", "settings", typeof(SettingsViewModel),
             BuildSettingsChildren());
     }
 
-    private List<NavigationItem> BuildInventoryChildren()
-    {
-        var canAdjust = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.InventoryAdjust, AppConstants.Permissions.InventoryManage);
-        var canTransfer = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.InventoryTransfer, AppConstants.Permissions.InventoryManage);
-
-        var items = new List<NavigationItem>
-        {
-            Leaf("On Hand", "PackageVariant", typeof(InventoryViewModel), "inventory", tabIndex: 0),
-            Leaf("Ledger", "BookOpenPageVariant", typeof(InventoryViewModel), "inventory", tabIndex: 1),
-        };
-        if (canAdjust)
-            items.Add(Leaf("Adjustment", "SwapHorizontal", typeof(InventoryViewModel), "inventory", tabIndex: 2));
-        if (canTransfer)
-        {
-            items.Add(Leaf("Transfer", "TruckFast", typeof(InventoryViewModel), "inventory", tabIndex: 3));
-            items.Add(Leaf("Recent Transfer", "History", typeof(InventoryViewModel), "inventory", tabIndex: 4));
-        }
-        items.Add(Leaf("Shortage book", "ClipboardAlert", typeof(InventoryViewModel), "inventory", tabIndex: 5));
-        return items;
-    }
+    private List<NavigationItem> BuildInventoryChildren() =>
+    [
+        Leaf("On Hand", "PackageVariant", typeof(InventoryViewModel), "inventory", tabIndex: 0,
+            requiredPermission: AppConstants.Permissions.InventoryMenuOnhand),
+        Leaf("Ledger", "BookOpenPageVariant", typeof(InventoryViewModel), "inventory", tabIndex: 1,
+            requiredPermission: AppConstants.Permissions.InventoryMenuLedger),
+        Leaf("Adjustment", "SwapHorizontal", typeof(InventoryViewModel), "inventory", tabIndex: 2,
+            requiredPermission: AppConstants.Permissions.InventoryMenuAdjustment),
+        Leaf("Transfer", "TruckFast", typeof(InventoryViewModel), "inventory", tabIndex: 3,
+            requiredPermission: AppConstants.Permissions.InventoryMenuTransfer),
+        Leaf("Recent Transfer", "History", typeof(InventoryViewModel), "inventory", tabIndex: 4,
+            requiredPermission: AppConstants.Permissions.InventoryMenuTransferHistory),
+        Leaf("Shortage book", "ClipboardAlert", typeof(InventoryViewModel), "inventory", tabIndex: 5,
+            requiredPermission: AppConstants.Permissions.InventoryMenuShortage),
+    ];
 
     private List<NavigationItem> BuildMastersChildren() =>
     [
-        Leaf("Suppliers", "Truck", typeof(MastersViewModel), "masters", tabIndex: 0),
-        Leaf("Customers", "AccountGroup", typeof(MastersViewModel), "masters", tabIndex: 1),
-        Leaf("Doctors", "Doctor", typeof(MastersViewModel), "masters", tabIndex: 2),
-        Leaf("Manufacturers", "Factory", typeof(MastersViewModel), "masters", tabIndex: 3),
-        Leaf("Employees", "BadgeAccountHorizontal", typeof(MastersViewModel), "masters", tabIndex: 4),
-        Leaf("Medicines", "Pill", typeof(MastersViewModel), "masters", tabIndex: 5),
+        Leaf("Suppliers", "Truck", typeof(MastersViewModel), "masters", tabIndex: 0,
+            requiredPermission: AppConstants.Permissions.MastersMenuSuppliers),
+        Leaf("Customers", "AccountGroup", typeof(MastersViewModel), "masters", tabIndex: 1,
+            requiredPermission: AppConstants.Permissions.MastersMenuCustomers),
+        Leaf("Doctors", "Doctor", typeof(MastersViewModel), "masters", tabIndex: 2,
+            requiredPermission: AppConstants.Permissions.MastersMenuDoctors),
+        Leaf("Manufacturers", "Factory", typeof(MastersViewModel), "masters", tabIndex: 3,
+            requiredPermission: AppConstants.Permissions.MastersMenuManufacturers),
+        Leaf("Employees", "BadgeAccountHorizontal", typeof(MastersViewModel), "masters", tabIndex: 4,
+            requiredPermission: AppConstants.Permissions.MastersMenuEmployees),
+        Leaf("Medicines", "Pill", typeof(MastersViewModel), "masters", tabIndex: 5,
+            requiredPermission: AppConstants.Permissions.MastersMenuMedicines),
     ];
 
-    private List<NavigationItem> BuildAccountingChildren()
-    {
-        var canVouchers = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.AccountingVouchers, AppConstants.Permissions.AccountingManage);
-        var canJournal = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.AccountingJournal, AppConstants.Permissions.AccountingView,
-            AppConstants.Permissions.AccountingManage);
-
-        var items = new List<NavigationItem>
-        {
-            Leaf("Parties", "AccountCash", typeof(AccountingViewModel), "accounting", tabIndex: 0),
-            Leaf("Customer Dues", "CashMultiple", typeof(AccountingViewModel), "accounting", tabIndex: 1),
-        };
-        if (canVouchers)
-            items.Add(Leaf("Vouchers", "Receipt", typeof(AccountingViewModel), "accounting", tabIndex: 2));
-        items.Add(Leaf("Cash Book", "BookOpenVariant", typeof(AccountingViewModel), "accounting", tabIndex: 3));
-        if (canJournal)
-            items.Add(Leaf("Journal", "NotebookOutline", typeof(AccountingViewModel), "accounting", tabIndex: 4));
-        return items;
-    }
-
-    private List<NavigationItem> BuildReportsChildren() =>
+    private List<NavigationItem> BuildAccountingChildren() =>
     [
-        Leaf("Sales Report", "PointOfSale", typeof(ReportsViewModel), "reports", reportKind: ReportKind.Sales),
-        Leaf("Purchase Report", "TruckDelivery", typeof(ReportsViewModel), "reports", reportKind: ReportKind.Purchases),
-        Leaf("GST Summary", "FilePercent", typeof(ReportsViewModel), "reports", reportKind: ReportKind.GstSummary),
-        Leaf("GSTR-1 export", "FileExport", typeof(ReportsViewModel), "reports", reportKind: ReportKind.Gstr1),
-        Leaf("GSTR-2B worksheet", "FileDocumentOutline", typeof(ReportsViewModel), "reports", reportKind: ReportKind.Gstr2B),
-        Leaf("Gross Profit", "ChartLine", typeof(ReportsViewModel), "reports", reportKind: ReportKind.Profit),
-        Leaf("Sales by Medicine", "Pill", typeof(ReportsViewModel), "reports", reportKind: ReportKind.SalesByMedicine),
-        Leaf("Schedule H / H1 Register", "ClipboardText", typeof(ReportsViewModel), "reports", reportKind: ReportKind.ScheduleRegister),
-        Leaf("Stock Valuation", "PackageVariantClosed", typeof(ReportsViewModel), "reports", reportKind: ReportKind.StockValuation),
-        Leaf("Expiry Report", "CalendarAlert", typeof(ReportsViewModel), "reports", reportKind: ReportKind.Expiry),
-        Leaf("Low Stock", "AlertCircleOutline", typeof(ReportsViewModel), "reports", reportKind: ReportKind.LowStock),
-        Leaf("Sale Returns", "AssignmentReturn", typeof(ReportsViewModel), "reports", reportKind: ReportKind.SaleReturns),
-        Leaf("Medicine-wise Returns", "BackupRestore", typeof(ReportsViewModel), "reports", reportKind: ReportKind.MedicineReturns),
+        Leaf("Parties", "AccountCash", typeof(AccountingViewModel), "accounting", tabIndex: 0,
+            requiredPermission: AppConstants.Permissions.AccountingMenuParties),
+        Leaf("Customer Dues", "CashMultiple", typeof(AccountingViewModel), "accounting", tabIndex: 1,
+            requiredPermission: AppConstants.Permissions.AccountingMenuDues),
+        Leaf("Vouchers", "Receipt", typeof(AccountingViewModel), "accounting", tabIndex: 2,
+            requiredPermission: AppConstants.Permissions.AccountingMenuVouchers),
+        Leaf("Cash Book", "BookOpenVariant", typeof(AccountingViewModel), "accounting", tabIndex: 3,
+            requiredPermission: AppConstants.Permissions.AccountingMenuCashbook),
+        Leaf("Journal", "NotebookOutline", typeof(AccountingViewModel), "accounting", tabIndex: 4,
+            requiredPermission: AppConstants.Permissions.AccountingMenuJournal),
     ];
 
-    private List<NavigationItem> BuildSettingsChildren()
+    private void AddReportsSubmenu()
     {
-        var canCompany = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.SettingsCompany, AppConstants.Permissions.SettingsManage);
-        var canBranches = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.SettingsBranches, AppConstants.Permissions.SettingsManage);
-        var canPreferences = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.SettingsPreferences, AppConstants.Permissions.SettingsManage);
-        var canUsers = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.UsersEdit, AppConstants.Permissions.UsersManage);
-        var canRoles = _currentUser.HasAnyPermission(
-            AppConstants.Permissions.UsersRoles, AppConstants.Permissions.UsersManage);
-        var canAccessSettings = _currentUser.CanAccessModule("settings");
-        var canMedicineMapping = _currentUser.HasAnyPermission(AppConstants.Permissions.SettingsManage)
-            || canAccessSettings;
-        var canMedWin = canMedicineMapping;
-
-        var items = new List<NavigationItem>();
-        if (canCompany)
-            items.Add(Leaf("Company", "Domain", typeof(SettingsViewModel), "settings", tabIndex: 0));
-        if (canBranches)
+        var root = new NavMenuEntry("Reports", "ChartBar");
+        foreach (var groupName in ReportCatalog.Groups)
         {
-            items.Add(Leaf("Branches", "Store", typeof(SettingsViewModel), "settings", tabIndex: 1));
-            items.Add(Leaf("Counters", "Monitor", typeof(SettingsViewModel), "settings", tabIndex: 2));
+            var group = new NavMenuEntry(groupName, IconForReportGroup(groupName));
+            foreach (var def in ReportCatalog.All.Where(d => d.Group == groupName))
+            {
+                var permission = ReportMenuPermissions.For(def.Kind);
+                if (!CanAccessPermission(permission)) continue;
+
+                var item = Leaf(def.Label, IconForReportKind(def.Kind), typeof(ReportsViewModel), "reports",
+                    reportKind: def.Kind, requiredPermission: permission);
+                group.AddChild(new NavMenuEntry(def.Label, IconForReportKind(def.Kind), item));
+            }
+            if (group.HasChildren)
+                root.AddChild(group);
         }
-        if (canPreferences)
-            items.Add(Leaf("Preferences", "Tune", typeof(SettingsViewModel), "settings", tabIndex: 3));
-        if (canMedicineMapping)
-            items.Add(Leaf("Medicine Mapping", "LinkVariant", typeof(SettingsViewModel), "settings", tabIndex: 4));
-        if (canMedWin)
-            items.Add(Leaf("MedWin Import", "DatabaseImport", typeof(SettingsViewModel), "settings", tabIndex: 5));
-        if (canRoles)
-            items.Add(Leaf("Roles & Permissions", "ShieldAccount", typeof(SettingsViewModel), "settings", tabIndex: 6));
-        if (canUsers)
-            items.Add(Leaf("Users", "AccountMultiple", typeof(SettingsViewModel), "settings", tabIndex: 7));
-        items.Add(Leaf("My Password", "LockReset", typeof(SettingsViewModel), "settings", tabIndex: 8));
-        items.Add(Leaf("Appearance", "Palette", typeof(SettingsViewModel), "settings", tabIndex: 9));
-        if (canPreferences)
-            items.Add(Leaf("Backup", "CloudUpload", typeof(SettingsViewModel), "settings", tabIndex: 10));
-        return items;
+
+        if (root.HasChildren)
+            TopMenu.Add(root);
     }
+
+    private static string IconForReportGroup(string group) => group switch
+    {
+        ReportCatalog.GroupSales => "PointOfSale",
+        ReportCatalog.GroupPurchase => "TruckDelivery",
+        ReportCatalog.GroupCustomers => "AccountGroup",
+        ReportCatalog.GroupPayments => "CashMultiple",
+        ReportCatalog.GroupGst => "FilePercent",
+        ReportCatalog.GroupStock => "PackageVariantClosed",
+        _ => "ChartBar"
+    };
+
+    private static string IconForReportKind(ReportKind kind) => kind switch
+    {
+        ReportKind.Sales or ReportKind.SalesDayWise => "PointOfSale",
+        ReportKind.SalesByCustomer or ReportKind.CustomerOutstanding or ReportKind.CustomerReceipts => "Account",
+        ReportKind.SalesByMedicine or ReportKind.MedicineReturns => "Pill",
+        ReportKind.SalesByPaymentMode => "CreditCard",
+        ReportKind.SalesCreditDue => "CashClock",
+        ReportKind.Profit => "ChartLine",
+        ReportKind.SaleReturns or ReportKind.PurchaseReturns => "AssignmentReturn",
+        ReportKind.ScheduleRegister => "ClipboardText",
+        ReportKind.Purchases or ReportKind.PurchasesBySupplier => "TruckDelivery",
+        ReportKind.SupplierOutstanding or ReportKind.SupplierPayments => "Truck",
+        ReportKind.PaymentVouchers or ReportKind.ReceiptVouchers => "Receipt",
+        ReportKind.ExpenseRegister or ReportKind.ExpenseByAccount => "CashMinus",
+        ReportKind.CashBookSummary => "BookOpenVariant",
+        ReportKind.GstSummary => "FilePercent",
+        ReportKind.Gstr1 => "FileExport",
+        ReportKind.Gstr2B => "FileDocumentOutline",
+        ReportKind.StockValuation or ReportKind.BatchStock => "PackageVariantClosed",
+        ReportKind.Expiry => "CalendarAlert",
+        ReportKind.LowStock => "AlertCircleOutline",
+        ReportKind.SlowMovingStock => "TimerSand",
+        _ => "ChartBar"
+    };
+
+    private List<NavigationItem> BuildSettingsChildren() =>
+    [
+        Leaf("Company", "Domain", typeof(SettingsViewModel), "settings", tabIndex: 0,
+            requiredPermission: AppConstants.Permissions.SettingsMenuCompany),
+        Leaf("Branches", "Store", typeof(SettingsViewModel), "settings", tabIndex: 1,
+            requiredPermission: AppConstants.Permissions.SettingsMenuBranches),
+        Leaf("Counters", "Monitor", typeof(SettingsViewModel), "settings", tabIndex: 2,
+            requiredPermission: AppConstants.Permissions.SettingsMenuCounters),
+        Leaf("Preferences", "Tune", typeof(SettingsViewModel), "settings", tabIndex: 3,
+            requiredPermission: AppConstants.Permissions.SettingsMenuPreferences),
+        Leaf("Medicine Mapping", "LinkVariant", typeof(SettingsViewModel), "settings", tabIndex: 4,
+            requiredPermission: AppConstants.Permissions.SettingsMenuMedicineMapping),
+        Leaf("New Medicine Mapping", "LinkPlus", typeof(SettingsViewModel), "settings", tabIndex: 5,
+            requiredPermission: AppConstants.Permissions.SettingsMenuNewMedicineMapping),
+        Leaf("MedWin Import", "DatabaseImport", typeof(SettingsViewModel), "settings", tabIndex: 6,
+            requiredPermission: AppConstants.Permissions.SettingsMenuMedWinImport),
+        Leaf("Roles & Permissions", "ShieldAccount", typeof(SettingsViewModel), "settings", tabIndex: 7,
+            requiredPermission: AppConstants.Permissions.SettingsMenuRoles),
+        Leaf("Users", "AccountMultiple", typeof(SettingsViewModel), "settings", tabIndex: 8,
+            requiredPermission: AppConstants.Permissions.SettingsMenuUsers),
+        Leaf("My Password", "LockReset", typeof(SettingsViewModel), "settings", tabIndex: 9,
+            requiredPermission: AppConstants.Permissions.SettingsMenuPassword),
+        Leaf("Appearance", "Palette", typeof(SettingsViewModel), "settings", tabIndex: 10,
+            requiredPermission: AppConstants.Permissions.SettingsMenuAppearance),
+        Leaf("Backup", "CloudUpload", typeof(SettingsViewModel), "settings", tabIndex: 11,
+            requiredPermission: AppConstants.Permissions.SettingsMenuBackup),
+        Leaf("Shop updates", "CloudDownload", typeof(SettingsViewModel), "settings", tabIndex: 12,
+            requiredPermission: AppConstants.Permissions.SettingsMenuUpdates),
+    ];
 
     private void AddModuleSubmenu(
         string groupLabel,
@@ -457,13 +529,8 @@ public class MainViewModel : ObservableObject
         Type viewModelType,
         List<NavigationItem> children)
     {
-        // Settings may be visible via users module even when settings module is locked.
-        var allowed = viewModelType == typeof(SettingsViewModel)
-            ? CanShow(new NavigationItem(groupLabel, groupIcon, viewModelType, module))
-            : _currentUser.CanAccessModule(module);
-        if (!allowed) return;
-
         var visible = children.Where(CanShow).ToList();
+        if (visible.Count == 0) return;
         AddGroupOrLeaf(groupLabel, groupIcon, visible);
     }
 
@@ -488,16 +555,23 @@ public class MainViewModel : ObservableObject
         Type vm,
         string module,
         int? tabIndex = null,
-        ReportKind? reportKind = null)
+        ReportKind? reportKind = null,
+        string? requiredPermission = null)
     {
-        var item = new NavigationItem(label, icon, vm, module, tabIndex, reportKind);
+        var item = new NavigationItem(label, icon, vm, module, tabIndex, reportKind, requiredPermission);
         if (CanShow(item))
             MenuItems.Add(item);
         return item;
     }
 
+    private bool CanAccessPermission(string permissionKey)
+        => _currentUser.HasPermission(permissionKey);
+
     private bool CanShow(NavigationItem item)
     {
+        if (!string.IsNullOrWhiteSpace(item.RequiredPermission))
+            return CanAccessPermission(item.RequiredPermission);
+
         if (item.TargetViewModel == typeof(SettingsViewModel))
             return _currentUser.CanAccessModule("settings") || _currentUser.CanAccessModule("users");
         return _currentUser.CanAccessModule(item.Module);

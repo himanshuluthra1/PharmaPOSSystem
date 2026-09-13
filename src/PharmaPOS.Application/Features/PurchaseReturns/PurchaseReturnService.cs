@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
@@ -16,12 +17,18 @@ public class PurchaseReturnService : IPurchaseReturnService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly IReportingSyncService _reportingSync;
+    private readonly IFinancialYearContext _financialYear;
 
-    public PurchaseReturnService(IUnitOfWork uow, IDateTimeProvider clock, IReportingSyncService reportingSync)
+    public PurchaseReturnService(
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        IReportingSyncService reportingSync,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
         _reportingSync = reportingSync;
+        _financialYear = financialYear;
     }
 
     public Task<List<ReturnReasonOptionDto>> ListReturnReasonsAsync(CancellationToken ct = default)
@@ -59,7 +66,8 @@ public class PurchaseReturnService : IPurchaseReturnService
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
             .Where(p => p.Status == PurchaseStatus.Received
                         || p.Status == PurchaseStatus.PartiallyReturned
-                        || p.Status == PurchaseStatus.Returned);
+                        || p.Status == PurchaseStatus.Returned)
+            .WhereInFinancialYear(_financialYear.Active, p => p.InvoiceDate);
 
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
@@ -155,6 +163,8 @@ public class PurchaseReturnService : IPurchaseReturnService
     public async Task<Result<PurchaseReturnReceiptDto>> CreateReturnAsync(
         CreatePurchaseReturnRequest request, int? branchId, string? userName, CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<PurchaseReturnReceiptDto>(_financialYear);
         try
         {
             var receipt = await PersistReturnAsync(request, branchId, userName, ct);
@@ -170,6 +180,8 @@ public class PurchaseReturnService : IPurchaseReturnService
     public async Task<Result<PurchaseReturnReceiptDto>> CreateDirectReturnAsync(
         CreateDirectPurchaseReturnRequest request, int? branchId, string? userName, CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<PurchaseReturnReceiptDto>(_financialYear);
         try
         {
             var receipt = await PersistDirectReturnAsync(request, branchId, userName, ct);
@@ -214,7 +226,8 @@ public class PurchaseReturnService : IPurchaseReturnService
     {
         var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
             .Where(r => r.Status == PurchaseReturnStatus.Completed
-                        && r.ReturnKind == PurchaseReturnKind.Standard);
+                        && r.ReturnKind == PurchaseReturnKind.Standard)
+            .WhereInFinancialYear(_financialYear.Active, r => r.ReturnDate);
         if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
         if (pendingSupplierReceiptOnly)
             q = q.Where(r => r.SupplierReturnReceiptNumber == null || r.SupplierReturnReceiptNumber == "");
@@ -291,6 +304,9 @@ public class PurchaseReturnService : IPurchaseReturnService
     public async Task<Result> AttachSupplierReceiptAsync(
         int purchaseReturnId, string receiptNumber, DateTime? receiptDate, string? userName, CancellationToken ct = default)
     {
+        var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
+        if (fyBlock.IsFailure) return fyBlock;
+
         receiptNumber = receiptNumber?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(receiptNumber))
             return Result.Failure("Enter the supplier return receipt / debit note number.");

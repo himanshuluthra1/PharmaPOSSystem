@@ -100,10 +100,12 @@ static void PrintHelp()
           --password <pwd>    Database password (default: z111111111111111111a — lowercase)
           --target <conn>     PharmaPOS SQL connection string
           --phase <name>      Run one phase (repeatable). Default: all
-          --force             Re-import sales/purchases; with --phase medicines, rematch OneMG catalogue;
+          --force             Re-import sales/purchases; with --phase medicines, same as default
+                              (clear prior MedWin links + fresh MedWin-only inserts; no auto-link);
                               with --phase dedupe-onemg, apply duplicate removal (default is dry-run)
-          --clear-transactions Permanently delete existing POS sales/purchases/stock/movements first
-                              (keeps medicine & other masters), then run selected phases
+          --clear-transactions Permanently delete existing POS sales/purchases/stock/movements,
+                              suppliers, and customers first (keeps medicine catalogue + company/users),
+                              then run selected phases
           --report-csv <path> Preview medicine matching to CSV (no DB writes)
           -h, --help          Show help
 
@@ -117,9 +119,10 @@ static void PrintHelp()
           - Medicines imported only if in stock or sold at least once in MedWin.
           - Salt/composition comes from itemgrp.itemgrds (not mgamma group codes).
           - Selling price comes from stock invoice rate (stkinvrate), then wrate/sale history.
-          - Quantities stay in MedWin units (do not divide sales by dpsize); pack size only for per-unit MRP.
+          - Quantities: MedWin stores loose units; import divides by pack size (stksize/dpsize/sizefact) → PharmaPOS pack qty (e.g. 45÷15=3).
           - Purchase returns and stock movements are written during full import.
-          - Active medicines are matched to existing OneMG catalogue by normalized name; matches are reused.
+          - Medicines phase always clears prior MedWinId Notes + MedicineMedWinMappings, then inserts fresh MedWin-only rows (no auto-link).
+          - Link later via Settings → Medicine Mapping. --report-csv still previews catalogue matches without writing.
           - Fresh start: --clear-transactions then full import (or Settings → MedWin Import checkbox).
           - In-app: Settings → MedWin Import (same runner as this CLI).
         """);

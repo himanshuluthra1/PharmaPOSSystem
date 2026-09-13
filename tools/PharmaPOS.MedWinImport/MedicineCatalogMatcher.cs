@@ -34,9 +34,8 @@ public sealed class MedicineCatalogMatcher
             // Skip MedWin-only duplicates so they do not steal barcode/name matches from OneMG catalogue.
             if (IsMedWinOnlyDuplicate(med.Notes)) continue;
 
+            // Index by product name only — never by salt/generic (too many false positives).
             matcher.AddToIndex(med.Name, med);
-            if (!string.IsNullOrWhiteSpace(med.GenericName))
-                matcher.AddToIndex(med.GenericName, med);
             if (!string.IsNullOrWhiteSpace(med.Barcode))
                 matcher._byBarcode[med.Barcode.Trim()] = med.Id;
             matcher._byId[med.Id] = med;
@@ -70,22 +69,29 @@ public sealed class MedicineCatalogMatcher
                 return new MedicineMatchResult(byCode, "Barcode", code, byBarcodeMed);
         }
 
+        // Name only (medname1 then medname). Never match on salt/generic alone.
         foreach (var (candidate, method) in new (string? Value, string Method)[]
         {
             (medName1, "medname1"),
-            (medName, "medname"),
-            (genericName, "generic")
+            (medName, "medname")
         })
         {
             var key = ImportHelpers.NormalizeForMatch(candidate);
             if (key.Length == 0) continue;
             if (!_byName.TryGetValue(key, out var matches) || matches.Count == 0) continue;
 
-            var best = matches
+            // Ambiguous catalogue hits → insert new rather than guess wrong.
+            var distinct = matches
+                .GroupBy(m => m.Id)
+                .Select(g => g.First())
                 .OrderBy(m => ImportHelpers.ParseMedWinMedicineId(m.Notes).HasValue ? 1 : 0)
                 .ThenBy(m => m.Id)
-                .First();
-            return new MedicineMatchResult(best.Id, method, key, best);
+                .ToList();
+
+            if (distinct.Count != 1)
+                continue;
+
+            return new MedicineMatchResult(distinct[0].Id, method, key, distinct[0]);
         }
 
         return null;

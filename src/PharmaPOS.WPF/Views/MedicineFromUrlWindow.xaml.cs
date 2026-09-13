@@ -98,6 +98,8 @@ public partial class MedicineFromUrlWindow : Window
                 SellingPrice = mrp,
                 PurchasePrice = 0,
                 GstPercent = gst,
+                RackNumber = NullIfBlank(LocationBox.Text),
+                HsnCode = NullIfBlank(HsnBox.Text),
                 Status = EntityStatus.Active
             };
 
@@ -120,7 +122,13 @@ public partial class MedicineFromUrlWindow : Window
                 saved?.PrescriptionRequired ?? false,
                 0m,
                 saved?.RackNumber,
-                saved?.BinNumber);
+                saved?.BinNumber,
+                saved?.Brand,
+                saved?.ScheduleType ?? ScheduleDrugType.None,
+                null,
+                saved?.PurchasePrice ?? 0m,
+                saved?.HsnCode,
+                saved?.Mrp ?? 0m);
 
             DialogResult = true;
             Close();

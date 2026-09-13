@@ -1,12 +1,15 @@
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
-using PharmaPOS.Application.Features.Reports;
 using PharmaPOS.WPF.ViewModels.Reports;
 
 namespace PharmaPOS.WPF.Views;
 
 public partial class ReportsView : UserControl
 {
+    private ReportsViewModel? _subscribedVm;
+
     public ReportsView()
     {
         InitializeComponent();
@@ -14,50 +17,63 @@ public partial class ReportsView : UserControl
 
     private ReportsViewModel? ViewModel => DataContext as ReportsViewModel;
 
-    private void SalesGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private void ReportsView_OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (sender is DataGrid { SelectedItem: SalesReportRowDto row })
-            ViewModel?.OpenSaleRowCommand.Execute(row);
-    }
+        if (_subscribedVm is not null)
+            _subscribedVm.ColumnsChanged -= RebuildColumns;
 
-    private void PurchaseGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is DataGrid { SelectedItem: PurchaseReportRowDto row })
-            ViewModel?.OpenPurchaseRowCommand.Execute(row);
-    }
-
-    private void SalesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter) return;
-        if (sender is DataGrid { SelectedItem: SalesReportRowDto row })
+        _subscribedVm = e.NewValue as ReportsViewModel;
+        if (_subscribedVm is not null)
         {
-            ViewModel?.OpenSaleRowCommand.Execute(row);
-            e.Handled = true;
+            _subscribedVm.ColumnsChanged += RebuildColumns;
+            RebuildColumns();
         }
     }
 
-    private void PurchaseGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void ReportsView_OnUnloaded(object sender, RoutedEventArgs e)
     {
-        if (e.Key != Key.Enter) return;
-        if (sender is DataGrid { SelectedItem: PurchaseReportRowDto row })
+        if (_subscribedVm is not null)
+            _subscribedVm.ColumnsChanged -= RebuildColumns;
+        _subscribedVm = null;
+    }
+
+    private void RebuildColumns()
+    {
+        ResultsGrid.Columns.Clear();
+        var vm = ViewModel;
+        if (vm is null) return;
+
+        foreach (var col in vm.Columns)
         {
-            ViewModel?.OpenPurchaseRowCommand.Execute(row);
-            e.Handled = true;
+            var binding = new Binding($"Values[{col.Key}]")
+            {
+                Mode = BindingMode.OneWay
+            };
+            if (!string.IsNullOrWhiteSpace(col.Format))
+                binding.StringFormat = col.Format;
+
+            ResultsGrid.Columns.Add(new DataGridTextColumn
+            {
+                Header = col.Header,
+                Binding = binding,
+                Width = new DataGridLength(1, DataGridLengthUnitType.Star),
+                MinWidth = 80
+            });
         }
     }
 
-    private void ScheduleGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private void ResultsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is DataGrid { SelectedItem: ScheduleRegisterRowDto row })
-            ViewModel?.OpenScheduleRowCommand.Execute(row);
+        if (sender is DataGrid { SelectedItem: ReportRowViewModel row })
+            ViewModel?.OpenRowCommand.Execute(row);
     }
 
-    private void ScheduleGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    private void ResultsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
-        if (sender is DataGrid { SelectedItem: ScheduleRegisterRowDto row })
+        if (sender is DataGrid { SelectedItem: ReportRowViewModel row })
         {
-            ViewModel?.OpenScheduleRowCommand.Execute(row);
+            ViewModel?.OpenRowCommand.Execute(row);
             e.Handled = true;
         }
     }

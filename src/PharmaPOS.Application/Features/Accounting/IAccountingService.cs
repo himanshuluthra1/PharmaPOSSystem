@@ -18,9 +18,25 @@ public interface IAccountingService
         bool owedOnly = false,
         CancellationToken ct = default);
 
+    /// <param name="openOnly">When true, only bills with a balance due are returned.</param>
     Task<List<PartyBillRowDto>> ListPartyBillsAsync(
         PartyLedgerKind kind,
         int partyId,
+        int? branchId,
+        bool openOnly = true,
+        CancellationToken ct = default);
+
+    /// <summary>Aggregate bill counts/amounts for one party (always includes settled for totals).</summary>
+    Task<PartyBillsSummaryDto> GetPartyBillsSummaryAsync(
+        PartyLedgerKind kind,
+        int partyId,
+        int? branchId,
+        CancellationToken ct = default);
+
+    /// <summary>Aggregate bill counts/amounts across the given party ids.</summary>
+    Task<PartyBillsSummaryDto> GetPartiesBillsSummaryAsync(
+        PartyLedgerKind kind,
+        IReadOnlyList<int> partyIds,
         int? branchId,
         CancellationToken ct = default);
 

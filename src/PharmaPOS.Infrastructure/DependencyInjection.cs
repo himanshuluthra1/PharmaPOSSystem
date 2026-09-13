@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<ICounterContextService, CounterContextService>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+        services.AddSingleton<IFinancialYearContext, FinancialYearContext>();
         return services;
     }
 }

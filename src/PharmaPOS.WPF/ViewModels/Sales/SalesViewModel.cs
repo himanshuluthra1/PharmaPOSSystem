@@ -34,6 +34,7 @@ public class SalesViewModel : ObservableObject
     private readonly IBarcodeCameraService _barcodeCamera;
     private readonly IBillShareService _billShare;
     private readonly IShortageBookService _shortageBook;
+    private readonly IFinancialYearContext _financialYear;
 
     private string _customerName = string.Empty;
     private string? _customerMobile;
@@ -83,7 +84,8 @@ public class SalesViewModel : ObservableObject
         IInvoicePrintService printService,
         IBarcodeCameraService barcodeCamera,
         IBillShareService billShare,
-        IShortageBookService shortageBook)
+        IShortageBookService shortageBook,
+        IFinancialYearContext financialYear)
     {
         _salesService = salesService;
         _settings = settings;
@@ -100,6 +102,7 @@ public class SalesViewModel : ObservableObject
         _barcodeCamera = barcodeCamera;
         _billShare = billShare;
         _shortageBook = shortageBook;
+        _financialYear = financialYear;
 
         CanCreate = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesCreate, AppConstants.Permissions.SalesManage);
@@ -123,24 +126,28 @@ public class SalesViewModel : ObservableObject
         SaveCommand = new AsyncRelayCommand(_ => SaveAsync(), _ => CanSaveBill);
         UnlockBillCommand = new AsyncRelayCommand(_ => UnlockBillAsync(), _ => CanUnlockBill);
         PrintCommand = new AsyncRelayCommand(_ => PrintAsync(), _ => CanPrint && IsEditing && !IsBusy);
-        NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate);
+        NewBillCommand = new RelayCommand(_ => NewBill(), _ => CanCreate && _financialYear.CanEditTransactions);
         SearchBillsCommand = new AsyncRelayCommand(_ => OpenBillSearchAsync(), _ => CanSearchBills && !IsBusy);
         OpenSaleReturnCommand = new AsyncRelayCommand(_ => OpenInlineReturnAsync(),
-            _ => CanReturn && IsEditing && !IsBusy);
+            _ => CanReturn && _financialYear.CanEditTransactions && IsEditing && !IsBusy);
         LoadOlderBillsCommand = new AsyncRelayCommand(_ => LoadOlderBillsAsync(), _ => CanLoadOlderBills);
         ScanBarcodeCameraCommand = new AsyncRelayCommand(_ => ScanBarcodeCameraAsync(), _ => CanModifyBill && !IsBusy);
-        SwitchOpenBillCommand = new RelayCommand(p => SwitchOpenBill(p), _ => CanCreate && !IsBusy);
-        NewCustomerBillCommand = new RelayCommand(_ => OpenNewCustomerBill(), _ => CanCreate && !IsBusy && OpenBills.Count < MaxOpenCustomerBills);
+        SwitchOpenBillCommand = new RelayCommand(p => SwitchOpenBill(p), _ => CanCreate && _financialYear.CanEditTransactions && !IsBusy);
+        NewCustomerBillCommand = new RelayCommand(_ => OpenNewCustomerBill(), _ => CanCreate && _financialYear.CanEditTransactions && !IsBusy && OpenBills.Count < MaxOpenCustomerBills);
         CloseCustomerBillCommand = new RelayCommand(_ => CloseActiveCustomerBill(), _ => CanCreate && !IsBusy);
         RefreshCounterCashCommand = new AsyncRelayCommand(RefreshCounterCashAsync, () => !IsBusy);
         ShowCounterCashSummaryCommand = new AsyncRelayCommand(ShowCounterCashSummaryAsync, () => !IsBusy);
         ChangeCounterCommand = new AsyncRelayCommand(ChangeCounterAsync, () => !IsBusy);
         DayCloseCommand = new AsyncRelayCommand(DayCloseAsync, () => !IsBusy && HasCounterSession);
         LastSaleRefillCommand = new AsyncRelayCommand(_ => OpenLastSaleRefillAsync(), _ => CanModifyBill);
+        SearchCustomerCommand = new AsyncRelayCommand(_ => OpenCustomerPickerAsync(), _ => CanModifyBill && !IsBusy);
         AddPaymentCommand = new RelayCommand(_ => AddPaymentLine(), _ => CanAddPayment);
         RemovePaymentCommand = new RelayCommand(
             p => RemovePaymentLine(p as SalePaymentLineViewModel),
             _ => CanModifyBill && PaymentLines.Count > 1);
+        ToggleCostMaskCommand = new RelayCommand(
+            _ => IsCostUnmasked = !IsCostUnmasked,
+            _ => HasSelectedMedicineDetail);
 
         OpenBills.Add(CreateSlot(1));
         OpenBills[0].IsActive = true;
@@ -200,8 +207,10 @@ public class SalesViewModel : ObservableObject
     public ICommand ChangeCounterCommand { get; }
     public ICommand DayCloseCommand { get; }
     public ICommand LastSaleRefillCommand { get; }
+    public ICommand SearchCustomerCommand { get; }
     public ICommand AddPaymentCommand { get; }
     public ICommand RemovePaymentCommand { get; }
+    public ICommand ToggleCostMaskCommand { get; }
 
     public string CounterDisplay =>
         _counterContext.ActiveCounterDisplay ?? "No counter selected";
@@ -263,19 +272,23 @@ public class SalesViewModel : ObservableObject
     /// <summary>True when the loaded bill can be changed (new bill, or unlocked edit allowed).</summary>
     public bool CanModifyBill =>
         CanCreate
+        && _financialYear.CanEditTransactions
         && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked))
         && !IsBusy;
 
     public bool CanSaveBill => CanModifyBill && Cart.Any(l => !l.IsEmpty);
 
     public bool ShowSaveButton =>
-        CanCreate && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
+        CanCreate && _financialYear.CanEditTransactions
+        && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
 
     public bool IsBillReadOnly =>
-        IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked);
+        !_financialYear.CanEditTransactions
+        || (IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
 
     public bool CanUnlockBill =>
-        IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices && !IsBusy;
+        IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices
+        && _financialYear.CanEditTransactions && !IsBusy;
 
     public bool ShowLockBanner => IsEditing && IsInvoiceLocked && InvoiceEditEnabled;
 
@@ -454,6 +467,38 @@ public class SalesViewModel : ObservableObject
             Owner = System.Windows.Application.Current.MainWindow
         };
         window.ShowDialog();
+    }
+
+    /// <summary>Loads the under-grid detail strip for the focused cart line.</summary>
+    public async Task RefreshCartLineDetailAsync(CartLineViewModel? line)
+    {
+        if (line is null || line.IsEmpty)
+        {
+            SelectedMedicineDetail = null;
+            return;
+        }
+
+        var requestId = ++_cartDetailRequestId;
+        var medicineId = line.MedicineId;
+        var batchId = line.BatchId > 0 ? line.BatchId : (int?)null;
+
+        try
+        {
+            var detail = await _salesService.GetMedicineLineDetailAsync(
+                medicineId,
+                batchId,
+                _currentUser.CurrentUser?.BranchId);
+
+            if (requestId != _cartDetailRequestId)
+                return;
+
+            SelectedMedicineDetail = detail;
+        }
+        catch
+        {
+            if (requestId == _cartDetailRequestId)
+                SelectedMedicineDetail = null;
+        }
     }
 
     public async Task ReplaceWithSubstituteAsync(CartLineViewModel line)
@@ -750,6 +795,28 @@ public class SalesViewModel : ObservableObject
         set => SetProperty(ref _doctorName, value);
     }
 
+    private async Task OpenCustomerPickerAsync()
+    {
+        var seed = !string.IsNullOrWhiteSpace(CustomerName)
+            ? CustomerName
+            : CustomerMobile;
+        var vm = new CustomerPickerViewModel(_salesService, seed);
+        var window = new Views.CustomerPickerWindow(vm)
+        {
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+        if (window.ShowDialog() != true || window.SelectedCustomer is null)
+            return;
+
+        var c = window.SelectedCustomer;
+        CustomerName = c.Name;
+        CustomerMobile = c.Phone;
+        if (!string.IsNullOrWhiteSpace(c.Address))
+            CustomerAddress = c.Address;
+        StatusMessage = $"Customer selected: {c.Name}";
+        await Task.CompletedTask;
+    }
+
     #endregion
 
     #region Totals & payment
@@ -808,7 +875,9 @@ public class SalesViewModel : ObservableObject
         RoundOff = summary.RoundOff;
         GrandTotal = summary.GrandTotal;
 
-        if (!_suppressPaymentSync && PaymentLines.Count == 1)
+        // New bills only: keep the sole tender in sync with the cart total.
+        // Editing an existing invoice must preserve loaded (incl. dues-adjusted) payments.
+        if (!_suppressPaymentSync && !IsEditing && PaymentLines.Count == 1)
             PaymentLines[0].SetAmountSilent(GrandTotal);
 
         OnPropertyChanged(nameof(ItemCount));
@@ -923,6 +992,44 @@ public class SalesViewModel : ObservableObject
         get => _statusMessage;
         private set => SetProperty(ref _statusMessage, value);
     }
+
+    /// <summary>Extra medicine fields for the strip under the cart (not shown as grid columns).</summary>
+    public SaleMedicineDetailDto? SelectedMedicineDetail
+    {
+        get => _selectedMedicineDetail;
+        private set
+        {
+            if (!SetProperty(ref _selectedMedicineDetail, value)) return;
+            // Remask cost whenever the selected line changes.
+            IsCostUnmasked = false;
+            OnPropertyChanged(nameof(HasSelectedMedicineDetail));
+            OnPropertyChanged(nameof(CostDisplayText));
+        }
+    }
+
+    public bool HasSelectedMedicineDetail => SelectedMedicineDetail is not null;
+
+    public bool IsCostUnmasked
+    {
+        get => _isCostUnmasked;
+        private set
+        {
+            if (SetProperty(ref _isCostUnmasked, value))
+                OnPropertyChanged(nameof(CostDisplayText));
+        }
+    }
+
+    /// <summary>Masked by default (••••); click Cost chip to reveal / hide.</summary>
+    public string CostDisplayText =>
+        SelectedMedicineDetail is null
+            ? "-"
+            : IsCostUnmasked
+                ? SelectedMedicineDetail.CostPrice.ToString("N2")
+                : "••••";
+
+    private int _cartDetailRequestId;
+    private SaleMedicineDetailDto? _selectedMedicineDetail;
+    private bool _isCostUnmasked;
 
     private async Task InitializeBillsAsync()
     {
@@ -1200,7 +1307,18 @@ public class SalesViewModel : ObservableObject
         }
 
         EnsureTrailingEmptyRow();
-        RecalculateTotals();
+        // Do not force the single payment line to GrandTotal — dues collections
+        // leave Credit + Cash/Bank splits that must stay intact.
+        _suppressPaymentSync = true;
+        try
+        {
+            RecalculateTotals();
+        }
+        finally
+        {
+            _suppressPaymentSync = false;
+            NotifyPaymentProperties();
+        }
         StatusMessage = BuildEditStatusMessage(sale.InvoiceNumber);
         if (focusGridAfterLoad && !IsBillReadOnly)
             RequestItemFocus?.Invoke(Cart.FirstOrDefault());

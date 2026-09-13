@@ -23,6 +23,7 @@ public class SaleReturnViewModel : ObservableObject
     private readonly IDialogService _dialog;
     private readonly IInvoicePrintService _printService;
     private readonly int? _branchId;
+    private readonly IFinancialYearContext _financialYear;
 
     private SaleReturnSearchCriteriaOption _selectedCriteria;
     private string _searchText = string.Empty;
@@ -47,16 +48,19 @@ public class SaleReturnViewModel : ObservableObject
         ISaleReturnService saleReturnService,
         ICurrentUserService currentUser,
         IDialogService dialog,
-        IInvoicePrintService printService)
+        IInvoicePrintService printService,
+        IFinancialYearContext financialYear)
     {
         _saleReturnService = saleReturnService;
         _currentUser = currentUser;
         _dialog = dialog;
         _printService = printService;
+        _financialYear = financialYear;
         _branchId = currentUser.CurrentUser?.BranchId;
 
         CanProcess = currentUser.HasAnyPermission(
-            AppConstants.Permissions.SalesReturn, AppConstants.Permissions.SalesReturnManage);
+            AppConstants.Permissions.SalesReturn, AppConstants.Permissions.SalesReturnManage)
+            && financialYear.CanEditTransactions;
         CanOverride = currentUser.HasAnyPermission(
             AppConstants.Permissions.SalesReturnOverride, AppConstants.Permissions.SalesReturnManage);
         CanHighValue = currentUser.HasAnyPermission(

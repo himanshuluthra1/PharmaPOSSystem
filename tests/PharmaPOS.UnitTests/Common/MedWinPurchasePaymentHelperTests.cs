@@ -3,23 +3,23 @@ namespace PharmaPOS.UnitTests.Common;
 /// <summary>Tests the MedWin purchase paid-amount rules (mirrors ImportHelpers.ResolveMedWinPurchasePaidAmount).</summary>
 public class MedWinPurchasePaymentHelperTests
 {
-    private static decimal ResolvePaid(decimal grandTotal, decimal creditDue, decimal chequePaid)
+    private static decimal ResolvePaid(decimal grandTotal, decimal debitNoteSettled, decimal chequePaid)
     {
         if (grandTotal <= 0) return 0m;
-        if (creditDue > 0) return Math.Clamp(grandTotal - creditDue, 0m, grandTotal);
-        if (chequePaid > 0) return Math.Min(grandTotal, chequePaid);
-        return 0m;
+        var paid = chequePaid + debitNoteSettled;
+        if (paid <= 0) return 0m;
+        return Math.Min(grandTotal, paid);
     }
 
     [Theory]
-    [InlineData(12799, 0, 0, 0)]       // bill 2223 — unpaid
-    [InlineData(15135, 0, 15135, 15135)] // full cheque payment
-    [InlineData(13261, 4946, 8315, 8315)] // partial credit
-    [InlineData(895, 582, 313, 313)]
+    [InlineData(12799, 0, 0, 0)]             // unpaid — both settlement fields zero
+    [InlineData(15135, 0, 15135, 15135)]     // full cash/cheque
+    [InlineData(4853, 2558, 2295, 4853)]     // cash + DB/NOTE (D.R. SB-26-17236)
+    [InlineData(13887, 3712, 10175, 13887)]  // cash + DB/NOTE
+    [InlineData(13759, 0, 683, 683)]         // partial cash only, remainder still due
     public void ResolvePaid_matches_medwin_header_patterns(
-        decimal grandTotal, decimal creditDue, decimal chequePaid, decimal expectedPaid)
+        decimal grandTotal, decimal debitNoteSettled, decimal chequePaid, decimal expectedPaid)
     {
-        Assert.Equal(expectedPaid, ResolvePaid(grandTotal, creditDue, chequePaid));
-        Assert.Equal(grandTotal - expectedPaid, grandTotal - ResolvePaid(grandTotal, creditDue, chequePaid));
+        Assert.Equal(expectedPaid, ResolvePaid(grandTotal, debitNoteSettled, chequePaid));
     }
 }

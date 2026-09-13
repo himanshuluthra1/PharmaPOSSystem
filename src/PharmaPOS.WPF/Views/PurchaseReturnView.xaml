@@ -9,7 +9,7 @@
              mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
              Focusable="True"
              PreviewKeyDown="PurchaseReturnView_PreviewKeyDown">
-    <Grid Margin="8">
+    <Grid Margin="4">
         <TabControl x:Name="MainTabs">
             <!-- Against purchase bill -->
             <TabItem Header="Against Bill">
@@ -21,31 +21,29 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="SearchBox" Grid.Column="0" Margin="0,0,8,0"
-                                     materialDesign:HintAssist.Hint="Search by invoice #, supplier invoice #, or supplier name"
-                                     Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Grid.Column="1" Margin="0,0,8,0"
+                    <materialDesign:Card Grid.Row="0" Margin="0,0,0,4" UniformCornerRadius="10" Padding="8,6">
+                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="Search :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <TextBox x:Name="SearchBox" Width="260" MaxWidth="300"
+                                         materialDesign:HintAssist.Hint="Search by invoice #, supplier invoice #, or supplier name"
+                                         materialDesign:HintAssist.IsFloating="False"
+                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                         Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <Button Margin="0,0,8,0"
                                     Command="{Binding SearchCommand}"
                                     Style="{StaticResource MaterialDesignRaisedButton}"
-                                    Padding="16,8"
+                                    Padding="8,2" Height="28"
                                     Content="Search (F3)" />
-                            <Button Grid.Column="2"
-                                    Command="{Binding LoadPurchaseCommand}"
+                            <Button Command="{Binding LoadPurchaseCommand}"
                                     Style="{StaticResource MaterialDesignOutlinedButton}"
-                                    Padding="16,8"
+                                    Padding="8,2" Height="28"
                                     Content="Load Bill" />
-                        </Grid>
+                        </WrapPanel>
                     </materialDesign:Card>
 
-                    <materialDesign:Card Grid.Row="1" Margin="0,0,0,8" UniformCornerRadius="10" Padding="8"
+                    <materialDesign:Card Grid.Row="1" Margin="0,0,0,4" UniformCornerRadius="10" Padding="8"
                                          MaxHeight="140"
                                          Visibility="{Binding HasSearchResults, Converter={StaticResource BoolToVisibility}}">
                         <DockPanel>
@@ -75,17 +73,21 @@
                             <ColumnDefinition Width="280" MinWidth="200" />
                         </Grid.ColumnDefinitions>
 
-                        <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
+                        <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="8">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Command="{Binding ClearCommand}"
+                                            Style="{StaticResource MaterialDesignFlatButton}"
+                                            Content="Clear" Padding="8,2" Height="28" />
                                     <StackPanel>
-                                        <TextBlock Text="Items to return" FontSize="18" FontWeight="Bold" />
-                                        <TextBlock Margin="0,4,0,0" Opacity="0.85" TextWrapping="Wrap"
+                                        <TextBlock Text="Items to return" FontSize="13" FontWeight="SemiBold" />
+                                        <TextBlock Margin="0,2,0,0" Opacity="0.85" FontSize="10" TextTrimming="CharacterEllipsis"
                                                    Visibility="{Binding HasLoadedPurchase, Converter={StaticResource BoolToVisibility}}">
                                             <Run Text="{Binding LoadedPurchase.InvoiceNumber, StringFormat=Bill: {0}, Mode=OneWay}" />
                                             <Run Text="  ·  " />
@@ -94,7 +96,7 @@
                                             <Run Text="{Binding LoadedPurchase.InvoiceDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" />
                                         </TextBlock>
                                         <TextBlock Text="Search and load a received purchase bill, then tick lines to return."
-                                                   Opacity="0.65" Margin="0,4,0,0">
+                                                   Opacity="0.65" FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Visible" />
@@ -107,10 +109,6 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                     </StackPanel>
-                                    <Button DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                            Command="{Binding ClearCommand}"
-                                            Style="{StaticResource MaterialDesignFlatButton}"
-                                            Content="Clear" />
                                 </DockPanel>
 
                                 <DataGrid Grid.Row="1"
@@ -153,19 +151,22 @@
                             </Grid>
                         </materialDesign:Card>
 
-                        <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="16">
+                        <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="8"
+                                             ToolTip="Stock is reduced when you process the return. Enter the supplier return receipt / debit note number later under Return Records.">
                             <StackPanel>
-                                <TextBlock Text="Return summary" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
-                                <TextBlock TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,12"
-                                           Text="Stock is reduced when you process the return. Enter the supplier return receipt / debit note number later under Return Records." />
+                                <TextBlock Text="Return summary" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
 
+                                <TextBlock Text="Settlement" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding SettlementModes}"
                                           SelectedItem="{Binding SettlementMode}"
                                           materialDesign:HintAssist.Hint="Settlement"
+                                          materialDesign:HintAssist.IsFloating="False"
                                           Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                           Margin="0,0,0,12" />
 
+                                <TextBlock Text="Remarks" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                 <TextBox materialDesign:HintAssist.Hint="Remarks (optional)"
+                                         materialDesign:HintAssist.IsFloating="False"
                                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                          Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}"
                                          AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
@@ -200,17 +201,14 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <materialDesign:Card Grid.Row="0" Margin="0,0,0,8" UniformCornerRadius="10" Padding="12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="220" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0" Margin="0,0,8,0">
+                    <materialDesign:Card Grid.Row="0" Margin="0,0,0,4" UniformCornerRadius="10" Padding="8,6">
+                        <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                                <TextBlock Text="Supplier :" Style="{StaticResource FieldCaption}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                <Grid Width="260" MaxWidth="300">
                                 <TextBox x:Name="DirectSupplierBox"
                                          materialDesign:HintAssist.Hint="Search supplier"
+                                         materialDesign:HintAssist.IsFloating="False"
                                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                          Text="{Binding DirectSupplierSearch, UpdateSourceTrigger=PropertyChanged}"
                                          PreviewKeyDown="DirectSupplierBox_PreviewKeyDown" />
@@ -229,18 +227,20 @@
                                     </Border>
                                 </Popup>
                             </Grid>
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold"
-                                       Text="{Binding DirectSupplierDisplay}" TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="2" Margin="0,0,8,0"
+                            </StackPanel>
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" FontSize="11"
+                                       Text="{Binding DirectSupplierDisplay}" TextTrimming="CharacterEllipsis"
+                                       MaxWidth="180" Margin="0,0,8,0" />
+                            <Button Margin="0,0,8,0"
                                     Command="{Binding AddDirectMedicineCommand}"
                                     Style="{StaticResource MaterialDesignRaisedButton}"
-                                    Padding="16,8"
+                                    Padding="8,2" Height="28"
                                     Content="Add Medicine" />
-                            <Button Grid.Column="3"
-                                    Command="{Binding ClearDirectCommand}"
+                            <Button Command="{Binding ClearDirectCommand}"
                                     Style="{StaticResource MaterialDesignFlatButton}"
+                                    Padding="8,2" Height="28"
                                     Content="Clear" />
-                        </Grid>
+                        </WrapPanel>
                     </materialDesign:Card>
 
                     <Grid Grid.Row="1">
@@ -249,17 +249,15 @@
                             <ColumnDefinition Width="280" MinWidth="200" />
                         </Grid.ColumnDefinitions>
 
-                        <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="12">
+                        <materialDesign:Card Grid.Column="0" Margin="0,0,6,0" UniformCornerRadius="10" Padding="8"
+                                             ToolTip="Pick medicines from stock (no purchase bill required). Rate defaults from batch purchase price.">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Margin="0,0,0,8">
-                                    <TextBlock Text="Medicines to return" FontSize="18" FontWeight="Bold" />
-                                    <TextBlock Margin="0,4,0,0" Opacity="0.65" TextWrapping="Wrap"
-                                               Text="Pick medicines from stock (no purchase bill required). Rate defaults from batch purchase price." />
-                                </StackPanel>
+                                <TextBlock Grid.Row="0" Text="Medicines to return" FontSize="13" FontWeight="SemiBold"
+                                           Margin="0,0,0,4" />
                                 <DataGrid Grid.Row="1"
                                           ItemsSource="{Binding DirectLines}"
                                           AutoGenerateColumns="False"
@@ -313,19 +311,22 @@
                             </Grid>
                         </materialDesign:Card>
 
-                        <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="16">
+                        <materialDesign:Card Grid.Column="1" UniformCornerRadius="10" Padding="8"
+                                             ToolTip="Use this when returning stock without the original purchase bill. Same receipt-number entry later under Return Records.">
                             <StackPanel>
-                                <TextBlock Text="Direct return" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
-                                <TextBlock TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,12"
-                                           Text="Use this when returning stock without the original purchase bill. Same receipt-number entry later under Return Records." />
+                                <TextBlock Text="Direct return" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
 
+                                <TextBlock Text="Settlement" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                 <ComboBox ItemsSource="{Binding SettlementModes}"
                                           SelectedItem="{Binding DirectSettlementMode}"
                                           materialDesign:HintAssist.Hint="Settlement"
+                                          materialDesign:HintAssist.IsFloating="False"
                                           Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                           Margin="0,0,0,12" />
 
+                                <TextBlock Text="Remarks" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                 <TextBox materialDesign:HintAssist.Hint="Remarks (optional)"
+                                         materialDesign:HintAssist.IsFloating="False"
                                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                          Text="{Binding DirectRemarks, UpdateSourceTrigger=PropertyChanged}"
                                          AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
@@ -360,25 +361,42 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4" VerticalAlignment="Center">
+                        <TextBlock Text="Return records" FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <Button Command="{Binding RefreshReturnsCommand}"
+                                Style="{StaticResource MaterialDesignIconButton}"
+                                Width="28" Height="28" Padding="0" Margin="0,0,8,0"
+                                ToolTip="Refresh">
+                            <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" />
+                        </Button>
                         <CheckBox Content="Only pending supplier receipt"
                                   IsChecked="{Binding PendingReceiptOnly}"
                                   VerticalAlignment="Center" />
-                        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                Command="{Binding RefreshReturnsCommand}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Content="Refresh" />
-                    </DockPanel>
+                    </WrapPanel>
 
-                    <materialDesign:Card Grid.Row="1" UniformCornerRadius="10" Padding="12" Margin="0,0,0,8">
+                    <materialDesign:Card Grid.Row="1" UniformCornerRadius="10" Padding="8" Margin="0,0,0,4">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Margin="0,0,0,8" TextWrapping="Wrap" Opacity="0.85"
-                                       Text="{Binding SelectedReturnHint}" />
+                            <TextBlock Grid.Row="0" Margin="0,0,0,4" FontSize="10" TextTrimming="CharacterEllipsis"
+                                       Opacity="0.85" Text="{Binding SelectedReturnHint}" />
                             <Grid Grid.Row="1" IsEnabled="{Binding HasSelectedReturn}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="180" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Receipt #" Style="{StaticResource FieldCaption}" Margin="0,0,8,0" />
+                                    <TextBlock Grid.Column="1" Text="Receipt date" Style="{StaticResource FieldCaption}" Margin="0,0,8,0" />
+                                </Grid>
+                                <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="180" />
@@ -386,16 +404,20 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBox x:Name="ReceiptNumberBox" Grid.Column="0" Margin="0,0,8,0"
                                          materialDesign:HintAssist.Hint="Supplier return receipt / debit note number"
+                                         materialDesign:HintAssist.IsFloating="False"
                                          Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                          Text="{Binding ReceiptNumber, UpdateSourceTrigger=PropertyChanged}" />
                                 <DatePicker Grid.Column="1" Margin="0,0,8,0"
                                             materialDesign:HintAssist.Hint="Receipt date"
+                                            materialDesign:HintAssist.IsFloating="False"
+                                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"
                                             SelectedDate="{Binding ReceiptDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 <Button Grid.Column="2"
                                         Command="{Binding AttachReceiptCommand}"
                                         Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Padding="16,8"
+                                        Padding="8,2" Height="28"
                                         Content="Save Receipt #" />
+                                </Grid>
                             </Grid>
                         </Grid>
                     </materialDesign:Card>

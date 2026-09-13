@@ -21,143 +21,112 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Top app bar -->
-        <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryMid"
+        <materialDesign:ColorZone Grid.Row="0"
+                                  Background="{Binding TopBarBackground}"
                                   materialDesign:ElevationAssist.Elevation="Dp4"
-                                  Padding="16,8">
-            <StackPanel>
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <ToggleButton Style="{StaticResource MaterialDesignActionToggleButton}"
-                                      ToolTip="Toggle dark / light theme"
-                                      IsChecked="{Binding IsDarkMode}"
-                                      Margin="4,0">
-                            <materialDesign:PackIcon Kind="WeatherNight" />
-                            <materialDesign:ToggleButtonAssist.OnContent>
-                                <materialDesign:PackIcon Kind="WhiteBalanceSunny" />
-                            </materialDesign:ToggleButtonAssist.OnContent>
-                        </ToggleButton>
+                                  Padding="16,8"
+                                  Foreground="White">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ToggleButton Style="{StaticResource MaterialDesignActionToggleButton}"
+                                  ToolTip="Toggle dark / light theme"
+                                  IsChecked="{Binding IsDarkMode}"
+                                  Margin="4,0">
+                        <materialDesign:PackIcon Kind="WeatherNight" />
+                        <materialDesign:ToggleButtonAssist.OnContent>
+                            <materialDesign:PackIcon Kind="WhiteBalanceSunny" />
+                        </materialDesign:ToggleButtonAssist.OnContent>
+                    </ToggleButton>
 
-                        <Button Style="{StaticResource MaterialDesignIconButton}" ToolTip="Notifications">
-                            <materialDesign:PackIcon Kind="BellOutline" />
-                        </Button>
+                    <Button Style="{StaticResource MaterialDesignIconButton}" ToolTip="Notifications">
+                        <materialDesign:PackIcon Kind="BellOutline" />
+                    </Button>
 
-                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="AccountCircle" Width="28" Height="28"
-                                                     VerticalAlignment="Center" />
-                            <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" FontSize="13"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="140" />
-                                <TextBlock Text="{Binding RoleName}" FontSize="11" Opacity="0.8"
-                                           TextTrimming="CharacterEllipsis" MaxWidth="140" />
-                            </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="AccountCircle" Width="28" Height="28"
+                                                 VerticalAlignment="Center" />
+                        <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" FontSize="13"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                            <TextBlock Text="{Binding RoleName}" FontSize="11" Opacity="0.8"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="140" />
                         </StackPanel>
-
-                        <Button Style="{StaticResource MaterialDesignIconButton}" ToolTip="Sign out"
-                                Command="{Binding LogoutCommand}" Margin="8,0,0,0">
-                            <materialDesign:PackIcon Kind="Logout" />
-                        </Button>
                     </StackPanel>
 
-                    <WrapPanel VerticalAlignment="Center" Margin="0,0,12,0">
-                        <materialDesign:PackIcon Kind="Pill" Width="28" Height="28"
-                                                 VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock Text="PharmaPOS" FontSize="20" FontWeight="Bold"
-                                   VerticalAlignment="Center" Margin="0,0,12,0" />
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0"
-                                    Visibility="{Binding HasActiveSectionTitle, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="·" FontSize="18" Opacity="0.7" Margin="0,0,8,0"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding ActiveSectionTitle}"
-                                       FontSize="16" FontWeight="SemiBold"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="280" />
-                        </StackPanel>
-                        <TextBlock Text="{Binding StoreCodeDisplay}" VerticalAlignment="Center"
-                                   Margin="0,0,12,0"
-                                   FontSize="13" FontWeight="SemiBold"
-                                   Opacity="0.95"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="160" />
-                        <TextBlock Text="{Binding BranchName}" VerticalAlignment="Center"
-                                   Opacity="0.75"
-                                   FontSize="13"
-                                   Margin="0,0,12,0"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="160" />
+                    <Button Style="{StaticResource MaterialDesignIconButton}" ToolTip="Sign out"
+                            Command="{Binding LogoutCommand}" Margin="8,0,0,0">
+                        <materialDesign:PackIcon Kind="Logout" />
+                    </Button>
+                </StackPanel>
 
-                        <!-- Sales counter strip (shown only on Sales) -->
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                    Visibility="{Binding ShowSalesCounterBar, Converter={StaticResource BoolToVisibility}}">
-                            <Border Background="#33FFFFFF" CornerRadius="8" Padding="8,4" Margin="0,0,6,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="CashRegister" Width="16" Height="16"
-                                                             VerticalAlignment="Center" Margin="0,0,6,0" />
-                                    <TextBlock Text="{Binding ActiveSales.CounterDisplay}"
-                                               FontWeight="SemiBold" FontSize="12"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" MaxWidth="220" />
-                                </StackPanel>
-                            </Border>
-                            <TextBlock Text="{Binding ActiveSales.CounterCashSummary}"
-                                       VerticalAlignment="Center" FontSize="12" Opacity="0.95"
-                                       Margin="0,0,4,0"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="420"
-                                       ToolTip="{Binding ActiveSales.CounterCashSummary}" />
-                            <Button Command="{Binding ActiveSales.ChangeCounterCommand}"
-                                    Style="{StaticResource MaterialDesignFlatMidBgButton}"
-                                    Content="Change" Margin="2,0" Padding="8,2" FontSize="12"
-                                    ToolTip="Switch to a different billing counter" />
-                            <Button Command="{Binding ActiveSales.ShowCounterCashSummaryCommand}"
-                                    Style="{StaticResource MaterialDesignFlatMidBgButton}"
-                                    Content="All counters" Margin="2,0" Padding="8,2" FontSize="12"
-                                    ToolTip="Today's cash by counter" />
-                            <Button Command="{Binding ActiveSales.DayCloseCommand}"
-                                    Style="{StaticResource MaterialDesignFlatMidBgButton}"
-                                    Content="Day close" Margin="2,0" Padding="8,2" FontSize="12"
-                                    ToolTip="Count drawer cash, close this counter, print or save PDF" />
-                        </StackPanel>
-                    </WrapPanel>
-                </DockPanel>
+                <WrapPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                    <materialDesign:PackIcon Kind="Pill" Width="28" Height="28"
+                                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="PharmaPOS" FontSize="20" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <TextBlock Text="{Binding FinancialYearLabel}"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0"
+                               Visibility="{Binding ShowFinancialYearBadge, Converter={StaticResource BoolToVisibility}}" />
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0"
+                                Visibility="{Binding HasActiveSectionTitle, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="·" FontSize="18" Opacity="0.7" Margin="0,0,8,0"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveSectionTitle}"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="280" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding StoreCodeDisplay}" VerticalAlignment="Center"
+                               Margin="0,0,12,0"
+                               FontSize="13" FontWeight="SemiBold"
+                               Opacity="0.95"
+                               TextTrimming="CharacterEllipsis" MaxWidth="160" />
+                    <TextBlock Text="{Binding BranchName}" VerticalAlignment="Center"
+                               Opacity="0.75"
+                               FontSize="13"
+                               Margin="0,0,12,0"
+                               TextTrimming="CharacterEllipsis" MaxWidth="160" />
 
-                <!-- Module shortcuts (updates with selected tab) -->
-                <ItemsControl ItemsSource="{Binding ActiveShortcuts}"
-                              Margin="0,8,0,0"
-                              Visibility="{Binding HasActiveShortcuts, Converter={StaticResource BoolToVisibility}}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:ShortcutHint}">
-                            <Border Background="#33FFFFFF"
-                                    BorderBrush="#55FFFFFF"
-                                    BorderThickness="1"
-                                    CornerRadius="10"
-                                    Padding="8,3"
-                                    Margin="0,0,8,4"
-                                    ToolTip="{Binding Description}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="#55FFFFFF"
-                                            CornerRadius="4"
-                                            Padding="6,1"
-                                            Margin="0,0,6,0">
-                                        <TextBlock Text="{Binding Key}"
-                                                   FontWeight="Bold"
-                                                   FontSize="11"
-                                                   VerticalAlignment="Center" />
-                                    </Border>
-                                    <TextBlock Text="{Binding Description}"
-                                               FontSize="11"
-                                               Opacity="0.95"
-                                               VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
+                    <!-- Sales counter strip (shown only on Sales) -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                Visibility="{Binding ShowSalesCounterBar, Converter={StaticResource BoolToVisibility}}">
+                        <Border Background="#33FFFFFF" CornerRadius="8" Padding="8,4" Margin="0,0,6,0">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="CashRegister" Width="16" Height="16"
+                                                         VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding ActiveSales.CounterDisplay}"
+                                           FontWeight="SemiBold" FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="220" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding ActiveSales.CounterCashSummary}"
+                                   VerticalAlignment="Center" FontSize="12" Opacity="0.95"
+                                   Margin="0,0,4,0"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="420"
+                                   ToolTip="{Binding ActiveSales.CounterCashSummary}" />
+                        <Button Command="{Binding ActiveSales.ChangeCounterCommand}"
+                                Style="{StaticResource MaterialDesignFlatMidBgButton}"
+                                Content="Change" Margin="2,0" Padding="8,2" FontSize="12"
+                                ToolTip="Switch to a different billing counter" />
+                        <Button Command="{Binding ActiveSales.ShowCounterCashSummaryCommand}"
+                                Style="{StaticResource MaterialDesignFlatMidBgButton}"
+                                Content="All counters" Margin="2,0" Padding="8,2" FontSize="12"
+                                ToolTip="Today's cash by counter" />
+                        <Button Command="{Binding ActiveSales.DayCloseCommand}"
+                                Style="{StaticResource MaterialDesignFlatMidBgButton}"
+                                Content="Day close" Margin="2,0" Padding="8,2" FontSize="12"
+                                ToolTip="Count drawer cash, close this counter, print or save PDF" />
+                    </StackPanel>
+                </WrapPanel>
+            </DockPanel>
         </materialDesign:ColorZone>
 
         <!-- Top navigation menu (groups + leaves) -->
@@ -166,9 +135,12 @@
             <Menu ItemsSource="{Binding TopMenu}"
                   Background="Transparent"
                   Padding="2,0"
-                  VerticalAlignment="Center">
-                <Menu.ItemContainerStyle>
-                    <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                  VerticalAlignment="Center"
+                  ItemContainerStyle="{DynamicResource NavMenuItemStyle}">
+                <Menu.Resources>
+                    <!-- Self-referential style so Reports → group → leaf nests cleanly. -->
+                    <Style x:Key="NavMenuItemStyle" TargetType="MenuItem"
+                           BasedOn="{StaticResource {x:Type MenuItem}}">
                         <Setter Property="Header" Value="{Binding}" />
                         <Setter Property="ItemsSource" Value="{Binding Children}" />
                         <Setter Property="Padding" Value="10,8" />
@@ -178,6 +150,7 @@
                         <Setter Property="Command"
                                 Value="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                         <Setter Property="CommandParameter" Value="{Binding Item}" />
+                        <Setter Property="ItemContainerStyle" Value="{DynamicResource NavMenuItemStyle}" />
                         <Setter Property="HeaderTemplate">
                             <Setter.Value>
                                 <DataTemplate DataType="{x:Type vm:NavMenuEntry}">
@@ -208,38 +181,6 @@
                                 </DataTemplate>
                             </Setter.Value>
                         </Setter>
-                        <Setter Property="ItemContainerStyle">
-                            <Setter.Value>
-                                <Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                    <Setter Property="Header" Value="{Binding}" />
-                                    <Setter Property="Padding" Value="10,8" />
-                                    <Setter Property="FontSize" Value="13" />
-                                    <Setter Property="Command"
-                                            Value="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                    <Setter Property="CommandParameter" Value="{Binding Item}" />
-                                    <Setter Property="HeaderTemplate">
-                                        <Setter.Value>
-                                            <DataTemplate DataType="{x:Type vm:NavMenuEntry}">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <materialDesign:PackIcon Kind="{Binding IconKind}"
-                                                                             Width="18" Height="18"
-                                                                             VerticalAlignment="Center" />
-                                                    <TextBlock Text="{Binding Label}"
-                                                               Margin="8,0,0,0"
-                                                               VerticalAlignment="Center" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter Property="FontWeight" Value="SemiBold" />
-                                            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Setter.Value>
-                        </Setter>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsActive}" Value="True">
                                 <Setter Property="FontWeight" Value="SemiBold" />
@@ -254,14 +195,54 @@
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </Menu.ItemContainerStyle>
+                </Menu.Resources>
             </Menu>
         </materialDesign:Card>
 
         <!-- Active content -->
-        <ContentControl Grid.Row="2" Margin="6,2,6,6"
+        <ContentControl Grid.Row="2" Margin="6,2,6,2"
                         Content="{Binding CurrentViewModel}"
                         HorizontalContentAlignment="Stretch"
                         VerticalContentAlignment="Stretch" />
+
+        <!-- Module shortcuts — bottom strip, colored chips like Sales medicine details -->
+        <Border Grid.Row="3"
+                Margin="6,0,6,6"
+                Padding="6,4"
+                Background="#F1F8E9"
+                BorderBrush="#C5E1A5"
+                BorderThickness="1"
+                CornerRadius="4"
+                Visibility="{Binding HasActiveShortcuts, Converter={StaticResource BoolToVisibility}}">
+            <ItemsControl ItemsSource="{Binding ActiveShortcuts}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:ShortcutHint}">
+                        <Border CornerRadius="3"
+                                Padding="8,4"
+                                Margin="0,0,6,2"
+                                BorderThickness="1"
+                                ToolTip="{Binding Description}"
+                                Background="{Binding Background}"
+                                BorderBrush="{Binding Border}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Key}"
+                                           FontWeight="Bold"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding Description}"
+                                           FontSize="11"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
     </Grid>
 </Window>

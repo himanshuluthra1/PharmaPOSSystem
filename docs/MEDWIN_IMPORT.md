@@ -14,8 +14,8 @@ Recommended path when you want to drop existing POS sales/purchases and live onl
 4. Click **Run import** and accept **both** confirmation dialogs
 5. After import: **Medicine Mapping** for unmatched meds
 
-What the wipe removes: sales/returns/payments, purchases/returns/POs, stock batches & movements, journal entries, sync outbox.  
-What it keeps: medicines, suppliers, customers, categories, manufacturers, users, roles, company, branches, chart of accounts.
+What the wipe removes: sales/returns/payments, purchases/returns/POs, stock batches & movements, journal entries, sync outbox, **suppliers**, **customers**.  
+What it keeps: **medicines** (OneMG catalogue), categories, manufacturers, users, roles, company, branches, chart of accounts.
 
 CLI: `--clear-transactions` (runs wipe before selected phases).
 
@@ -28,7 +28,9 @@ CLI: `--clear-transactions` (runs wipe before selected phases).
 5. Click **Run import**
 6. After medicines land, use **Settings → Medicine Mapping** to link MedWin orphans to OneMG catalogue (Gemini optional)
 
-Requires **Microsoft ACE OLEDB 12.0** on the PC.
+Requires **64-bit Microsoft Access Database Engine (ACE OLEDB)** on the PC
+([download](https://www.microsoft.com/en-us/download/details.aspx?id=54920) → `AccessDatabaseEngine_X64.exe`).
+If 32-bit Office is already installed, run `AccessDatabaseEngine_X64.exe /quiet` from an elevated prompt.
 
 ### CLI
 ```bash
@@ -86,7 +88,7 @@ Some MedWin groups (e.g. `HIM`) have empty `itemgrds` — those stay as short co
 Only medicines that appear in **`stockmas` OR `dsalemaster`** (in stock or ever sold) are imported.
 
 ### OneMG matching
-Active MedWin medicines are matched to existing OneMG catalogue rows (normalized name / barcode). Matches reuse the OneMG row and append `MedWinId:` to notes. Unmatched MedWin rows are inserted as orphans for Medicine Mapping.
+Active MedWin medicines are matched to existing OneMG catalogue rows by **barcode** or **normalized product name including dosage form** (e.g. TAB ≠ CREAM). Salt/generic-only matching is disabled. Ambiguous name hits are skipped (MedWin row is inserted as an orphan for Medicine Mapping). Matches reuse the OneMG row and append `MedWinId:` to notes.
 
 ---
 
@@ -99,14 +101,14 @@ Active MedWin medicines are matched to existing OneMG catalogue rows (normalized
 | `medicines` | `mednmas` + `itemgrp` + `compmas` + `category` | `Medicines`, `Manufacturers` |
 | `suppliers` | `subgroup` (`subgrpty='SC'`) | `Suppliers` |
 | `customers` | `subgroup` (`SD`), `patient_master`, cash sale names | `Customers` |
-| `stock` | `stockmas` (qty > 0) | `MedicineBatches` + current-stock `StockMovements` snapshot |
+| `stock` | `stockmas` (qty ≠ 0, including negative) | `MedicineBatches` + current-stock `StockMovements` snapshot |
 | `purchases` | `purchase` / `dpurchas` | `Purchases` / `PurchaseItems` (`MW-P-{n}`) + `StockMovements` (units) |
 | `purchase-returns` | `purchase_return` / `dpurchas_return` | `PurchaseReturns` / `PurchaseReturnItems` (`MW-PR-{n}`) + `StockMovements` |
 | `sales` | `salemaster` / `dsalemaster` | `Sales` / `SaleItems` (`MW-S-{n}`) + `StockMovements` (**units**, not packs) |
 | `payments` | `dsale_payment`, `dsale_receipt` | `SalePayments` |
 | `users` | distinct `oprcodeadd` | `Users` (`op{n}`, default password `MedWin@123`) |
 | `backfill-expiry` | MedWin month/year fields | Sale lines / batches expiry |
-| `backfill-purchase-payments` | header `pcredit` / `pcheqamt` | `PaidAmount` / payment status |
+| `backfill-purchase-payments` | header `pcheqamt` (cash) + `pcredit` (debit note) | `PaidAmount` / payment status; clears stale `subopbal` openings |
 | `backfill-purchase-tax` | Sum of `PurchaseItems` tax/taxable | Fix header `Cgst`/`Sgst`/`Taxable` (MedWin `purtaxam` was often taxable, not tax) |
 | `backfill-salts` | Re-resolve `itemgrp.itemgrds` onto existing MedWin orphans | `GenericName`, `Composition`, `PackInfo`, `Strength` |
 | `dedupe-onemg` | — | Soft-delete duplicate OneMG catalogue rows |
@@ -114,18 +116,20 @@ Active MedWin medicines are matched to existing OneMG catalogue rows (normalized
 Default **Full import** runs: company, gst, medicines, suppliers, customers, stock, purchases, purchase-returns, sales, payments, users.
 
 ### Quantity units (important)
-MedWin `stockmas`, purchase lines, purchase returns, and item ledger use **loose units** (e.g. tablets).  
-Sales `dsalemaster.dpqty` is also in units (`dpsize` is pack size only).  
-PharmaPOS import keeps **the same unit basis** everywhere (do not divide sales by `dpsize`). Sale MRP/rate are normalized to per-unit when `dpsize > 1`. Negative sale qty = sale return.
+MedWin `stockmas` / purchase / sale line quantities are **loose units** (e.g. tablets).  
+Pack size comes from `stksize` / `dpsize` (fallback: medicine `sizefact` → `UnitsPerPack`).  
+PharmaPOS import converts to **pack quantity**: `qty ÷ packSize` (e.g. 45 ÷ 15 → 3).  
+MRP/rates stay **per pack**. Negative sale qty = sale return.
 
-Optional pre-phase: `clear-transactions` (via UI checkbox / `--clear-transactions`) — hard-deletes existing POS transactional & stock data first.
+Optional pre-phase: `clear-transactions` (via UI checkbox / `--clear-transactions`) — hard-deletes existing POS transactional data, stock, suppliers, and customers first (medicines kept).
 
 ---
 
 ## Known gaps (not imported yet)
 
 - Standalone sale-return masters (`salereturnmaster` / `dsalemaster_return` — usually empty; returns often sit on sale bills as negative qty)
-- Purchase receipts ledger (`purrcpt`) beyond header paid fields
+- Purchase receipts ledger (`purrcpt` / `dpurrcpt`) as separate payment rows (header `pcheqamt`+`pcredit` already covers settlements)
+- MedWin supplier `subopbal` as live opening payable (field is static; party dues come from open purchases)
 - Doctors master, schemes, loyalty points
 - Accounting ledgers (`daccount`)
 - Inactive / never-sold medicines
@@ -159,7 +163,7 @@ Provider: `Microsoft.ACE.OLEDB.12.0`.
 ## Related code entry points
 
 - `MedWinMigrationRunner.RunAsync` — public facade (CLI + WPF Settings)
-- `MedWinTransactionalDataCleaner` — wipe sales/purchases/stock before fresh MedWin import
+- `MedWinTransactionalDataCleaner` — wipe sales/purchases/stock/suppliers/customers before fresh MedWin import (medicines kept)
 - `MedWinImporter.RunAsync` — phase orchestrator
 - `MedWinMasterImporter.ImportMedicinesAsync` — salt/pack/medicine insert + OneMG match
 - `MedWinMasterImporter.BackfillSaltsAsync` — repair salts on existing orphans

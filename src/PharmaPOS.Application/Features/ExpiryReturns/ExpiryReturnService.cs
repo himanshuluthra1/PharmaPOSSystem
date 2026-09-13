@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PharmaPOS.Application.Common;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.PurchaseReturns;
 using PharmaPOS.Application.Features.Settings;
@@ -17,17 +18,20 @@ public sealed class ExpiryReturnService : IExpiryReturnService
     private readonly IDateTimeProvider _clock;
     private readonly ISettingsService _settings;
     private readonly IPurchaseReturnService _purchaseReturns;
+    private readonly IFinancialYearContext _financialYear;
 
     public ExpiryReturnService(
         IUnitOfWork uow,
         IDateTimeProvider clock,
         ISettingsService settings,
-        IPurchaseReturnService purchaseReturns)
+        IPurchaseReturnService purchaseReturns,
+        IFinancialYearContext financialYear)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
         _purchaseReturns = purchaseReturns;
+        _financialYear = financialYear;
     }
 
     public async Task<List<ExpiryEligibleBatchDto>> ListEligibleBatchesAsync(
@@ -98,15 +102,25 @@ public sealed class ExpiryReturnService : IExpiryReturnService
     }
 
     public Task<List<ExpirySupplierOptionDto>> ListSuppliersAsync(CancellationToken ct = default)
-        => _uow.Repository<Supplier>().Query().AsNoTracking()
-            .Where(s => s.Status == EntityStatus.Active)
+    {
+        // Only suppliers that have at least one received purchase bill.
+        var supplierIdsWithPurchases = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.Status != PurchaseStatus.Cancelled && p.Status != PurchaseStatus.Draft)
+            .Select(p => p.SupplierId)
+            .Distinct();
+
+        return _uow.Repository<Supplier>().Query().AsNoTracking()
+            .Where(s => s.Status == EntityStatus.Active && supplierIdsWithPurchases.Contains(s.Id))
             .OrderBy(s => s.Name)
             .Select(s => new ExpirySupplierOptionDto(s.Id, s.Name))
             .ToListAsync(ct);
+    }
 
     public async Task<Result<ExpiryClaimReceiptDto>> SubmitClaimAsync(
         SubmitExpiryClaimRequest request, int? branchId, string? userName, CancellationToken ct = default)
     {
+        if (!_financialYear.CanEditTransactions)
+            return FinancialYearGuard.FailIfReadOnly<ExpiryClaimReceiptDto>(_financialYear);
         if (request.SupplierId <= 0)
             return Result.Failure<ExpiryClaimReceiptDto>("Select a supplier.");
 
@@ -227,7 +241,8 @@ public sealed class ExpiryReturnService : IExpiryReturnService
     public async Task<List<ExpiryClaimListRowDto>> ListClaimsAsync(
         bool awaitingCreditNoteOnly, int? branchId, int take = 100, CancellationToken ct = default)
     {
-        var q = _uow.Repository<ExpirySupplierClaim>().Query().AsNoTracking();
+        var q = _uow.Repository<ExpirySupplierClaim>().Query().AsNoTracking()
+            .WhereInFinancialYear(_financialYear.Active, c => c.ClaimDate);
         if (branchId.HasValue) q = q.Where(c => c.BranchId == branchId);
         if (awaitingCreditNoteOnly)
             q = q.Where(c => c.Status == ExpiryClaimStatus.AwaitingCreditNote);
@@ -302,6 +317,9 @@ public sealed class ExpiryReturnService : IExpiryReturnService
     public async Task<Result> AttachCreditNoteAsync(
         AttachExpiryCreditNoteRequest request, string? userName, CancellationToken ct = default)
     {
+        var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
+        if (fyBlock.IsFailure) return fyBlock;
+
         var number = request.CreditNoteNumber?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(number))
             return Result.Failure("Enter the supplier credit note number.");

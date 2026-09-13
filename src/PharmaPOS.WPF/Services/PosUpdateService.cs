@@ -91,6 +91,10 @@ public sealed class PosUpdateService : IPosUpdateService
 
     public async Task<bool> IsVendorConsoleAsync(CancellationToken ct = default)
     {
+        // Provider console is always STORE-001 (even if MySQL is down or StoreId is missing).
+        if (string.Equals(_identity.StoreCode, "STORE-001", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         if (!_identity.IsConfigured || string.IsNullOrWhiteSpace(_identity.StoreId))
             return false;
 
@@ -108,10 +112,10 @@ public sealed class PosUpdateService : IPosUpdateService
         }
         catch
         {
-            // Fall through to store-code fallback.
+            // Ignore — non-vendor if MySQL unavailable and not STORE-001.
         }
 
-        return string.Equals(_identity.StoreCode, "STORE-001", StringComparison.OrdinalIgnoreCase);
+        return false;
     }
 
     public async Task HeartbeatAsync(CancellationToken ct = default)
