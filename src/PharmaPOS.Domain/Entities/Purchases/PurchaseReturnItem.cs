@@ -34,6 +34,9 @@ public class PurchaseReturnItem : BaseEntity
     public decimal TaxAmount { get; set; }
     public decimal LineTotal { get; set; }
 
+    /// <summary>Supplier refund of this line as a percent of calculated amount (default 100).</summary>
+    public decimal RefundPercent { get; set; } = 100m;
+
     public int? ReturnReasonId { get; set; }
     public ReturnReason? ReturnReason { get; set; }
     public string? ReasonRemarks { get; set; }

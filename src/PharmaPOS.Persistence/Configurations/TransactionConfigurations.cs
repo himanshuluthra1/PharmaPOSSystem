@@ -77,7 +77,9 @@ public class PurchaseConfiguration : IEntityTypeConfiguration<Purchase>
         b.Property(x => x.LockedBy).HasMaxLength(100);
         b.HasIndex(x => x.InvoiceNumber).IsUnique();
         b.HasIndex(x => x.InvoiceDate);
-        b.HasIndex(x => x.LinkedPurchaseReturnId);
+        b.HasIndex(x => x.LinkedPurchaseReturnId)
+            .IsUnique()
+            .HasFilter("[LinkedPurchaseReturnId] IS NOT NULL");
 
         b.HasMany(x => x.Items).WithOne(i => i.Purchase!)
             .HasForeignKey(i => i.PurchaseId).OnDelete(DeleteBehavior.Cascade);

@@ -28,3 +28,21 @@ public enum ExpiryClaimStatus
     CreditReceived = 1,
     Cancelled = 2
 }
+
+/// <summary>How supplier credit for an expiry claim was documented.</summary>
+public enum ExpiryCreditSettlementKind
+{
+    /// <summary>Standalone credit / debit note from the company.</summary>
+    CreditNote = 0,
+    /// <summary>Credit adjusted on a subsequent purchase bill.</summary>
+    PurchaseBill = 1
+}
+
+/// <summary>How the supplier documented credit for a purchase return.</summary>
+public enum PurchaseReturnReceiptSettlementKind
+{
+    /// <summary>Supplier return receipt / debit note number.</summary>
+    SupplierReceipt = 0,
+    /// <summary>Credit adjusted on a subsequent purchase bill.</summary>
+    PurchaseBill = 1
+}

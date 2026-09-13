@@ -39,6 +39,8 @@ public static class ReportMenuPermissions
         ReportKind.Expiry => AppConstants.Permissions.ReportsMenuExpiry,
         ReportKind.LowStock => AppConstants.Permissions.ReportsMenuLowStock,
         ReportKind.SlowMovingStock => AppConstants.Permissions.ReportsMenuSlowMovingStock,
+        ReportKind.StockAdjustments => AppConstants.Permissions.ReportsMenuStockAdjustments,
+        ReportKind.MedicinesSoldByDate => AppConstants.Permissions.ReportsMenuMedicinesSoldByDate,
         _ => AppConstants.Permissions.ReportsView
     };
 
@@ -75,5 +77,7 @@ public static class ReportMenuPermissions
         AppConstants.Permissions.ReportsMenuExpiry,
         AppConstants.Permissions.ReportsMenuLowStock,
         AppConstants.Permissions.ReportsMenuSlowMovingStock,
+        AppConstants.Permissions.ReportsMenuStockAdjustments,
+        AppConstants.Permissions.ReportsMenuMedicinesSoldByDate,
     ];
 }

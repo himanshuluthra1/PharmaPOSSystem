@@ -45,7 +45,11 @@ public enum ReportKind
     BatchStock,
     Expiry,
     LowStock,
-    SlowMovingStock
+    SlowMovingStock,
+    StockAdjustments,
+
+    // Sales detail
+    MedicinesSoldByDate
 }
 
 public sealed class ReportKindOption(ReportKind kind, string label, string description)
@@ -105,6 +109,8 @@ public static class ReportCatalog
             "Sales totals grouped by customer / patient.", true, FilterPreset.None),
         Def(ReportKind.SalesByMedicine, GroupSales, "By Medicine",
             "Quantity and revenue ranked by medicine.", true, FilterPreset.None),
+        Def(ReportKind.MedicinesSoldByDate, GroupSales, "Medicines Sold by Date",
+            "Sale-line medicines with date, invoice, qty and value. Add to shortage book (F7).", true, FilterPreset.None),
         Def(ReportKind.SalesByPaymentMode, GroupSales, "By Payment Mode",
             "Collections split by Cash, UPI, Card, Credit, etc.", true, FilterPreset.None),
         Def(ReportKind.SalesDayWise, GroupSales, "Day-wise Summary",
@@ -130,7 +136,7 @@ public static class ReportCatalog
         Def(ReportKind.SupplierPayments, GroupPurchase, "Purchase Payments",
             "Supplier bills with paid, partial, and pending amounts. Filter by payment status.", true, FilterPreset.PaymentStatus),
         Def(ReportKind.PurchaseReturns, GroupPurchase, "Purchase Returns",
-            "Supplier return / debit notes for the period.", true, FilterPreset.None),
+            "Supplier returns for the period — kind, amount, and how credit was settled (receipt or purchase bill).", true, FilterPreset.None),
         Def(ReportKind.ExpiryToCompanyClaims, GroupPurchase, "Expiry to Company Claims",
             "Expiry claims sent to suppliers — claim lines, expected credit, and credit-note status.", true, FilterPreset.None),
 
@@ -179,6 +185,8 @@ public static class ReportCatalog
             "Medicines at or below reorder level.", false, FilterPreset.LowStockSeverity),
         Def(ReportKind.SlowMovingStock, GroupStock, "Slow / Non-moving Stock",
             "Stock with no sale in 90+ days (or never sold).", false, FilterPreset.None),
+        Def(ReportKind.StockAdjustments, GroupStock, "Stock Adjustments",
+            "Manual / physical stock adjustments with system vs physical qty.", true, FilterPreset.None),
     ];
 
     public static IReadOnlyList<string> Groups { get; } =
@@ -289,13 +297,15 @@ public record GstDetailRowDto(
     decimal CgstAmount,
     decimal SgstAmount,
     decimal IgstAmount,
-    decimal GrandTotal)
+    decimal GrandTotal,
+    int DocumentId = 0)
 {
     public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy");
     public decimal TotalTax => CgstAmount + SgstAmount + IgstAmount;
 }
 
 public record ProfitReportRowDto(
+    int SaleId,
     string InvoiceNumber,
     DateTime InvoiceDate,
     string CustomerName,
@@ -308,6 +318,7 @@ public record ProfitReportRowDto(
 }
 
 public record MedicineSalesRowDto(
+    int MedicineId,
     string MedicineName,
     string? GenericName,
     decimal QuantitySold,
@@ -318,8 +329,26 @@ public record MedicineSalesRowDto(
     public decimal MarginPercent => Revenue > 0 ? Math.Round(GrossProfit / Revenue * 100m, 1) : 0m;
 }
 
+public record MedicinesSoldByDateRowDto(
+    DateTime SaleDate,
+    string InvoiceNumber,
+    int SaleId,
+    int MedicineId,
+    string MedicineName,
+    string? GenericName,
+    string BatchNumber,
+    decimal Quantity,
+    decimal Revenue,
+    decimal Cost,
+    decimal GrossProfit)
+{
+    public string SaleDateLabel => SaleDate.ToString("dd/MM/yyyy");
+    public decimal MarginPercent => Revenue > 0 ? Math.Round(GrossProfit / Revenue * 100m, 1) : 0m;
+}
+
 public record StockValuationReportRowDto(
     string MedicineName,
+    string? SupplierName,
     string BatchNumber,
     DateTime? ExpiryDate,
     decimal Quantity,
@@ -329,6 +358,21 @@ public record StockValuationReportRowDto(
     decimal StockAmount)
 {
     public string ExpiryLabel => ExpiryDate?.ToString("dd/MM/yyyy") ?? "—";
+    public string SupplierLabel => string.IsNullOrWhiteSpace(SupplierName) ? "—" : SupplierName;
+}
+
+public record StockAdjustmentReportRowDto(
+    DateTime AdjustmentDate,
+    string AdjustmentNumber,
+    string MedicineName,
+    string BatchNumber,
+    decimal SystemQuantity,
+    decimal PhysicalQuantity,
+    decimal Difference,
+    string? Reason,
+    string? Remarks)
+{
+    public string AdjustmentDateLabel => AdjustmentDate.ToString("dd/MM/yyyy");
 }
 
 public record ExpiryReportRowDto(
@@ -406,4 +450,58 @@ public sealed class ScheduleRegisterReportDto
     public List<ScheduleRegisterRowDto> Rows { get; set; } = new();
     public decimal TotalQuantity => Rows.Sum(r => r.Quantity);
     public int RecordCount => Rows.Count;
+}
+
+/// <summary>One sale bill in the Sales By Customer drill-down list.</summary>
+[Obsolete("Use ReportBillListRowDto")]
+public record CustomerSaleBillRowDto(
+    int SaleId,
+    string InvoiceNumber,
+    DateTime InvoiceDate,
+    decimal GrandTotal,
+    decimal PaidAmount,
+    decimal BalanceDue,
+    string Status)
+{
+    public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
+}
+
+public enum ReportDocumentKind
+{
+    Sale = 0,
+    Purchase = 1
+}
+
+/// <summary>Underlying sale or purchase bill for a consolidated report row drill-down.</summary>
+public record ReportBillListRowDto(
+    ReportDocumentKind DocumentKind,
+    int DocumentId,
+    string InvoiceNumber,
+    DateTime InvoiceDate,
+    string PartyName,
+    decimal GrandTotal,
+    decimal PaidAmount,
+    decimal BalanceDue,
+    string Status)
+{
+    public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
+    public string KindLabel => DocumentKind == ReportDocumentKind.Sale ? "Sale" : "Purchase";
+}
+
+/// <summary>Query keys for listing bills behind a consolidated report row.</summary>
+public sealed class ReportBillDrillDownQuery
+{
+    public required ReportKind Kind { get; init; }
+    public DateTime From { get; init; }
+    public DateTime To { get; init; }
+    public int? BranchId { get; init; }
+    public string Title { get; init; } = "Bills";
+    public string? CustomerKey { get; init; }
+    public int? CustomerId { get; init; }
+    public int? SupplierId { get; init; }
+    public int? MedicineId { get; init; }
+    public string? BatchNumber { get; init; }
+    public string? PaymentMethod { get; init; }
+    public DateTime? Day { get; init; }
+    public bool OpenBillsOnly { get; init; }
 }

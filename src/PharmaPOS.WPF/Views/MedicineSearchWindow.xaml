@@ -79,7 +79,7 @@
                     <Button Content="Select" Style="{StaticResource MaterialDesignRaisedButton}"
                             IsDefault="True" Click="SelectButton_Click" />
                 </StackPanel>
-                <TextBlock Text="↑↓ navigate  •  Enter select  •  Ctrl+L ledger  •  Esc cancel"
+                <TextBlock Text="↑↓ navigate  •  Enter select  •  F7 shortage  •  Ctrl+L ledger  •  Esc cancel"
                            Opacity="0.5" VerticalAlignment="Center" FontSize="11" />
             </DockPanel>
         </Grid>

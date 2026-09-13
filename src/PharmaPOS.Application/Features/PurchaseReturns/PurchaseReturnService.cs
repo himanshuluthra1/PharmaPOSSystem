@@ -237,6 +237,7 @@ public class PurchaseReturnService : IPurchaseReturnService
                 r.Id,
                 r.ReturnNumber,
                 r.ReturnDate,
+                r.SupplierId,
                 r.Purchase != null ? r.Purchase.InvoiceNumber : "Direct",
                 r.Purchase != null ? r.Purchase.SupplierInvoiceNumber : null,
                 r.Supplier != null ? r.Supplier.Name : "—",
@@ -244,7 +245,37 @@ public class PurchaseReturnService : IPurchaseReturnService
                 r.SupplierReturnReceiptNumber,
                 r.SupplierReturnReceiptDate,
                 r.SupplierReturnReceiptNumber != null && r.SupplierReturnReceiptNumber != "",
-                r.PurchaseId == null))
+                r.PurchaseId == null,
+                r.ReceiptSettlementKind,
+                r.SettledAgainstPurchaseId,
+                r.SupplierReturnReceiptNumber == null || r.SupplierReturnReceiptNumber == ""
+                    ? null
+                    : r.ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
+                        ? $"Bill {r.SupplierReturnReceiptNumber}"
+                        : $"Receipt {r.SupplierReturnReceiptNumber}",
+                r.PurchaseId))
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<PurchaseReturnSupplierBillOptionDto>> ListSupplierBillsAsync(
+        int supplierId, int? branchId, CancellationToken ct = default)
+    {
+        if (supplierId <= 0) return [];
+
+        var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.SupplierId == supplierId
+                        && p.Status != PurchaseStatus.Cancelled
+                        && p.Status != PurchaseStatus.Draft);
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        return await q.OrderByDescending(p => p.InvoiceDate).ThenByDescending(p => p.Id)
+            .Take(200)
+            .Select(p => new PurchaseReturnSupplierBillOptionDto(
+                p.Id,
+                p.InvoiceNumber,
+                p.SupplierInvoiceNumber,
+                p.InvoiceDate,
+                p.GrandTotal))
             .ToListAsync(ct);
     }
 
@@ -278,6 +309,7 @@ public class PurchaseReturnService : IPurchaseReturnService
         return Result.Success(new PurchaseReturnDetailDto
         {
             Id = ret.Id,
+            SupplierId = ret.SupplierId,
             ReturnNumber = ret.ReturnNumber,
             ReturnDate = ret.ReturnDate,
             SupplierName = ret.Supplier?.Name ?? "—",
@@ -285,39 +317,214 @@ public class PurchaseReturnService : IPurchaseReturnService
             IsDirectReturn = ret.PurchaseId is null,
             Remarks = ret.Remarks,
             GrandTotal = ret.GrandTotal,
+            CanEditLines = !ret.HasSupplierReceipt,
+            ReceiptSettlementKind = ret.ReceiptSettlementKind,
+            SupplierReturnReceiptNumber = ret.SupplierReturnReceiptNumber,
+            SupplierReturnReceiptDate = ret.SupplierReturnReceiptDate,
+            SettledAgainstPurchaseId = ret.SettledAgainstPurchaseId,
             Lines = ret.Items
                 .OrderBy(i => i.Id)
-                .Select(i => new PurchaseReturnDetailLineDto(
-                    names.TryGetValue(i.MedicineId, out var n) ? n : $"Medicine #{i.MedicineId}",
-                    i.BatchNumber,
-                    i.ExpiryDate,
-                    i.ReturnedQuantity,
-                    i.ReturnedFreeQuantity,
-                    i.PurchasePrice,
-                    i.GstPercent,
-                    i.LineTotal,
-                    i.ReturnReasonId is int rid && reasons.TryGetValue(rid, out var rn) ? rn : null))
+                .Select(i => new PurchaseReturnDetailLineDto
+                {
+                    Id = i.Id,
+                    MedicineName = names.TryGetValue(i.MedicineId, out var n) ? n : $"Medicine #{i.MedicineId}",
+                    BatchNumber = i.BatchNumber,
+                    ExpiryDate = i.ExpiryDate,
+                    ReturnedQuantity = i.ReturnedQuantity,
+                    ReturnedFreeQuantity = i.ReturnedFreeQuantity,
+                    PurchasePrice = i.PurchasePrice,
+                    DiscountPercent = i.DiscountPercent,
+                    GstPercent = i.GstPercent,
+                    RefundPercent = i.RefundPercent <= 0 ? 100m : i.RefundPercent,
+                    LineTotal = i.LineTotal,
+                    ReasonName = i.ReturnReasonId is int rid && reasons.TryGetValue(rid, out var rn) ? rn : null,
+                    ReasonRemarks = i.ReasonRemarks
+                })
                 .ToList()
         });
     }
 
+    public async Task<Result<PurchaseReturnDetailDto>> UpdateReturnLinesAsync(
+        UpdatePurchaseReturnLinesRequest request, string? userName, CancellationToken ct = default)
+    {
+        var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
+        if (fyBlock.IsFailure)
+            return Result.Failure<PurchaseReturnDetailDto>(fyBlock.Error ?? "Read-only financial year.");
+
+        var ret = await _uow.Repository<PurchaseReturn>().Query()
+            .Include(r => r.Items)
+            .Include(r => r.Supplier)
+            .Include(r => r.Purchase)
+            .FirstOrDefaultAsync(r => r.Id == request.PurchaseReturnId, ct);
+
+        if (ret is null)
+            return Result.Failure<PurchaseReturnDetailDto>("Purchase return not found.");
+        if (ret.HasSupplierReceipt)
+            return Result.Failure<PurchaseReturnDetailDto>(
+                "This return is already settled with a receipt / purchase bill and cannot be edited.");
+        if (request.Lines.Count == 0)
+            return Result.Failure<PurchaseReturnDetailDto>("No lines to update.");
+
+        var oldGrand = ret.GrandTotal;
+        var byId = ret.Items.ToDictionary(i => i.Id);
+
+        foreach (var lineReq in request.Lines)
+        {
+            if (!byId.TryGetValue(lineReq.Id, out var item))
+                return Result.Failure<PurchaseReturnDetailDto>($"Return line #{lineReq.Id} was not found.");
+
+            if (lineReq.ReturnedQuantity < 0 || lineReq.ReturnedFreeQuantity < 0)
+                return Result.Failure<PurchaseReturnDetailDto>("Quantity cannot be negative.");
+            if (lineReq.ReturnedQuantity + lineReq.ReturnedFreeQuantity <= 0)
+                return Result.Failure<PurchaseReturnDetailDto>("Each line needs quantity greater than zero.");
+
+            var refundPct = lineReq.RefundPercent <= 0 ? 0 : Math.Min(lineReq.RefundPercent, 999m);
+            var oldStock = item.ReturnedQuantity + item.ReturnedFreeQuantity;
+            var newStock = lineReq.ReturnedQuantity + lineReq.ReturnedFreeQuantity;
+            var stockDelta = newStock - oldStock;
+
+            if (stockDelta != 0 && item.MedicineBatchId is int batchId)
+            {
+                var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(batchId, ct);
+                if (batch is null)
+                    return Result.Failure<PurchaseReturnDetailDto>($"Stock batch missing for {item.BatchNumber}.");
+                if (stockDelta > 0 && batch.QuantityAvailable < stockDelta)
+                    return Result.Failure<PurchaseReturnDetailDto>(
+                        $"Insufficient stock for {item.BatchNumber}. Available {batch.QuantityAvailable:0.##}.");
+                batch.QuantityAvailable -= stockDelta;
+                _uow.Repository<MedicineBatch>().Update(batch);
+            }
+
+            var (taxable, tax, lineTotal) = CalcReturnLineAmounts(
+                lineReq.PurchasePrice, lineReq.ReturnedQuantity, item.DiscountPercent, lineReq.GstPercent, refundPct);
+
+            item.BatchNumber = string.IsNullOrWhiteSpace(lineReq.BatchNumber) ? item.BatchNumber : lineReq.BatchNumber.Trim();
+            item.ExpiryDate = lineReq.ExpiryDate;
+            item.ReturnedQuantity = lineReq.ReturnedQuantity;
+            item.ReturnedFreeQuantity = lineReq.ReturnedFreeQuantity;
+            item.PurchasePrice = lineReq.PurchasePrice;
+            item.GstPercent = lineReq.GstPercent;
+            item.RefundPercent = refundPct;
+            item.TaxableAmount = taxable;
+            item.TaxAmount = tax;
+            item.LineTotal = lineTotal;
+            item.DiscountAmount = Math.Round(
+                lineReq.PurchasePrice * lineReq.ReturnedQuantity * item.DiscountPercent / 100m, 2);
+            item.ReasonRemarks = string.IsNullOrWhiteSpace(lineReq.ReasonRemarks) ? null : lineReq.ReasonRemarks.Trim();
+            item.ModifiedBy = userName;
+            _uow.Repository<PurchaseReturnItem>().Update(item);
+        }
+
+        var taxableSum = ret.Items.Sum(i => i.TaxableAmount);
+        var taxSum = ret.Items.Sum(i => i.TaxAmount);
+        var grand = Math.Round(ret.Items.Sum(i => i.LineTotal), 2);
+        var cgst = Math.Round(taxSum / 2m, 2);
+        var sgst = taxSum - cgst;
+
+        ret.SubTotal = Math.Round(ret.Items.Sum(i => i.PurchasePrice * i.ReturnedQuantity), 2);
+        ret.DiscountAmount = Math.Max(0, Math.Round(ret.SubTotal - taxableSum, 2));
+        ret.TaxableAmount = taxableSum;
+        ret.CgstAmount = cgst;
+        ret.SgstAmount = sgst;
+        ret.GrandTotal = grand;
+        ret.CreditAmount = grand;
+        if (ret.CreditAppliedAmount > ret.CreditAmount)
+            ret.CreditAppliedAmount = ret.CreditAmount;
+        ret.ModifiedBy = userName;
+        _uow.Repository<PurchaseReturn>().Update(ret);
+
+        var delta = oldGrand - grand; // positive => less credit to supplier
+        if (Math.Abs(delta) >= 0.005m)
+        {
+            var supplier = await _uow.Repository<Supplier>().GetByIdAsync(ret.SupplierId, ct);
+            if (supplier is not null)
+            {
+                supplier.OutstandingBalance += delta;
+                _uow.Repository<Supplier>().Update(supplier);
+            }
+
+            if (ret.PurchaseId is int purchaseId)
+            {
+                var purchase = await _uow.Repository<Purchase>().GetByIdAsync(purchaseId, ct);
+                if (purchase is not null)
+                {
+                    purchase.GrandTotal = Math.Max(0m, Math.Round(purchase.GrandTotal + delta, 2));
+                    if (purchase.PaidAmount > purchase.GrandTotal)
+                        purchase.PaidAmount = purchase.GrandTotal;
+                    purchase.PaymentStatus = purchase.GrandTotal <= 0m || purchase.PaidAmount >= purchase.GrandTotal
+                        ? PaymentStatus.Paid
+                        : purchase.PaidAmount > 0m
+                            ? PaymentStatus.PartiallyPaid
+                            : PaymentStatus.Unpaid;
+                    _uow.Repository<Purchase>().Update(purchase);
+                }
+            }
+        }
+
+        await _uow.SaveChangesAsync(ct);
+        return await GetReturnDetailsAsync(ret.Id, ret.BranchId, ct);
+    }
+
+    private static (decimal Taxable, decimal Tax, decimal LineTotal) CalcReturnLineAmounts(
+        decimal price, decimal qty, decimal discountPercent, decimal gstPercent, decimal refundPercent)
+    {
+        var disc = Math.Clamp(discountPercent, 0m, 100m);
+        var gst = Math.Max(0m, gstPercent);
+        var refund = Math.Clamp(refundPercent, 0m, 999m);
+        var taxable = Math.Round(price * qty * (1m - disc / 100m), 2);
+        var tax = Math.Round(taxable * gst / 100m, 2);
+        var gross = taxable + tax;
+        var lineTotal = Math.Round(gross * refund / 100m, 2);
+        return (taxable, tax, lineTotal);
+    }
+
     public async Task<Result> AttachSupplierReceiptAsync(
-        int purchaseReturnId, string receiptNumber, DateTime? receiptDate, string? userName, CancellationToken ct = default)
+        AttachPurchaseReturnReceiptRequest request, string? userName, CancellationToken ct = default)
     {
         var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
         if (fyBlock.IsFailure) return fyBlock;
 
-        receiptNumber = receiptNumber?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(receiptNumber))
-            return Result.Failure("Enter the supplier return receipt / debit note number.");
-
-        var ret = await _uow.Repository<PurchaseReturn>().GetByIdAsync(purchaseReturnId, ct);
+        var ret = await _uow.Repository<PurchaseReturn>().GetByIdAsync(request.PurchaseReturnId, ct);
         if (ret is null) return Result.Failure("Purchase return not found.");
         if (ret.Status != PurchaseReturnStatus.Completed)
             return Result.Failure("Only completed returns can receive a supplier receipt number.");
 
-        ret.SupplierReturnReceiptNumber = receiptNumber;
-        ret.SupplierReturnReceiptDate = receiptDate?.Date ?? _clock.Now.Date;
+        string settlementRef;
+        DateTime settlementDate;
+        int? settledPurchaseId = null;
+
+        if (request.SettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill)
+        {
+            if (request.SettledAgainstPurchaseId is null or <= 0)
+                return Result.Failure("Select the purchase bill that includes this credit.");
+
+            var bill = await _uow.Repository<Purchase>().Query().AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == request.SettledAgainstPurchaseId.Value, ct);
+            if (bill is null)
+                return Result.Failure("Purchase bill not found.");
+            if (bill.SupplierId != ret.SupplierId)
+                return Result.Failure("Selected bill belongs to a different supplier.");
+            if (bill.Status is PurchaseStatus.Cancelled or PurchaseStatus.Draft)
+                return Result.Failure("Select a posted purchase bill.");
+
+            settledPurchaseId = bill.Id;
+            settlementRef = string.IsNullOrWhiteSpace(bill.SupplierInvoiceNumber)
+                ? bill.InvoiceNumber
+                : $"{bill.InvoiceNumber} / {bill.SupplierInvoiceNumber}";
+            settlementDate = request.ReceiptDate?.Date ?? bill.InvoiceDate.Date;
+        }
+        else
+        {
+            settlementRef = request.ReceiptNumber?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(settlementRef))
+                return Result.Failure("Enter the supplier return receipt / debit note number.");
+            settlementDate = request.ReceiptDate?.Date ?? _clock.Now.Date;
+        }
+
+        ret.ReceiptSettlementKind = request.SettlementKind;
+        ret.SettledAgainstPurchaseId = settledPurchaseId;
+        ret.SupplierReturnReceiptNumber = settlementRef;
+        ret.SupplierReturnReceiptDate = settlementDate;
         ret.ModifiedBy = userName;
         _uow.Repository<PurchaseReturn>().Update(ret);
         await _uow.SaveChangesAsync(ct);
@@ -438,6 +645,7 @@ public class PurchaseReturnService : IPurchaseReturnService
                 TaxableAmount = taxable,
                 TaxAmount = tax,
                 LineTotal = lineTotal,
+                RefundPercent = 100m,
                 ReturnReasonId = req.ReturnReasonId,
                 ReasonRemarks = req.ReasonRemarks,
                 CreatedBy = userName
@@ -657,6 +865,7 @@ public class PurchaseReturnService : IPurchaseReturnService
                 TaxableAmount = taxable,
                 TaxAmount = tax,
                 LineTotal = lineTotal,
+                RefundPercent = 100m,
                 ReturnReasonId = req.ReturnReasonId,
                 ReasonRemarks = req.ReasonRemarks,
                 CreatedBy = userName

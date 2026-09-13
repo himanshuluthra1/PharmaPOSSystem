@@ -6,6 +6,8 @@ using Microsoft.Win32;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Reports;
 using PharmaPOS.Application.Features.Settings;
+using PharmaPOS.Application.Features.ShortageBook;
+using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -17,6 +19,8 @@ public class ReportsViewModel : ObservableObject
     private readonly IReportsService _reports;
     private readonly IInvoiceViewerDialogService _invoiceViewer;
     private readonly IInvoicePrintService _printService;
+    private readonly IShortageBookService _shortageBook;
+    private readonly ICurrentUserService _currentUser;
     private readonly int? _branchId;
     private readonly IDialogService _dialog;
     private readonly IFinancialYearContext _financialYear;
@@ -40,11 +44,13 @@ public class ReportsViewModel : ObservableObject
     private ScheduleRegisterReportDto? _scheduleRegisterReport;
     private ScheduleRegisterFilterOption _selectedScheduleFilter;
     private ReportDefinition _definition;
+    private ReportRowViewModel? _selectedRow;
 
     public ReportsViewModel(
         IReportsService reports,
         IInvoiceViewerDialogService invoiceViewer,
         IInvoicePrintService printService,
+        IShortageBookService shortageBook,
         ICurrentUserService currentUser,
         IFinancialYearContext financialYear,
         IDialogService dialog)
@@ -52,6 +58,8 @@ public class ReportsViewModel : ObservableObject
         _reports = reports;
         _invoiceViewer = invoiceViewer;
         _printService = printService;
+        _shortageBook = shortageBook;
+        _currentUser = currentUser;
         _branchId = currentUser.CurrentUser?.BranchId;
         _financialYear = financialYear;
         _dialog = dialog;
@@ -91,6 +99,9 @@ public class ReportsViewModel : ObservableObject
             _ => ShowScheduleActions && HasData && !IsBusy);
         ClearFilterCommand = new RelayCommand(_ => ClearFilters());
         OpenRowCommand = new AsyncRelayCommand(p => OpenRowAsync(p as ReportRowViewModel), _ => !IsBusy);
+        AddToShortageBookCommand = new AsyncRelayCommand(
+            _ => AddSelectedToShortageBookAsync(),
+            _ => ShowShortageBookActions && SelectedRow is not null && !IsBusy);
         ApplyTodayCommand = new RelayCommand(_ => ApplyPreset(DateTime.Today, DateTime.Today));
         ApplyThisMonthCommand = new RelayCommand(_ =>
         {
@@ -127,6 +138,7 @@ public class ReportsViewModel : ObservableObject
 
     public bool ShowScheduleFilter => SelectedReport.Kind == ReportKind.ScheduleRegister;
     public bool ShowScheduleActions => SelectedReport.Kind == ReportKind.ScheduleRegister;
+    public bool ShowShortageBookActions => SelectedReport.Kind == ReportKind.MedicinesSoldByDate;
 
     public ReportKindOption SelectedReport
     {
@@ -140,8 +152,10 @@ public class ReportsViewModel : ObservableObject
             OnPropertyChanged(nameof(FilterTextHint));
             OnPropertyChanged(nameof(ShowScheduleFilter));
             OnPropertyChanged(nameof(ShowScheduleActions));
+            OnPropertyChanged(nameof(ShowShortageBookActions));
             OnPropertyChanged(nameof(ShowGstReturnExport));
             OnPropertyChanged(nameof(CanOpenInvoiceHint));
+            OnPropertyChanged(nameof(OpenRowHint));
             RefreshFilterOptions();
             ClearFilters(apply: false);
             ClearAllRows();
@@ -152,6 +166,16 @@ public class ReportsViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowFilters));
             OnPropertyChanged(nameof(HasNoFilterMatches));
             _ = RunReportAsync();
+        }
+    }
+
+    public ReportRowViewModel? SelectedRow
+    {
+        get => _selectedRow;
+        set
+        {
+            if (SetProperty(ref _selectedRow, value))
+                CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -173,8 +197,9 @@ public class ReportsViewModel : ObservableObject
             "Filter by invoice #, supplier, or due reason...",
         ReportKind.GstSummary => "Filter by invoice # or party...",
         ReportKind.Gstr1 or ReportKind.Gstr2B => "Filter by invoice, party, GSTIN, or section...",
-        ReportKind.SalesByMedicine or ReportKind.LowStock or ReportKind.SlowMovingStock or ReportKind.BatchStock =>
-            "Filter by medicine or generic...",
+        ReportKind.SalesByMedicine or ReportKind.MedicinesSoldByDate or ReportKind.LowStock or
+            ReportKind.SlowMovingStock or ReportKind.BatchStock or ReportKind.StockAdjustments =>
+            "Filter by medicine, invoice, or batch...",
         ReportKind.ScheduleRegister => "Filter by invoice, patient, doctor, or medicine...",
         ReportKind.StockValuation or ReportKind.Expiry => "Filter by medicine, batch, or supplier...",
         ReportKind.SaleReturns => "Filter by return #, invoice, or customer...",
@@ -272,7 +297,16 @@ public class ReportsViewModel : ObservableObject
     public bool ShowTaxDiscountKpis => ShowGenericSummaryKpis;
 
     public bool CanOpenInvoiceHint => SelectedReport.Kind is
-        ReportKind.Sales or ReportKind.Purchases or ReportKind.ScheduleRegister or ReportKind.SalesCreditDue;
+        ReportKind.Sales or ReportKind.Purchases or ReportKind.ScheduleRegister or ReportKind.SalesCreditDue
+            or ReportKind.MedicinesSoldByDate or ReportKind.SaleReturns or ReportKind.PurchaseReturns
+            or ReportKind.Profit or ReportKind.SalesByCustomer or ReportKind.SalesDayWise
+            or ReportKind.SalesByPaymentMode or ReportKind.SalesByMedicine or ReportKind.MedicineReturns
+            or ReportKind.PurchasesBySupplier or ReportKind.SupplierOutstanding or ReportKind.CustomerOutstanding
+            or ReportKind.GstSummary or ReportKind.SupplierPayments;
+
+    public string OpenRowHint => IsConsolidatedBillReport(SelectedReport.Kind)
+        ? "Double-click a row (or press Enter) to list underlying bills, then open any bill for details."
+        : "Double-click a row (or press Enter) to open the related invoice.";
 
     public bool IsBusy
     {
@@ -300,6 +334,7 @@ public class ReportsViewModel : ObservableObject
     public ICommand PrintScheduleRegisterCommand { get; }
     public ICommand ClearFilterCommand { get; }
     public ICommand OpenRowCommand { get; }
+    public ICommand AddToShortageBookCommand { get; }
     public ICommand ApplyTodayCommand { get; }
     public ICommand ApplyThisMonthCommand { get; }
     public ICommand ApplyLastMonthCommand { get; }
@@ -307,11 +342,229 @@ public class ReportsViewModel : ObservableObject
     public Task OpenRowAsync(ReportRowViewModel? row)
     {
         if (row is null) return Task.CompletedTask;
+        if (IsConsolidatedBillReport(SelectedReport.Kind))
+            return OpenConsolidatedBillsAsync(row);
         if (TryGetInt(row, "SaleId", out var saleId) && saleId > 0)
             return _invoiceViewer.ShowSaleAsync(saleId);
         if (TryGetInt(row, "PurchaseId", out var purchaseId) && purchaseId > 0)
             return _invoiceViewer.ShowPurchaseAsync(purchaseId);
         return Task.CompletedTask;
+    }
+
+    private static bool IsConsolidatedBillReport(ReportKind kind) => kind is
+        ReportKind.SalesByCustomer or ReportKind.SalesDayWise or ReportKind.SalesByPaymentMode
+            or ReportKind.SalesByMedicine or ReportKind.MedicineReturns
+            or ReportKind.PurchasesBySupplier or ReportKind.SupplierOutstanding
+            or ReportKind.CustomerOutstanding;
+
+    private async Task OpenConsolidatedBillsAsync(ReportRowViewModel row)
+    {
+        var query = BuildDrillDownQuery(row);
+        if (query is null)
+        {
+            _dialog.ShowInfo("This row does not have enough information to list bills.", "Bills");
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            var bills = await _reports.ListUnderlyingBillsAsync(query);
+            var subtitle = query.Kind is ReportKind.CustomerOutstanding or ReportKind.SupplierOutstanding
+                ? (bills.Count == 0
+                    ? "No open bills found."
+                    : $"{bills.Count} open bill(s)")
+                : (bills.Count == 0
+                    ? $"No bills from {query.From:dd-MMM-yyyy} to {query.To:dd-MMM-yyyy}."
+                    : $"{bills.Count} bill(s) · {query.From:dd-MMM-yyyy} – {query.To:dd-MMM-yyyy}");
+
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                var window = new Views.ReportBillsDrillDownWindow(
+                    query.Title,
+                    subtitle,
+                    bills,
+                    OpenListedBillAsync)
+                {
+                    Owner = System.Windows.Application.Current.MainWindow
+                };
+                window.ShowDialog();
+            });
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError($"Could not load bills.\n{ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private ReportBillDrillDownQuery? BuildDrillDownQuery(ReportRowViewModel row)
+    {
+        var kind = SelectedReport.Kind;
+        return kind switch
+        {
+            ReportKind.SalesByCustomer => string.IsNullOrWhiteSpace(GetString(row, "Customer"))
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    CustomerKey = GetString(row, "Customer"),
+                    Title = GetString(row, "Customer")
+                },
+            ReportKind.SalesDayWise => !DateTime.TryParseExact(
+                    GetString(row, "DayKey"), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var day)
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    Day = day,
+                    Title = $"Sales · {day:dd-MMM-yyyy}"
+                },
+            ReportKind.SalesByPaymentMode => string.IsNullOrWhiteSpace(GetString(row, "Method"))
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    PaymentMethod = GetString(row, "Method"),
+                    Title = $"Payment · {GetString(row, "Method")}"
+                },
+            ReportKind.SalesByMedicine => !TryGetInt(row, "MedicineId", out var medId) || medId <= 0
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    MedicineId = medId,
+                    Title = GetString(row, "MedicineName").Length > 0
+                        ? GetString(row, "MedicineName")
+                        : $"Medicine #{medId}"
+                },
+            ReportKind.MedicineReturns => !TryGetInt(row, "MedicineId", out var retMedId) || retMedId <= 0
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    MedicineId = retMedId,
+                    BatchNumber = GetString(row, "BatchNumber"),
+                    Title = $"{GetString(row, "MedicineName")} · {GetString(row, "BatchNumber")}"
+                },
+            ReportKind.PurchasesBySupplier => !TryGetInt(row, "SupplierId", out var supplierId) || supplierId <= 0
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    SupplierId = supplierId,
+                    Title = GetString(row, "Supplier").Length > 0
+                        ? GetString(row, "Supplier")
+                        : $"Supplier #{supplierId}"
+                },
+            ReportKind.SupplierOutstanding => !TryGetInt(row, "SupplierId", out var outSupplierId) || outSupplierId <= 0
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    SupplierId = outSupplierId,
+                    OpenBillsOnly = true,
+                    Title = GetString(row, "Name").Length > 0
+                        ? GetString(row, "Name")
+                        : $"Supplier #{outSupplierId}"
+                },
+            ReportKind.CustomerOutstanding => !TryGetInt(row, "CustomerId", out var customerId) || customerId <= 0
+                ? null
+                : new ReportBillDrillDownQuery
+                {
+                    Kind = kind,
+                    From = FromDate,
+                    To = ToDate,
+                    BranchId = _branchId,
+                    CustomerId = customerId,
+                    OpenBillsOnly = true,
+                    Title = GetString(row, "Name").Length > 0
+                        ? GetString(row, "Name")
+                        : $"Customer #{customerId}"
+                },
+            _ => null
+        };
+    }
+
+    private Task OpenListedBillAsync(ReportBillListRowDto bill)
+        => bill.DocumentKind == ReportDocumentKind.Purchase
+            ? _invoiceViewer.ShowPurchaseAsync(bill.DocumentId)
+            : _invoiceViewer.ShowSaleAsync(bill.DocumentId);
+
+    public Task AddSelectedToShortageBookAsync()
+        => AddRowToShortageBookAsync(SelectedRow);
+
+    public async Task AddRowToShortageBookAsync(ReportRowViewModel? row)
+    {
+        if (row is null || !ShowShortageBookActions) return;
+        if (!TryGetInt(row, "MedicineId", out var medicineId) || medicineId <= 0)
+        {
+            _dialog.ShowInfo("Select a medicine row first.", "Shortage book");
+            return;
+        }
+
+        var medicineName = GetString(row, "MedicineName");
+        if (string.IsNullOrWhiteSpace(medicineName))
+            medicineName = $"Medicine #{medicineId}";
+
+        try
+        {
+            var onHand = await _shortageBook.GetOnHandQuantityAsync(medicineId, _branchId);
+            var defaultRequested = Math.Max(1m, onHand > 0 ? onHand + 1 : 1m);
+            var prompt = _dialog.PromptShortageDetails(
+                medicineName,
+                defaultRequested,
+                detailLine: $"On hand: {onHand:0.##}. Wanted quantity and customer name are optional.");
+            if (prompt is null) return;
+
+            var result = await _shortageBook.RecordAsync(
+                new RecordShortageRequest(
+                    medicineId,
+                    prompt.WantedQuantity,
+                    onHand,
+                    ShortageSource.Manual,
+                    prompt.CustomerName),
+                _branchId,
+                _currentUser.CurrentUser?.FullName ?? _currentUser.CurrentUser?.Username);
+
+            if (result.IsFailure)
+            {
+                _dialog.ShowError(result.Error ?? "Could not record shortage.");
+                return;
+            }
+
+            StatusMessage = $"Added to shortage book: {result.Value!.MedicineName}";
+            _dialog.ShowInfo($"Added to shortage book: {result.Value.MedicineName}", "Shortage book");
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
     }
 
     private void PrintScheduleRegister()
@@ -697,7 +950,8 @@ public class ReportsViewModel : ObservableObject
             ReportKind.StockValuation => SumKey("StockAmount"),
             ReportKind.Expiry or ReportKind.BatchStock or ReportKind.SlowMovingStock => SumKey("StockValue"),
             ReportKind.Profit => SumKey("Revenue"),
-            ReportKind.SalesByMedicine => SumKey("Revenue"),
+            ReportKind.SalesByMedicine or ReportKind.MedicinesSoldByDate => SumKey("Revenue"),
+            ReportKind.StockAdjustments => SumKey("Difference"),
             ReportKind.ScheduleRegister => SumKey("Quantity"),
             ReportKind.Gstr1 or ReportKind.Gstr2B => SumKey("InvoiceValue"),
             ReportKind.SaleReturns or ReportKind.MedicineReturns => SumKey("RefundAmount"),
@@ -719,6 +973,7 @@ public class ReportsViewModel : ObservableObject
             ReportKind.Profit or ReportKind.SalesByMedicine => SumKey("GrossProfit"),
             ReportKind.Gstr1 or ReportKind.Gstr2B => SumKey("TaxableAmount"),
             ReportKind.LowStock => SumKey("Shortfall"),
+            ReportKind.StockAdjustments => SumKey("SystemQuantity"),
             ReportKind.SupplierPayments => SumKey("BalanceDue"),
             _ => discount
         };

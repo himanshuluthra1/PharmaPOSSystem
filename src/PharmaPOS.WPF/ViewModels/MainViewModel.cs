@@ -471,7 +471,7 @@ public class MainViewModel : ObservableObject
     {
         ReportKind.Sales or ReportKind.SalesDayWise => "PointOfSale",
         ReportKind.SalesByCustomer or ReportKind.CustomerOutstanding or ReportKind.CustomerReceipts => "Account",
-        ReportKind.SalesByMedicine or ReportKind.MedicineReturns => "Pill",
+        ReportKind.SalesByMedicine or ReportKind.MedicineReturns or ReportKind.MedicinesSoldByDate => "Pill",
         ReportKind.SalesByPaymentMode => "CreditCard",
         ReportKind.SalesCreditDue => "CashClock",
         ReportKind.Profit => "ChartLine",
@@ -489,6 +489,7 @@ public class MainViewModel : ObservableObject
         ReportKind.Expiry => "CalendarAlert",
         ReportKind.LowStock => "AlertCircleOutline",
         ReportKind.SlowMovingStock => "TimerSand",
+        ReportKind.StockAdjustments => "ScaleBalance",
         _ => "ChartBar"
     };
 

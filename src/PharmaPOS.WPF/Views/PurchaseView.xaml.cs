@@ -302,13 +302,23 @@ public partial class PurchaseView : UserControl
         if (e.Key == Key.Enter && PurchaseListBox.SelectedItem is PurchaseListItemDto purchase)
         {
             e.Handled = true;
-            await CommitPurchaseSelectionAsync(purchase);
+            if (Keyboard.Modifiers == ModifierKeys.Control)
+                await InvoiceDrillDown.OpenPurchaseAsync(purchase.PurchaseId);
+            else
+                await CommitPurchaseSelectionAsync(purchase);
         }
         else if (e.Key == Key.Escape)
         {
             e.Handled = true;
             PurchasePopup.IsOpen = false;
         }
+    }
+
+    private void PurchaseListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (PurchaseListBox.SelectedItem is not PurchaseListItemDto purchase || purchase.PurchaseId <= 0) return;
+        e.Handled = true;
+        _ = InvoiceDrillDown.OpenPurchaseAsync(purchase.PurchaseId);
     }
 
     private async void PurchaseListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

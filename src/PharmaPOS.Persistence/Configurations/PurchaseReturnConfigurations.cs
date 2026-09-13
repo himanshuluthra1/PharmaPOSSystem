@@ -23,6 +23,10 @@ public class PurchaseReturnConfiguration : IEntityTypeConfiguration<PurchaseRetu
             .OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Supplier).WithMany()
             .HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.SettledAgainstPurchase).WithMany()
+            .HasForeignKey(x => x.SettledAgainstPurchaseId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
         b.HasMany(x => x.Items).WithOne(i => i.PurchaseReturn!)
             .HasForeignKey(i => i.PurchaseReturnId).OnDelete(DeleteBehavior.Cascade);
     }
@@ -43,6 +47,10 @@ public class ExpirySupplierClaimConfiguration : IEntityTypeConfiguration<ExpiryS
             .HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.PurchaseReturn).WithMany()
             .HasForeignKey(x => x.PurchaseReturnId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.SettledAgainstPurchase).WithMany()
+            .HasForeignKey(x => x.SettledAgainstPurchaseId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
         b.HasMany(x => x.Items).WithOne(i => i.Claim!)
             .HasForeignKey(i => i.ClaimId).OnDelete(DeleteBehavior.Cascade);
     }

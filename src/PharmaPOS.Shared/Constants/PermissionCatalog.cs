@@ -109,6 +109,8 @@ public static class PermissionCatalog
         new(AppConstants.Permissions.ReportsMenuExpiry, "Menu — Expiry Report", "Reports"),
         new(AppConstants.Permissions.ReportsMenuLowStock, "Menu — Low Stock", "Reports"),
         new(AppConstants.Permissions.ReportsMenuSlowMovingStock, "Menu — Slow / Non-moving Stock", "Reports"),
+        new(AppConstants.Permissions.ReportsMenuStockAdjustments, "Menu — Stock Adjustments", "Reports"),
+        new(AppConstants.Permissions.ReportsMenuMedicinesSoldByDate, "Menu — Medicines Sold by Date", "Reports"),
 
         // Settings — menu
         new(AppConstants.Permissions.SettingsMenuCompany, "Menu — Company", "Settings"),

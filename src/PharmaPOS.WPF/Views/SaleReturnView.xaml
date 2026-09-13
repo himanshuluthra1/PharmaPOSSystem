@@ -69,7 +69,10 @@
                           CanUserAddRows="False"
                           HeadersVisibility="Column"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                          MouseDoubleClick="SearchGrid_MouseDoubleClick">
+                          Cursor="Hand"
+                          ToolTip="Double-click / Enter loads for return · Ctrl+Enter / Ctrl+double-click opens invoice popup"
+                          MouseDoubleClick="SearchGrid_MouseDoubleClick"
+                          PreviewKeyDown="SearchGrid_PreviewKeyDown">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="140" />
                         <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="150" />

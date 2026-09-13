@@ -32,7 +32,7 @@ public class MedicinePickerService : IMedicinePickerService
         using var scope = _scopeFactory.CreateScope();
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
         var shortageBook = scope.ServiceProvider.GetRequiredService<IShortageBookService>();
-        var medicine = ShowMedicineSearch(scope, salesService, branchId);
+        var medicine = ShowMedicineSearch(scope, branchId);
         if (medicine is null) return null;
 
         await TryRecordZeroStockShortageAsync(shortageBook, medicine, ShortageSource.SalesCart, branchId);
@@ -44,10 +44,9 @@ public class MedicinePickerService : IMedicinePickerService
     {
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
-        var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
         var inventory = scope.ServiceProvider.GetRequiredService<IInventoryService>();
 
-        var medicine = ShowMedicineSearch(scope, salesService, branchId);
+        var medicine = ShowMedicineSearch(scope, branchId);
         if (medicine is null) return null;
 
         var adjustmentBatches = await inventory.GetBatchesForAdjustmentAsync(medicine.Id, branchId);
@@ -100,19 +99,22 @@ public class MedicinePickerService : IMedicinePickerService
     {
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
-        var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
-        return Task.FromResult(ShowMedicineSearch(scope, salesService, branchId));
+        return Task.FromResult(ShowMedicineSearch(scope, branchId));
     }
 
     private static MedicineLookupDto? ShowMedicineSearch(
-        IServiceScope scope, ISalesService salesService, int? branchId)
+        IServiceScope scope, int? branchId)
     {
         var import = scope.ServiceProvider.GetRequiredService<IPharmacyMedicineImportService>();
         var masters = scope.ServiceProvider.GetRequiredService<IMastersService>();
         var ledger = scope.ServiceProvider.GetRequiredService<IMedicineLedgerDialogService>();
+        var shortageBook = scope.ServiceProvider.GetRequiredService<IShortageBookService>();
+        var dialog = scope.ServiceProvider.GetRequiredService<IDialogService>();
+        var currentUser = scope.ServiceProvider.GetRequiredService<ICurrentUserService>();
+        var searchIndex = scope.ServiceProvider.GetRequiredService<IMedicineSearchIndex>();
 
-        var searchVm = new MedicineSearchViewModel(salesService, branchId);
-        var searchWin = new MedicineSearchWindow(searchVm, import, masters, ledger)
+        var searchVm = new MedicineSearchViewModel(searchIndex, branchId);
+        var searchWin = new MedicineSearchWindow(searchVm, import, masters, ledger, shortageBook, dialog, currentUser)
         {
             Owner = System.Windows.Application.Current.MainWindow
         };

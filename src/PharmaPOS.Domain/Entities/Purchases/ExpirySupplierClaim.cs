@@ -24,9 +24,16 @@ public class ExpirySupplierClaim : BranchEntity
 
     public decimal ExpectedCreditAmount { get; set; }
 
+    /// <summary>Whether credit was recorded via a CN or against a purchase bill.</summary>
+    public ExpiryCreditSettlementKind CreditSettlementKind { get; set; } = ExpiryCreditSettlementKind.CreditNote;
+
     public string? CreditNoteNumber { get; set; }
     public DateTime? CreditNoteDate { get; set; }
     public decimal? CreditNoteAmount { get; set; }
+
+    /// <summary>When <see cref="CreditSettlementKind"/> is PurchaseBill, the bill that absorbed the credit.</summary>
+    public int? SettledAgainstPurchaseId { get; set; }
+    public Purchase? SettledAgainstPurchase { get; set; }
 
     public string? Remarks { get; set; }
 
@@ -56,4 +63,7 @@ public class ExpirySupplierClaimItem : BaseEntity
     public decimal PurchasePrice { get; set; }
     public decimal GstPercent { get; set; }
     public decimal LineTotal { get; set; }
+
+    /// <summary>Supplier refund of this line as a percent of calculated amount (default 100).</summary>
+    public decimal RefundPercent { get; set; } = 100m;
 }

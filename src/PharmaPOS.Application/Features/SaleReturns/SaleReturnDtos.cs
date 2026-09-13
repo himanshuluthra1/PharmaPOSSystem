@@ -182,9 +182,11 @@ public record SaleReturnSummaryRowDto(
     decimal RefundAmount,
     RefundMode RefundMode,
     string CashierName,
-    bool IsFullReturn);
+    bool IsFullReturn,
+    int SaleId = 0);
 
 public record MedicineReturnReportRowDto(
+    int MedicineId,
     string MedicineName,
     string BatchNumber,
     decimal ReturnedQuantity,

@@ -128,7 +128,9 @@
                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                          ScrollViewer.CanContentScroll="False"
                                          PreviewKeyDown="BillListBox_PreviewKeyDown"
-                                         PreviewMouseLeftButtonUp="BillListBox_PreviewMouseLeftButtonUp">
+                                         PreviewMouseLeftButtonUp="BillListBox_PreviewMouseLeftButtonUp"
+                                         MouseDoubleClick="BillListBox_MouseDoubleClick"
+                                         ToolTip="Enter loads bill for edit · Double-click / Ctrl+Enter opens invoice popup">
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />

@@ -48,6 +48,22 @@ public interface IReportsService
         int? branchId,
         ScheduleRegisterFilter filter = ScheduleRegisterFilter.HAndH1,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Bills for one customer key in the period (same grouping as Sales By Customer:
+    /// registered customer name, else billing name, else "Walk-in").
+    /// </summary>
+    Task<IReadOnlyList<CustomerSaleBillRowDto>> ListCustomerSalesAsync(
+        DateTime from,
+        DateTime to,
+        string customerKey,
+        int? branchId,
+        CancellationToken ct = default);
+
+    /// <summary>List sale/purchase bills underlying a consolidated report row.</summary>
+    Task<IReadOnlyList<ReportBillListRowDto>> ListUnderlyingBillsAsync(
+        ReportBillDrillDownQuery query,
+        CancellationToken ct = default);
 }
 
 /// <summary>Optional sale-return data provider used by the unified report table pipeline.</summary>

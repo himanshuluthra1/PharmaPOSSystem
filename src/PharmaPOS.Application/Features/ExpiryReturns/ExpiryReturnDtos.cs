@@ -21,6 +21,12 @@ public interface IExpiryReturnService
 
     Task<Result<ExpiryClaimDetailDto>> GetClaimAsync(int claimId, int? branchId, CancellationToken ct = default);
 
+    Task<List<ExpirySupplierBillOptionDto>> ListSupplierBillsAsync(
+        int supplierId, int? branchId, CancellationToken ct = default);
+
+    Task<Result<ExpiryClaimDetailDto>> UpdateClaimLinesAsync(
+        UpdateExpiryClaimLinesRequest request, string? userName, CancellationToken ct = default);
+
     Task<Result> AttachCreditNoteAsync(
         AttachExpiryCreditNoteRequest request, string? userName, CancellationToken ct = default);
 }
@@ -57,6 +63,19 @@ public class SubmitExpiryClaimLineRequest
 
 public record ExpirySupplierOptionDto(int Id, string Name);
 
+public record ExpirySupplierBillOptionDto(
+    int PurchaseId,
+    string InvoiceNumber,
+    string? SupplierBillNumber,
+    DateTime InvoiceDate,
+    decimal GrandTotal)
+{
+    public string Label =>
+        string.IsNullOrWhiteSpace(SupplierBillNumber)
+            ? $"{InvoiceNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}"
+            : $"{InvoiceNumber} / {SupplierBillNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}";
+}
+
 public class ExpiryClaimReceiptDto
 {
     public int ClaimId { get; set; }
@@ -74,40 +93,71 @@ public record ExpiryClaimListRowDto(
     string SupplierName,
     decimal ExpectedCreditAmount,
     string Status,
-    string? CreditNoteNumber,
+    string? SettlementReference,
     DateTime? CreditNoteDate,
-    string ReturnNumber);
+    string ReturnNumber,
+    int? SettledAgainstPurchaseId = null);
 
 public class ExpiryClaimDetailDto
 {
     public int Id { get; set; }
+    public int SupplierId { get; set; }
     public string ClaimNumber { get; set; } = string.Empty;
     public DateTime ClaimDate { get; set; }
     public string SupplierName { get; set; } = string.Empty;
     public string ReturnNumber { get; set; } = string.Empty;
     public decimal ExpectedCreditAmount { get; set; }
     public ExpiryClaimStatus Status { get; set; }
+    public bool CanEditLines { get; set; }
+    public ExpiryCreditSettlementKind CreditSettlementKind { get; set; }
     public string? CreditNoteNumber { get; set; }
     public DateTime? CreditNoteDate { get; set; }
     public decimal? CreditNoteAmount { get; set; }
+    public int? SettledAgainstPurchaseId { get; set; }
+    public string? SettledAgainstPurchaseLabel { get; set; }
     public string? Remarks { get; set; }
     public List<ExpiryClaimDetailLineDto> Lines { get; set; } = [];
 }
 
-public record ExpiryClaimDetailLineDto(
-    string MedicineName,
-    string BatchNumber,
-    DateTime? ExpiryDate,
-    decimal StockQuantity,
-    decimal ClaimQuantity,
-    decimal PurchasePrice,
-    decimal LineTotal,
-    string? PurchaseInvoiceNumber);
+public class ExpiryClaimDetailLineDto
+{
+    public int Id { get; set; }
+    public string MedicineName { get; set; } = string.Empty;
+    public string BatchNumber { get; set; } = string.Empty;
+    public DateTime? ExpiryDate { get; set; }
+    public decimal StockQuantity { get; set; }
+    public decimal ClaimQuantity { get; set; }
+    public decimal PurchasePrice { get; set; }
+    public decimal GstPercent { get; set; }
+    public decimal RefundPercent { get; set; } = 100m;
+    public decimal LineTotal { get; set; }
+    public string? PurchaseInvoiceNumber { get; set; }
+    public int? PurchaseId { get; set; }
+}
+
+public class UpdateExpiryClaimLinesRequest
+{
+    public int ClaimId { get; set; }
+    public List<UpdateExpiryClaimLineRequest> Lines { get; set; } = [];
+}
+
+public class UpdateExpiryClaimLineRequest
+{
+    public int Id { get; set; }
+    public string BatchNumber { get; set; } = string.Empty;
+    public DateTime? ExpiryDate { get; set; }
+    public decimal ClaimQuantity { get; set; }
+    public decimal PurchasePrice { get; set; }
+    public decimal GstPercent { get; set; }
+    public decimal RefundPercent { get; set; } = 100m;
+}
 
 public class AttachExpiryCreditNoteRequest
 {
     public int ClaimId { get; set; }
+    public ExpiryCreditSettlementKind SettlementKind { get; set; } = ExpiryCreditSettlementKind.CreditNote;
     public string CreditNoteNumber { get; set; } = string.Empty;
+    public int? SettledAgainstPurchaseId { get; set; }
     public DateTime? CreditNoteDate { get; set; }
     public decimal? CreditNoteAmount { get; set; }
 }

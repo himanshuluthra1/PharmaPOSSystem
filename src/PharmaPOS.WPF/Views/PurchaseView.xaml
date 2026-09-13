@@ -175,7 +175,9 @@
                                                  ScrollViewer.CanContentScroll="False"
                                                  SelectionChanged="PurchaseListBox_SelectionChanged"
                                                  PreviewKeyDown="PurchaseListBox_PreviewKeyDown"
-                                                 PreviewMouseLeftButtonUp="PurchaseListBox_PreviewMouseLeftButtonUp">
+                                                 PreviewMouseLeftButtonUp="PurchaseListBox_PreviewMouseLeftButtonUp"
+                                                 MouseDoubleClick="PurchaseListBox_MouseDoubleClick"
+                                                 ToolTip="Enter loads bill for edit · Double-click / Ctrl+Enter opens invoice popup">
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">
                                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />

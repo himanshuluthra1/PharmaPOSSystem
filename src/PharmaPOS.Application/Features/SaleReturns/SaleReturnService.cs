@@ -237,7 +237,8 @@ public class SaleReturnService : ISaleReturnService
                 r.RefundAmount,
                 r.RefundMode,
                 r.CreatedBy ?? "—",
-                r.IsFullReturn))
+                r.IsFullReturn,
+                r.SaleId))
             .ToListAsync(ct);
     }
 
@@ -272,6 +273,7 @@ public class SaleReturnService : ISaleReturnService
             .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
 
         return raw.Select(r => new MedicineReturnReportRowDto(
+            r.MedicineId,
             names.TryGetValue(r.MedicineId, out var name) ? name : $"Medicine #{r.MedicineId}",
             string.IsNullOrWhiteSpace(r.BatchNumber) ? "—" : r.BatchNumber!,
             r.ReturnedQuantity,

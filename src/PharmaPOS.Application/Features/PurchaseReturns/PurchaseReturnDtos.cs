@@ -28,7 +28,13 @@ public interface IPurchaseReturnService
         int purchaseReturnId, int? branchId, CancellationToken ct = default);
 
     Task<Result> AttachSupplierReceiptAsync(
-        int purchaseReturnId, string receiptNumber, DateTime? receiptDate, string? userName, CancellationToken ct = default);
+        AttachPurchaseReturnReceiptRequest request, string? userName, CancellationToken ct = default);
+
+    Task<List<PurchaseReturnSupplierBillOptionDto>> ListSupplierBillsAsync(
+        int supplierId, int? branchId, CancellationToken ct = default);
+
+    Task<Result<PurchaseReturnDetailDto>> UpdateReturnLinesAsync(
+        UpdatePurchaseReturnLinesRequest request, string? userName, CancellationToken ct = default);
 
     Task<List<ReturnReasonOptionDto>> ListReturnReasonsAsync(CancellationToken ct = default);
 
@@ -152,6 +158,7 @@ public record PurchaseReturnListRowDto(
     int Id,
     string ReturnNumber,
     DateTime ReturnDate,
+    int SupplierId,
     string PurchaseInvoiceNumber,
     string? SupplierInvoiceNumber,
     string SupplierName,
@@ -159,11 +166,16 @@ public record PurchaseReturnListRowDto(
     string? SupplierReturnReceiptNumber,
     DateTime? SupplierReturnReceiptDate,
     bool HasSupplierReceipt,
-    bool IsDirectReturn);
+    bool IsDirectReturn,
+    PurchaseReturnReceiptSettlementKind ReceiptSettlementKind,
+    int? SettledAgainstPurchaseId,
+    string? SettlementReference,
+    int? PurchaseId = null);
 
 public class PurchaseReturnDetailDto
 {
     public int Id { get; set; }
+    public int SupplierId { get; set; }
     public string ReturnNumber { get; set; } = string.Empty;
     public DateTime ReturnDate { get; set; }
     public string SupplierName { get; set; } = string.Empty;
@@ -171,18 +183,71 @@ public class PurchaseReturnDetailDto
     public bool IsDirectReturn { get; set; }
     public string? Remarks { get; set; }
     public decimal GrandTotal { get; set; }
+    public bool CanEditLines { get; set; }
+    public PurchaseReturnReceiptSettlementKind ReceiptSettlementKind { get; set; }
+    public string? SupplierReturnReceiptNumber { get; set; }
+    public DateTime? SupplierReturnReceiptDate { get; set; }
+    public int? SettledAgainstPurchaseId { get; set; }
     public List<PurchaseReturnDetailLineDto> Lines { get; set; } = new();
 }
 
-public record PurchaseReturnDetailLineDto(
-    string MedicineName,
-    string? BatchNumber,
-    DateTime? ExpiryDate,
-    decimal ReturnedQuantity,
-    decimal ReturnedFreeQuantity,
-    decimal PurchasePrice,
-    decimal GstPercent,
-    decimal LineTotal,
-    string? ReasonName);
+public class PurchaseReturnDetailLineDto
+{
+    public int Id { get; set; }
+    public string MedicineName { get; set; } = string.Empty;
+    public string? BatchNumber { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public decimal ReturnedQuantity { get; set; }
+    public decimal ReturnedFreeQuantity { get; set; }
+    public decimal PurchasePrice { get; set; }
+    public decimal DiscountPercent { get; set; }
+    public decimal GstPercent { get; set; }
+    public decimal RefundPercent { get; set; } = 100m;
+    public decimal LineTotal { get; set; }
+    public string? ReasonName { get; set; }
+    public string? ReasonRemarks { get; set; }
+}
+
+public class UpdatePurchaseReturnLinesRequest
+{
+    public int PurchaseReturnId { get; set; }
+    public List<UpdatePurchaseReturnLineRequest> Lines { get; set; } = [];
+}
+
+public class UpdatePurchaseReturnLineRequest
+{
+    public int Id { get; set; }
+    public string? BatchNumber { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public decimal ReturnedQuantity { get; set; }
+    public decimal ReturnedFreeQuantity { get; set; }
+    public decimal PurchasePrice { get; set; }
+    public decimal GstPercent { get; set; }
+    public decimal RefundPercent { get; set; } = 100m;
+    public string? ReasonRemarks { get; set; }
+}
+
+public record PurchaseReturnSupplierBillOptionDto(
+    int PurchaseId,
+    string InvoiceNumber,
+    string? SupplierBillNumber,
+    DateTime InvoiceDate,
+    decimal GrandTotal)
+{
+    public string Label =>
+        string.IsNullOrWhiteSpace(SupplierBillNumber)
+            ? $"{InvoiceNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}"
+            : $"{InvoiceNumber} / {SupplierBillNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}";
+}
+
+public class AttachPurchaseReturnReceiptRequest
+{
+    public int PurchaseReturnId { get; set; }
+    public PurchaseReturnReceiptSettlementKind SettlementKind { get; set; }
+        = PurchaseReturnReceiptSettlementKind.SupplierReceipt;
+    public string ReceiptNumber { get; set; } = string.Empty;
+    public int? SettledAgainstPurchaseId { get; set; }
+    public DateTime? ReceiptDate { get; set; }
+}
 
 public record ReturnReasonOptionDto(int Id, string Code, string Name, bool RequiresRemarks);

@@ -24,6 +24,7 @@ public static class DependencyInjection
     {
         services.AddSingleton<ILinkedMedWinIdCache, LinkedMedWinIdCache>();
         services.AddSingleton<IMedicineMedWinMappingBackfillService, MedicineMedWinMappingBackfillService>();
+        services.AddSingleton<IMedicineSearchIndex, MedicineSearchIndex>();
         services.AddTransient<IAuthService, AuthService>();
         services.AddTransient<IDashboardService, DashboardService>();
         services.AddTransient<ISalesService, SalesService>();

@@ -43,7 +43,7 @@
                     <TextBlock Text="{Binding SelectedReportDescription}"
                                FontSize="11" Opacity="0.55" Margin="0,0,0,4"
                                TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="Double-click a row (or press Enter) to open the related invoice."
+                    <TextBlock Text="{Binding OpenRowHint}"
                                FontSize="10" Opacity="0.45" Margin="0,0,0,4"
                                Visibility="{Binding CanOpenInvoiceHint, Converter={StaticResource BoolToVisibility}}" />
                     <TextBlock Text="{Binding GstReturnDisclaimer}"
@@ -104,6 +104,15 @@
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Printer" Width="14" Height="14" VerticalAlignment="Center" />
                                 <TextBlock Text="Print" Margin="4,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding AddToShortageBookCommand}"
+                                Style="{StaticResource CompactToolbarButton}"
+                                ToolTip="Add selected medicine to shortage book (F7)"
+                                Visibility="{Binding ShowShortageBookActions, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="ClipboardAlert" Width="14" Height="14" VerticalAlignment="Center" />
+                                <TextBlock Text="Shortage (F7)" Margin="4,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding ExportCsvCommand}" IsEnabled="{Binding CanExport}"
@@ -358,6 +367,7 @@
                                Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibility}}" />
                     <DataGrid x:Name="ResultsGrid"
                               ItemsSource="{Binding Rows}"
+                              SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
                               CanUserAddRows="False"

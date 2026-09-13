@@ -1,8 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.Masters;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.Application.Features.ShortageBook;
+using PharmaPOS.Domain.Enums;
 using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels.Sales;
 
@@ -14,7 +17,11 @@ public partial class MedicineSearchWindow : Window
     private readonly IPharmacyMedicineImportService? _import;
     private readonly IMastersService? _masters;
     private readonly IMedicineLedgerDialogService? _medicineLedger;
+    private readonly IShortageBookService? _shortageBook;
+    private readonly IDialogService? _dialog;
+    private readonly ICurrentUserService? _currentUser;
     private MedicineLookupDto? _createdMedicine;
+    private bool _shortageBusy;
 
     /// <summary>Selected existing medicine, or newly created (website / copy).</summary>
     public MedicineLookupDto? ResultMedicine => _createdMedicine ?? _viewModel.SelectedMedicine;
@@ -23,13 +30,19 @@ public partial class MedicineSearchWindow : Window
         MedicineSearchViewModel viewModel,
         IPharmacyMedicineImportService? import = null,
         IMastersService? masters = null,
-        IMedicineLedgerDialogService? medicineLedger = null)
+        IMedicineLedgerDialogService? medicineLedger = null,
+        IShortageBookService? shortageBook = null,
+        IDialogService? dialog = null,
+        ICurrentUserService? currentUser = null)
     {
         InitializeComponent();
         _viewModel = viewModel;
         _import = import;
         _masters = masters;
         _medicineLedger = medicineLedger;
+        _shortageBook = shortageBook;
+        _dialog = dialog;
+        _currentUser = currentUser;
         DataContext = viewModel;
         Loaded += (_, _) =>
         {
@@ -73,6 +86,13 @@ public partial class MedicineSearchWindow : Window
             return;
         }
 
+        if (e.Key == Key.F7)
+        {
+            e.Handled = true;
+            await AddSelectedToShortageBookAsync();
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.Down:
@@ -89,6 +109,61 @@ public partial class MedicineSearchWindow : Window
                 ConfirmSelection();
                 e.Handled = true;
                 break;
+        }
+    }
+
+    private async Task AddSelectedToShortageBookAsync()
+    {
+        if (_shortageBusy) return;
+        var medicine = _viewModel.SelectedMedicine;
+        if (medicine is null)
+        {
+            MessageBox.Show("Select a medicine in the list first.", "Shortage book",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (_shortageBook is null || _dialog is null)
+        {
+            MessageBox.Show("Shortage book is not available.", "Shortage book",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _shortageBusy = true;
+        try
+        {
+            var branchId = _currentUser?.CurrentUser?.BranchId;
+            var onHand = await _shortageBook.GetOnHandQuantityAsync(medicine.Id, branchId);
+            var defaultRequested = Math.Max(1m, onHand > 0 ? onHand + 1 : 1m);
+            var prompt = _dialog.PromptShortageDetails(
+                medicine.Name,
+                defaultRequested,
+                detailLine: $"On hand: {onHand:0.##}. Wanted quantity and customer name are optional.");
+            if (prompt is null) return;
+
+            var result = await _shortageBook.RecordAsync(
+                new RecordShortageRequest(
+                    medicine.Id,
+                    prompt.WantedQuantity,
+                    onHand,
+                    ShortageSource.Manual,
+                    prompt.CustomerName),
+                branchId,
+                _currentUser?.CurrentUser?.FullName ?? _currentUser?.CurrentUser?.Username);
+
+            if (result.IsFailure)
+                _dialog.ShowError(result.Error ?? "Could not record shortage.");
+            else
+                _dialog.ShowInfo($"Added to shortage book: {medicine.Name}", "Shortage book");
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            _shortageBusy = false;
         }
     }
 

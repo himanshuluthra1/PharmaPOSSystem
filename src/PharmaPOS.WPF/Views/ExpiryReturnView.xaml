@@ -61,7 +61,11 @@
                     <materialDesign:Card Grid.Row="1" Padding="8" UniformCornerRadius="10">
                         <DataGrid ItemsSource="{Binding Batches}"
                                   AutoGenerateColumns="False" CanUserAddRows="False"
-                                  HeadersVisibility="Column">
+                                  HeadersVisibility="Column"
+                                  Cursor="Hand"
+                                  ToolTip="Double-click or Enter to open source purchase invoice"
+                                  MouseDoubleClick="BatchesGrid_MouseDoubleClick"
+                                  PreviewKeyDown="BatchesGrid_PreviewKeyDown">
                             <DataGrid.Columns>
                                 <DataGridCheckBoxColumn Header="Sel" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="44" />
                                 <DataGridTextColumn Header="Medicine" Binding="{Binding Source.MedicineName}" Width="2*" MinWidth="140" IsReadOnly="True" />
@@ -136,14 +140,18 @@
                             <DataGrid ItemsSource="{Binding Claims}"
                                       SelectedItem="{Binding SelectedClaim}"
                                       AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                                      HeadersVisibility="Column">
+                                      HeadersVisibility="Column"
+                                      Cursor="Hand"
+                                      ToolTip="Double-click or Enter to open settled purchase invoice (when settled against a bill)"
+                                      MouseDoubleClick="ClaimsGrid_MouseDoubleClick"
+                                      PreviewKeyDown="ClaimsGrid_PreviewKeyDown">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Claim #" Binding="{Binding ClaimNumber}" Width="130" />
                                     <DataGridTextColumn Header="Date" Binding="{Binding ClaimDate, StringFormat=dd-MMM-yyyy}" Width="100" />
                                     <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName}" Width="*" MinWidth="120" />
                                     <DataGridTextColumn Header="Credit" Binding="{Binding ExpectedCreditAmount, StringFormat=N2}" Width="90" />
                                     <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="140" />
-                                    <DataGridTextColumn Header="CN #" Binding="{Binding CreditNoteNumber}" Width="100" />
+                                    <DataGridTextColumn Header="Settled via" Binding="{Binding SettlementReference}" Width="140" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </DockPanel>
@@ -158,52 +166,98 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <StackPanel Grid.Row="0" Margin="0,0,0,6">
-                                <TextBlock Text="Claim lines" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,4" />
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,2">
-                                    <Run Text="{Binding ClaimDetail.ClaimNumber, Mode=OneWay}" />
-                                    <Run Text=" · " />
-                                    <Run Text="{Binding ClaimDetail.SupplierName, Mode=OneWay}" />
-                                </TextBlock>
-                                <TextBlock Opacity="0.7" Margin="0,0,0,4">
-                                    <Run Text="Return " />
-                                    <Run Text="{Binding ClaimDetail.ReturnNumber, Mode=OneWay}" />
-                                    <Run Text=" · Expected " />
-                                    <Run Text="{Binding ClaimDetail.ExpectedCreditAmount, Mode=OneWay, StringFormat=N2}" />
-                                </TextBlock>
-                            </StackPanel>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding SaveClaimLinesCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Padding="8,2" Height="28" Margin="8,0,0,0"
+                                        Content="Save line changes"
+                                        Visibility="{Binding CanEditClaimLines, Converter={StaticResource BoolToVisibility}}" />
+                                <StackPanel>
+                                    <TextBlock Text="Claim lines" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,4" />
+                                    <TextBlock FontWeight="SemiBold" Margin="0,0,0,2">
+                                        <Run Text="{Binding ClaimDetail.ClaimNumber, Mode=OneWay}" />
+                                        <Run Text=" · " />
+                                        <Run Text="{Binding ClaimDetail.SupplierName, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Opacity="0.7" Margin="0,0,0,4">
+                                        <Run Text="Return " />
+                                        <Run Text="{Binding ClaimDetail.ReturnNumber, Mode=OneWay}" />
+                                        <Run Text=" · Expected " />
+                                        <Run Text="{Binding ClaimDetail.ExpectedCreditAmount, Mode=OneWay, StringFormat=N2}" />
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" Opacity="0.65"
+                                               Text="Editable until credit note / purchase bill is saved. Refund % defaults to 100."
+                                               Visibility="{Binding CanEditClaimLines, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </DockPanel>
 
                             <DataGrid Grid.Row="1"
-                                      ItemsSource="{Binding ClaimDetail.Lines}"
-                                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                                      ItemsSource="{Binding EditableClaimLines}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="{Binding IsClaimLinesReadOnly}"
+                                      CanUserAddRows="False"
                                       HeadersVisibility="Column"
-                                      Visibility="{Binding HasSelectedClaim, Converter={StaticResource BoolToVisibility}}">
+                                      Cursor="Hand"
+                                      ToolTip="Double-click or Enter to open source purchase invoice"
+                                      MouseDoubleClick="ClaimLinesGrid_MouseDoubleClick"
+                                      PreviewKeyDown="ClaimLinesGrid_PreviewKeyDown"
+                                      Visibility="{Binding HasEditableClaimLines, Converter={StaticResource BoolToVisibility}}">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="120" />
-                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
-                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=dd-MMM-yyyy}" Width="95" />
-                                    <DataGridTextColumn Header="Qty" Binding="{Binding ClaimQuantity, StringFormat=0.##}" Width="60" />
-                                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2}" Width="70" />
-                                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="80" />
-                                    <DataGridTextColumn Header="Bill" Binding="{Binding PurchaseInvoiceNumber}" Width="100" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="120" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="90" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=dd-MMM-yyyy, UpdateSourceTrigger=PropertyChanged}" Width="95" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding ClaimQuantity, UpdateSourceTrigger=PropertyChanged}" Width="60" />
+                                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                    <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                    <DataGridTextColumn Header="Refund %" Binding="{Binding RefundPercent, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="80" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Bill" Binding="{Binding PurchaseInvoiceNumber}" Width="100" IsReadOnly="True" />
                                 </DataGrid.Columns>
                             </DataGrid>
 
                             <StackPanel Grid.Row="2" Margin="0,8,0,0"
                                         ToolTip="{Binding ManageBlockedReason}">
-                                <TextBlock Text="Attach credit note" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6" />
+                                <TextBlock Text="Record credit received" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6" />
                                 <TextBlock Text="{Binding ManageBlockedReason}" Foreground="#C62828" FontSize="11"
                                            Margin="0,0,0,6" TextWrapping="Wrap"
                                            Visibility="{Binding HasManageBlockedReason, Converter={StaticResource BoolToVisibility}}" />
-                                <TextBlock Text="Credit note number" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
-                                <TextBox Margin="0,0,0,6"
-                                         materialDesign:HintAssist.Hint="Credit note number"
-                                         materialDesign:HintAssist.IsFloating="False"
-                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                         Text="{Binding CreditNoteNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Text="Credit note date" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+
+                                <TextBlock Text="Credit received as" Style="{StaticResource FieldCaption}" Margin="0,0,0,4" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <RadioButton Content="Credit note"
+                                                 IsChecked="{Binding IsCreditNoteSettlement}"
+                                                 GroupName="ExpirySettlementKind"
+                                                 Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <RadioButton Content="Purchase bill number"
+                                                 IsChecked="{Binding IsPurchaseBillSettlement}"
+                                                 GroupName="ExpirySettlementKind"
+                                                 VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding ShowCreditNoteFields, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Credit note number" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                    <TextBox Margin="0,0,0,6"
+                                             materialDesign:HintAssist.Hint="Credit note number"
+                                             materialDesign:HintAssist.IsFloating="False"
+                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                             Text="{Binding CreditNoteNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding ShowPurchaseBillFields, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Purchase bill" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                    <ComboBox Margin="0,0,0,6"
+                                              ItemsSource="{Binding SupplierBills}"
+                                              SelectedItem="{Binding SelectedSupplierBill}"
+                                              DisplayMemberPath="Label"
+                                              materialDesign:HintAssist.Hint="Select bill number and date"
+                                              materialDesign:HintAssist.IsFloating="False"
+                                              Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                                </StackPanel>
+
+                                <TextBlock Text="Date" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                 <DatePicker Margin="0,0,0,6"
-                                            materialDesign:HintAssist.Hint="Credit note date"
+                                            materialDesign:HintAssist.Hint="Credit / bill date"
                                             materialDesign:HintAssist.IsFloating="False"
                                             Style="{StaticResource MaterialDesignOutlinedDatePicker}"
                                             SelectedDate="{Binding CreditNoteDate}" />
@@ -215,7 +269,7 @@
                                          Text="{Binding CreditNoteAmount, UpdateSourceTrigger=PropertyChanged}" />
                                 <Button Command="{Binding AttachCreditNoteCommand}"
                                         Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Content="Save credit note" Padding="8,2" Height="28"
+                                        Content="Save credit" Padding="8,2" Height="28"
                                         ToolTip="{Binding ManageBlockedReason}" />
                                 <TextBlock Text="{Binding StatusMessage}" Opacity="0.6" Margin="0,8,0,0" TextWrapping="Wrap" />
                             </StackPanel>

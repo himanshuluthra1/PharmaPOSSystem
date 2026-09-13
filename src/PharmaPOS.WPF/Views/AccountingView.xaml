@@ -266,7 +266,11 @@
                                         Background="{DynamicResource MaterialDesignDivider}" />
 
                                 <DataGrid Grid.Column="2" Style="{StaticResource AcctDataGrid}"
-                                          ItemsSource="{Binding Bills}" IsReadOnly="False">
+                                          ItemsSource="{Binding Bills}" IsReadOnly="False"
+                                          MouseDoubleClick="PartyBillsGrid_MouseDoubleClick"
+                                          PreviewKeyDown="PartyBillsGrid_PreviewKeyDown"
+                                          Cursor="Hand"
+                                          ToolTip="Double-click or Enter to open invoice">
                                     <DataGrid.Columns>
                                         <DataGridCheckBoxColumn Header=""
                                                                 Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
@@ -366,7 +370,11 @@
                                 <DockPanel Grid.Column="2">
                                     <TextBlock DockPanel.Dock="Top" Text="Open bills" FontSize="11" FontWeight="SemiBold"
                                                Opacity="0.5" Margin="0,0,0,2" />
-                                    <DataGrid Style="{StaticResource AcctDataGrid}" ItemsSource="{Binding OpenBills}">
+                                    <DataGrid Style="{StaticResource AcctDataGrid}" ItemsSource="{Binding OpenBills}"
+                                              MouseDoubleClick="CustomerOpenBillsGrid_MouseDoubleClick"
+                                              PreviewKeyDown="CustomerOpenBillsGrid_PreviewKeyDown"
+                                              Cursor="Hand"
+                                              ToolTip="Double-click or Enter to open sale invoice">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="110" />
                                             <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="90" />
@@ -567,6 +575,10 @@
                                         <DataGrid ItemsSource="{Binding BillAllocations}"
                                                   Style="{StaticResource AcctDataGrid}"
                                                   IsReadOnly="False"
+                                                  MouseDoubleClick="VoucherAllocationsGrid_MouseDoubleClick"
+                                                  PreviewKeyDown="VoucherAllocationsGrid_PreviewKeyDown"
+                                                  Cursor="Hand"
+                                                  ToolTip="Double-click or Enter to open purchase invoice"
                                                   MaxHeight="420"
                                                   Visibility="{Binding ShowBillWiseAllocation, Converter={StaticResource BoolToVisibility}}">
                                             <DataGrid.Columns>

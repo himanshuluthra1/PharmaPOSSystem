@@ -159,7 +159,8 @@ public partial class ReportsService : IReportsService
                 s.CgstAmount,
                 s.SgstAmount,
                 s.IgstAmount,
-                s.GrandTotal))
+                s.GrandTotal,
+                s.Id))
             .ToListAsync(ct);
 
         var purchases = await PurchasesQuery(branchId)
@@ -173,7 +174,8 @@ public partial class ReportsService : IReportsService
                 p.CgstAmount,
                 p.SgstAmount,
                 p.IgstAmount,
-                p.GrandTotal))
+                p.GrandTotal,
+                p.Id))
             .ToListAsync(ct);
 
         var summary = new GstSummaryDto
@@ -224,6 +226,7 @@ public partial class ReportsService : IReportsService
             var cost = s.Items.Sum(i =>
                 i.Quantity * (i.MedicineBatch?.PurchasePrice ?? 0m));
             return new ProfitReportRowDto(
+                s.Id,
                 s.InvoiceNumber,
                 s.InvoiceDate,
                 s.Customer?.Name ?? s.BillingCustomerName ?? "Walk-in",
@@ -303,7 +306,7 @@ public partial class ReportsService : IReportsService
                         return x.Quantity * price;
                     return 0m;
                 });
-                return new MedicineSalesRowDto(name, generic, qty, revenue, cost, revenue - cost);
+                return new MedicineSalesRowDto(g.Key, name, generic, qty, revenue, cost, revenue - cost);
             })
             .OrderByDescending(r => r.Revenue)
             .ToList();
@@ -320,21 +323,40 @@ public partial class ReportsService : IReportsService
     public async Task<(ReportSummaryDto Summary, List<StockValuationReportRowDto> Rows)> GetStockValuationReportAsync(
         int? branchId, CancellationToken ct = default)
     {
-        var q = BatchQuery(branchId).Where(b => b.QuantityAvailable != 0);
-
-        var rows = await q
+        var batches = await BatchQuery(branchId)
+            .Where(b => b.QuantityAvailable != 0)
             .OrderBy(b => b.Medicine!.Name)
             .ThenBy(b => b.ExpiryDate)
-            .Select(b => new StockValuationReportRowDto(
-                b.Medicine!.Name,
+            .Select(b => new
+            {
+                b.Id,
+                b.MedicineId,
+                MedicineName = b.Medicine!.Name,
+                b.BatchNumber,
+                b.ExpiryDate,
+                b.QuantityAvailable,
+                b.PurchasePrice,
+                b.Mrp
+            })
+            .ToListAsync(ct);
+
+        var supplierByBatch = await ResolveBatchSuppliersAsync(
+            batches.Select(b => (b.Id, b.MedicineId, b.MedicineName, b.BatchNumber)).ToList(), ct);
+
+        var rows = batches.Select(b =>
+        {
+            supplierByBatch.TryGetValue(b.Id, out var supplier);
+            return new StockValuationReportRowDto(
+                b.MedicineName,
+                supplier.Name,
                 b.BatchNumber,
                 b.ExpiryDate,
                 b.QuantityAvailable,
                 b.PurchasePrice,
                 b.Mrp,
                 b.PurchasePrice * b.QuantityAvailable,
-                b.Mrp * b.QuantityAvailable))
-            .ToListAsync(ct);
+                b.Mrp * b.QuantityAvailable);
+        }).ToList();
 
         return (new ReportSummaryDto
         {

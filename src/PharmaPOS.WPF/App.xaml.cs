@@ -8,6 +8,7 @@ using PharmaPOS.Persistence;
 using PharmaPOS.Persistence.Seed;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.ReportingSync;
+using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.WPF.Services;
 using PharmaPOS.WPF.ViewModels;
 using PharmaPOS.WPF.ViewModels.Sales;
@@ -288,6 +289,9 @@ public partial class App : System.Windows.Application
     {
         await Services.GetRequiredService<IFinancialYearContext>().RefreshAsync();
 
+        // Warm medicine typeahead catalogue in the background so sales search feels instant.
+        _ = Services.GetRequiredService<IMedicineSearchIndex>().EnsureWarmAsync();
+
         var mainWindow = Services.GetRequiredService<MainWindow>();
         var mainVm = Services.GetRequiredService<MainViewModel>();
         mainWindow.DataContext = mainVm;
@@ -297,6 +301,7 @@ public partial class App : System.Windows.Application
             Services.GetRequiredService<INavigationService>().ClearSessionCache();
             Services.GetRequiredService<ICounterContextService>().Clear();
             Services.GetRequiredService<ICurrentUserService>().Clear();
+            Services.GetRequiredService<IMedicineSearchIndex>().Invalidate();
             // Flag the close as a logout so it re-opens login instead of exiting.
             mainWindow.Tag = "logout";
             mainWindow.Close();

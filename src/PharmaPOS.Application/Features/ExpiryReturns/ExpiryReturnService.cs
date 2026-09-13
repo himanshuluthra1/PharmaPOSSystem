@@ -221,6 +221,7 @@ public sealed class ExpiryReturnService : IExpiryReturnService
                 PurchasePrice = src.PurchasePrice,
                 GstPercent = src.GstPercent,
                 LineTotal = Math.Round(unit * qty, 2),
+                RefundPercent = 100m,
                 CreatedBy = userName
             }, ct);
         }
@@ -257,9 +258,36 @@ public sealed class ExpiryReturnService : IExpiryReturnService
                 c.Status == ExpiryClaimStatus.CreditReceived ? "Credit received"
                     : c.Status == ExpiryClaimStatus.Cancelled ? "Cancelled"
                     : "Awaiting credit note",
-                c.CreditNoteNumber,
+                c.Status != ExpiryClaimStatus.CreditReceived || string.IsNullOrWhiteSpace(c.CreditNoteNumber)
+                    ? null
+                    : c.CreditSettlementKind == ExpiryCreditSettlementKind.PurchaseBill
+                        ? $"Bill {c.CreditNoteNumber}"
+                        : $"CN {c.CreditNoteNumber}",
                 c.CreditNoteDate,
-                c.PurchaseReturn != null ? c.PurchaseReturn.ReturnNumber : ""))
+                c.PurchaseReturn != null ? c.PurchaseReturn.ReturnNumber : "",
+                c.SettledAgainstPurchaseId))
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<ExpirySupplierBillOptionDto>> ListSupplierBillsAsync(
+        int supplierId, int? branchId, CancellationToken ct = default)
+    {
+        if (supplierId <= 0) return [];
+
+        var q = _uow.Repository<Purchase>().Query().AsNoTracking()
+            .Where(p => p.SupplierId == supplierId
+                        && p.Status != PurchaseStatus.Cancelled
+                        && p.Status != PurchaseStatus.Draft);
+        if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
+
+        return await q.OrderByDescending(p => p.InvoiceDate).ThenByDescending(p => p.Id)
+            .Take(200)
+            .Select(p => new ExpirySupplierBillOptionDto(
+                p.Id,
+                p.InvoiceNumber,
+                p.SupplierInvoiceNumber,
+                p.InvoiceDate,
+                p.GrandTotal))
             .ToListAsync(ct);
     }
 
@@ -269,6 +297,7 @@ public sealed class ExpiryReturnService : IExpiryReturnService
         var claim = await _uow.Repository<ExpirySupplierClaim>().Query().AsNoTracking()
             .Include(c => c.Supplier)
             .Include(c => c.PurchaseReturn)
+            .Include(c => c.SettledAgainstPurchase)
             .Include(c => c.Items)
             .FirstOrDefaultAsync(c => c.Id == claimId, ct);
 
@@ -289,29 +318,169 @@ public sealed class ExpiryReturnService : IExpiryReturnService
                 .Where(p => purchaseIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id, p => p.InvoiceNumber, ct);
 
+        string? settledBillLabel = null;
+        if (claim.SettledAgainstPurchase is not null)
+        {
+            var p = claim.SettledAgainstPurchase;
+            settledBillLabel = string.IsNullOrWhiteSpace(p.SupplierInvoiceNumber)
+                ? $"{p.InvoiceNumber} · {p.InvoiceDate:dd-MMM-yyyy}"
+                : $"{p.InvoiceNumber} / {p.SupplierInvoiceNumber} · {p.InvoiceDate:dd-MMM-yyyy}";
+        }
+
         return Result.Success(new ExpiryClaimDetailDto
         {
             Id = claim.Id,
+            SupplierId = claim.SupplierId,
             ClaimNumber = claim.ClaimNumber,
             ClaimDate = claim.ClaimDate,
             SupplierName = claim.Supplier?.Name ?? "—",
             ReturnNumber = claim.PurchaseReturn?.ReturnNumber ?? "",
             ExpectedCreditAmount = claim.ExpectedCreditAmount,
             Status = claim.Status,
+            CanEditLines = claim.Status == ExpiryClaimStatus.AwaitingCreditNote
+                           && string.IsNullOrWhiteSpace(claim.CreditNoteNumber),
+            CreditSettlementKind = claim.CreditSettlementKind,
             CreditNoteNumber = claim.CreditNoteNumber,
             CreditNoteDate = claim.CreditNoteDate,
             CreditNoteAmount = claim.CreditNoteAmount,
+            SettledAgainstPurchaseId = claim.SettledAgainstPurchaseId,
+            SettledAgainstPurchaseLabel = settledBillLabel,
             Remarks = claim.Remarks,
-            Lines = claim.Items.OrderBy(i => i.Id).Select(i => new ExpiryClaimDetailLineDto(
-                names.TryGetValue(i.MedicineId, out var n) ? n : $"Medicine #{i.MedicineId}",
-                i.BatchNumber,
-                i.ExpiryDate,
-                i.StockQuantity,
-                i.ClaimQuantity,
-                i.PurchasePrice,
-                i.LineTotal,
-                i.PurchaseId is int pid && invoices.TryGetValue(pid, out var inv) ? inv : null)).ToList()
+            Lines = claim.Items.OrderBy(i => i.Id).Select(i => new ExpiryClaimDetailLineDto
+            {
+                Id = i.Id,
+                MedicineName = names.TryGetValue(i.MedicineId, out var n) ? n : $"Medicine #{i.MedicineId}",
+                BatchNumber = i.BatchNumber,
+                ExpiryDate = i.ExpiryDate,
+                StockQuantity = i.StockQuantity,
+                ClaimQuantity = i.ClaimQuantity,
+                PurchasePrice = i.PurchasePrice,
+                GstPercent = i.GstPercent,
+                RefundPercent = i.RefundPercent <= 0 ? 100m : i.RefundPercent,
+                LineTotal = i.LineTotal,
+                PurchaseInvoiceNumber = i.PurchaseId is int pid && invoices.TryGetValue(pid, out var inv) ? inv : null,
+                PurchaseId = i.PurchaseId
+            }).ToList()
         });
+    }
+
+    public async Task<Result<ExpiryClaimDetailDto>> UpdateClaimLinesAsync(
+        UpdateExpiryClaimLinesRequest request, string? userName, CancellationToken ct = default)
+    {
+        var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
+        if (fyBlock.IsFailure)
+            return Result.Failure<ExpiryClaimDetailDto>(fyBlock.Error ?? "Read-only financial year.");
+
+        var claim = await _uow.Repository<ExpirySupplierClaim>().Query()
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.Id == request.ClaimId, ct);
+
+        if (claim is null)
+            return Result.Failure<ExpiryClaimDetailDto>("Claim not found.");
+        if (claim.Status != ExpiryClaimStatus.AwaitingCreditNote || !string.IsNullOrWhiteSpace(claim.CreditNoteNumber))
+            return Result.Failure<ExpiryClaimDetailDto>(
+                "This claim is already settled and cannot be edited.");
+        if (request.Lines.Count == 0)
+            return Result.Failure<ExpiryClaimDetailDto>("No lines to update.");
+
+        var byId = claim.Items.ToDictionary(i => i.Id);
+
+        foreach (var lineReq in request.Lines)
+        {
+            if (!byId.TryGetValue(lineReq.Id, out var item))
+                return Result.Failure<ExpiryClaimDetailDto>($"Claim line #{lineReq.Id} was not found.");
+            if (lineReq.ClaimQuantity <= 0)
+                return Result.Failure<ExpiryClaimDetailDto>("Claim quantity must be greater than zero.");
+
+            var refundPct = Math.Clamp(lineReq.RefundPercent, 0m, 999m);
+            var oldQty = item.ClaimQuantity;
+            var qtyDelta = lineReq.ClaimQuantity - oldQty;
+
+            if (qtyDelta != 0)
+            {
+                var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(item.MedicineBatchId, ct);
+                if (batch is null)
+                    return Result.Failure<ExpiryClaimDetailDto>($"Stock batch missing for {item.BatchNumber}.");
+                if (qtyDelta > 0 && batch.QuantityAvailable < qtyDelta)
+                    return Result.Failure<ExpiryClaimDetailDto>(
+                        $"Insufficient stock for {item.BatchNumber}. Available {batch.QuantityAvailable:0.##}.");
+                batch.QuantityAvailable -= qtyDelta;
+                _uow.Repository<MedicineBatch>().Update(batch);
+            }
+
+            var taxable = Math.Round(lineReq.PurchasePrice * lineReq.ClaimQuantity, 2);
+            var tax = Math.Round(taxable * Math.Max(0m, lineReq.GstPercent) / 100m, 2);
+            var gross = taxable + tax;
+            var lineTotal = Math.Round(gross * refundPct / 100m, 2);
+
+            item.BatchNumber = string.IsNullOrWhiteSpace(lineReq.BatchNumber) ? item.BatchNumber : lineReq.BatchNumber.Trim();
+            item.ExpiryDate = lineReq.ExpiryDate;
+            item.ClaimQuantity = lineReq.ClaimQuantity;
+            item.PurchasePrice = lineReq.PurchasePrice;
+            item.GstPercent = lineReq.GstPercent;
+            item.RefundPercent = refundPct;
+            item.LineTotal = lineTotal;
+            item.ModifiedBy = userName;
+            _uow.Repository<ExpirySupplierClaimItem>().Update(item);
+
+            var prItems = await _uow.Repository<PurchaseReturnItem>().Query()
+                .Where(i => i.PurchaseReturnId == claim.PurchaseReturnId
+                            && i.MedicineBatchId == item.MedicineBatchId)
+                .ToListAsync(ct);
+            foreach (var prItem in prItems)
+            {
+                prItem.BatchNumber = item.BatchNumber;
+                prItem.ExpiryDate = item.ExpiryDate;
+                prItem.ReturnedQuantity = item.ClaimQuantity;
+                prItem.PurchasePrice = item.PurchasePrice;
+                prItem.GstPercent = item.GstPercent;
+                prItem.RefundPercent = item.RefundPercent;
+                prItem.TaxableAmount = taxable;
+                prItem.TaxAmount = tax;
+                prItem.LineTotal = lineTotal;
+                prItem.ModifiedBy = userName;
+                _uow.Repository<PurchaseReturnItem>().Update(prItem);
+            }
+        }
+
+        claim.ExpectedCreditAmount = Math.Round(claim.Items.Sum(i => i.LineTotal), 2);
+        claim.ModifiedBy = userName;
+        _uow.Repository<ExpirySupplierClaim>().Update(claim);
+
+        var purchaseReturn = await _uow.Repository<PurchaseReturn>().Query()
+            .Include(r => r.Items)
+            .FirstOrDefaultAsync(r => r.Id == claim.PurchaseReturnId, ct);
+        if (purchaseReturn is not null)
+        {
+            var oldGrand = purchaseReturn.GrandTotal;
+            var taxableSum = purchaseReturn.Items.Sum(i => i.TaxableAmount);
+            var taxSum = purchaseReturn.Items.Sum(i => i.TaxAmount);
+            var grand = Math.Round(purchaseReturn.Items.Sum(i => i.LineTotal), 2);
+            purchaseReturn.TaxableAmount = taxableSum;
+            purchaseReturn.CgstAmount = Math.Round(taxSum / 2m, 2);
+            purchaseReturn.SgstAmount = taxSum - purchaseReturn.CgstAmount;
+            purchaseReturn.SubTotal = Math.Round(purchaseReturn.Items.Sum(i => i.PurchasePrice * i.ReturnedQuantity), 2);
+            purchaseReturn.GrandTotal = grand;
+            purchaseReturn.CreditAmount = grand;
+            if (purchaseReturn.CreditAppliedAmount > purchaseReturn.CreditAmount)
+                purchaseReturn.CreditAppliedAmount = purchaseReturn.CreditAmount;
+            purchaseReturn.ModifiedBy = userName;
+            _uow.Repository<PurchaseReturn>().Update(purchaseReturn);
+
+            var delta = oldGrand - grand;
+            if (Math.Abs(delta) >= 0.005m)
+            {
+                var supplier = await _uow.Repository<Supplier>().GetByIdAsync(claim.SupplierId, ct);
+                if (supplier is not null)
+                {
+                    supplier.OutstandingBalance += delta;
+                    _uow.Repository<Supplier>().Update(supplier);
+                }
+            }
+        }
+
+        await _uow.SaveChangesAsync(ct);
+        return await GetClaimAsync(claim.Id, claim.BranchId, ct);
     }
 
     public async Task<Result> AttachCreditNoteAsync(
@@ -320,18 +489,48 @@ public sealed class ExpiryReturnService : IExpiryReturnService
         var fyBlock = FinancialYearGuard.EnsureEditable(_financialYear);
         if (fyBlock.IsFailure) return fyBlock;
 
-        var number = request.CreditNoteNumber?.Trim() ?? "";
-        if (string.IsNullOrWhiteSpace(number))
-            return Result.Failure("Enter the supplier credit note number.");
-
         var claim = await _uow.Repository<ExpirySupplierClaim>().GetByIdAsync(request.ClaimId, ct);
         if (claim is null)
             return Result.Failure("Claim not found.");
         if (claim.Status == ExpiryClaimStatus.Cancelled)
             return Result.Failure("Cancelled claims cannot receive a credit note.");
 
-        claim.CreditNoteNumber = number;
-        claim.CreditNoteDate = request.CreditNoteDate?.Date ?? _clock.Now.Date;
+        string settlementRef;
+        DateTime settlementDate;
+        int? settledPurchaseId = null;
+
+        if (request.SettlementKind == ExpiryCreditSettlementKind.PurchaseBill)
+        {
+            if (request.SettledAgainstPurchaseId is null or <= 0)
+                return Result.Failure("Select the purchase bill that includes this credit.");
+
+            var bill = await _uow.Repository<Purchase>().Query().AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == request.SettledAgainstPurchaseId.Value, ct);
+            if (bill is null)
+                return Result.Failure("Purchase bill not found.");
+            if (bill.SupplierId != claim.SupplierId)
+                return Result.Failure("Selected bill belongs to a different supplier.");
+            if (bill.Status is PurchaseStatus.Cancelled or PurchaseStatus.Draft)
+                return Result.Failure("Select a posted purchase bill.");
+
+            settledPurchaseId = bill.Id;
+            settlementRef = string.IsNullOrWhiteSpace(bill.SupplierInvoiceNumber)
+                ? bill.InvoiceNumber
+                : $"{bill.InvoiceNumber} / {bill.SupplierInvoiceNumber}";
+            settlementDate = request.CreditNoteDate?.Date ?? bill.InvoiceDate.Date;
+        }
+        else
+        {
+            settlementRef = request.CreditNoteNumber?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(settlementRef))
+                return Result.Failure("Enter the supplier credit note number.");
+            settlementDate = request.CreditNoteDate?.Date ?? _clock.Now.Date;
+        }
+
+        claim.CreditSettlementKind = request.SettlementKind;
+        claim.SettledAgainstPurchaseId = settledPurchaseId;
+        claim.CreditNoteNumber = settlementRef;
+        claim.CreditNoteDate = settlementDate;
         claim.CreditNoteAmount = request.CreditNoteAmount is > 0
             ? request.CreditNoteAmount
             : claim.ExpectedCreditAmount;
@@ -341,7 +540,17 @@ public sealed class ExpiryReturnService : IExpiryReturnService
         await _uow.SaveChangesAsync(ct);
 
         await _purchaseReturns.AttachSupplierReceiptAsync(
-            claim.PurchaseReturnId, number, claim.CreditNoteDate, userName, ct);
+            new AttachPurchaseReturnReceiptRequest
+            {
+                PurchaseReturnId = claim.PurchaseReturnId,
+                SettlementKind = request.SettlementKind == ExpiryCreditSettlementKind.PurchaseBill
+                    ? PurchaseReturnReceiptSettlementKind.PurchaseBill
+                    : PurchaseReturnReceiptSettlementKind.SupplierReceipt,
+                ReceiptNumber = settlementRef,
+                SettledAgainstPurchaseId = settledPurchaseId,
+                ReceiptDate = claim.CreditNoteDate
+            },
+            userName, ct);
 
         return Result.Success();
     }

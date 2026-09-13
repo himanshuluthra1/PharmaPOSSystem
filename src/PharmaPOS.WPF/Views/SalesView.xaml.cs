@@ -363,6 +363,14 @@ public partial class SalesView : UserControl
         await ViewModel.ReplaceWithSubstituteAsync(line);
     }
 
+    private async Task TryAddSelectedLineToShortageBookAsync()
+    {
+        if (ViewModel is null) return;
+        if (CartGrid.SelectedItem is not CartLineViewModel line) return;
+        CommitGridEdit();
+        await ViewModel.RecordShortageFromCartLineAsync(line);
+    }
+
     private void BillSelectorToggle_Checked(object sender, RoutedEventArgs e)
     {
         BillPopup.IsOpen = true;
@@ -405,13 +413,23 @@ public partial class SalesView : UserControl
         if (e.Key == Key.Enter && BillListBox.SelectedItem is SaleListItemDto bill)
         {
             e.Handled = true;
-            _ = CommitBillSelectionAsync(bill);
+            if (Keyboard.Modifiers == ModifierKeys.Control)
+                _ = InvoiceDrillDown.OpenSaleAsync(bill.SaleId);
+            else
+                _ = CommitBillSelectionAsync(bill);
         }
         else if (e.Key == Key.Escape)
         {
             e.Handled = true;
             BillPopup.IsOpen = false;
         }
+    }
+
+    private void BillListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (BillListBox.SelectedItem is not SaleListItemDto bill || bill.SaleId <= 0) return;
+        e.Handled = true;
+        _ = InvoiceDrillDown.OpenSaleAsync(bill.SaleId);
     }
 
     private async void BillListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -571,7 +589,7 @@ public partial class SalesView : UserControl
 
             // Swallow typing so empty qty/price cells never receive input if focus drifted.
             if (key is not (Key.Escape or Key.Tab or Key.Left or Key.Right or Key.Up or Key.Down
-                or Key.F3 or Key.F4 or Key.F5 or Key.System or Key.LeftAlt or Key.RightAlt
+                or Key.F3 or Key.F4 or Key.F5 or Key.F6 or Key.F7 or Key.F8 or Key.System or Key.LeftAlt or Key.RightAlt
                 or Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift))
                 e.Handled = true;
 
@@ -663,6 +681,13 @@ public partial class SalesView : UserControl
             e.Handled = true;
             if (ViewModel.LastSaleRefillCommand.CanExecute(null))
                 ViewModel.LastSaleRefillCommand.Execute(null);
+            return;
+        }
+
+        if (key == Key.F7)
+        {
+            e.Handled = true;
+            await TryAddSelectedLineToShortageBookAsync();
             return;
         }
 
@@ -765,6 +790,12 @@ public partial class SalesView : UserControl
                     CommitGridEdit();
                     if (vm.LastSaleRefillCommand.CanExecute(null))
                         vm.LastSaleRefillCommand.Execute(null);
+                    return;
+                case Key.F7:
+                    e.Handled = true;
+                    CommitGridEdit();
+                    if (CartGrid.SelectedItem is CartLineViewModel shortageLine)
+                        _ = vm.RecordShortageFromCartLineAsync(shortageLine);
                     return;
                 case Key.F8:
                     if (vm.OpenSaleReturnCommand.CanExecute(null))

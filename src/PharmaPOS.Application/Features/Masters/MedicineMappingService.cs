@@ -6,6 +6,7 @@ using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Entities.Purchases;
 using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Enums;
+using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Masters;
@@ -19,13 +20,18 @@ public class MedicineMappingService : IMedicineMappingService
     private readonly IUnitOfWork _uow;
     private readonly IDateTimeProvider _clock;
     private readonly ILinkedMedWinIdCache _linkedMedWinIdCache;
+    private readonly IMedicineSearchIndex _medicineSearchIndex;
 
     public MedicineMappingService(
-        IUnitOfWork uow, IDateTimeProvider clock, ILinkedMedWinIdCache linkedMedWinIdCache)
+        IUnitOfWork uow,
+        IDateTimeProvider clock,
+        ILinkedMedWinIdCache linkedMedWinIdCache,
+        IMedicineSearchIndex medicineSearchIndex)
     {
         _uow = uow;
         _clock = clock;
         _linkedMedWinIdCache = linkedMedWinIdCache;
+        _medicineSearchIndex = medicineSearchIndex;
     }
 
     public async Task<List<MedicineMappingListItemDto>> ListUnmatchedMedWinMedicinesAsync(
@@ -386,6 +392,7 @@ public class MedicineMappingService : IMedicineMappingService
 
         await _uow.SaveChangesAsync(ct);
         _linkedMedWinIdCache.Invalidate();
+        _medicineSearchIndex.Invalidate();
         return Result.Success();
     }
 
@@ -419,6 +426,7 @@ public class MedicineMappingService : IMedicineMappingService
             }, ct);
 
             _linkedMedWinIdCache.Invalidate();
+            _medicineSearchIndex.Invalidate();
             return result;
         }
         catch (MedicineMappingBatchException ex)

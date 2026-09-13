@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PharmaPOS.Persistence.Context;
 
@@ -11,9 +12,11 @@ using PharmaPOS.Persistence.Context;
 namespace PharmaPOS.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913121012_AddExpiryClaimPurchaseBillSettlement")]
+    partial class AddExpiryClaimPurchaseBillSettlement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2122,10 +2125,6 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("RefundPercent")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal>("StockQuantity")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -2573,9 +2572,6 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<int?>("PurchaseId")
                         .HasColumnType("int");
 
-                    b.Property<int>("ReceiptSettlementKind")
-                        .HasColumnType("int");
-
                     b.Property<string>("Remarks")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -2594,9 +2590,6 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<decimal>("RoundOff")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("SettledAgainstPurchaseId")
-                        .HasColumnType("int");
 
                     b.Property<int>("SettlementMode")
                         .HasColumnType("int");
@@ -2638,8 +2631,6 @@ namespace PharmaPOS.Persistence.Migrations
 
                     b.HasIndex("ReturnNumber")
                         .IsUnique();
-
-                    b.HasIndex("SettledAgainstPurchaseId");
 
                     b.HasIndex("SupplierId");
 
@@ -2719,10 +2710,6 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("ReasonRemarks")
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
-
-                    b.Property<decimal>("RefundPercent")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("ReturnReasonId")
                         .HasColumnType("int");
@@ -4474,11 +4461,6 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasForeignKey("PurchaseId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("PharmaPOS.Domain.Entities.Purchases.Purchase", "SettledAgainstPurchase")
-                        .WithMany()
-                        .HasForeignKey("SettledAgainstPurchaseId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("PharmaPOS.Domain.Entities.Masters.Supplier", "Supplier")
                         .WithMany()
                         .HasForeignKey("SupplierId")
@@ -4488,8 +4470,6 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("Purchase");
-
-                    b.Navigation("SettledAgainstPurchase");
 
                     b.Navigation("Supplier");
                 });

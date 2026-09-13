@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PharmaPOS.Application.Common.Abstractions;
 using PharmaPOS.Application.Features.ExpiryReturns;
+using PharmaPOS.Domain.Enums;
 using PharmaPOS.Shared.Constants;
 using PharmaPOS.WPF.Mvvm;
 using PharmaPOS.WPF.Services;
@@ -24,10 +25,12 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     private string? _remarks;
     private bool _awaitingCreditOnly = true;
     private ExpiryClaimListRowDto? _selectedClaim;
+    private ExpiryCreditSettlementKind _settlementKind = ExpiryCreditSettlementKind.CreditNote;
     private string _creditNoteNumber = string.Empty;
     private DateTime? _creditNoteDate = DateTime.Today;
     private decimal? _creditNoteAmount;
     private ExpiryClaimDetailDto? _claimDetail;
+    private ExpirySupplierBillOptionDto? _selectedSupplierBill;
 
     public ExpiryReturnViewModel(
         IExpiryReturnService service,
@@ -63,7 +66,10 @@ public sealed class ExpiryReturnViewModel : ObservableObject
         RefreshClaimsCommand = new AsyncRelayCommand(_ => RefreshClaimsAsync(), _ => !IsBusy);
         AttachCreditNoteCommand = new AsyncRelayCommand(
             _ => AttachCreditNoteAsync(),
-            _ => CanManage && !IsBusy && SelectedClaim is not null && !string.IsNullOrWhiteSpace(CreditNoteNumber));
+            _ => CanManage && !IsBusy && SelectedClaim is not null && CanSaveSettlement);
+        SaveClaimLinesCommand = new AsyncRelayCommand(
+            _ => SaveClaimLinesAsync(),
+            _ => CanManage && !IsBusy && CanEditClaimLines && ClaimLinesDirty);
         SelectAllCommand = new RelayCommand(_ => SetAllClaims(true), _ => Batches.Count > 0 && CanManage);
         ClearQtyCommand = new RelayCommand(_ => SetAllClaims(false), _ => Batches.Count > 0 && CanManage);
 
@@ -108,6 +114,33 @@ public sealed class ExpiryReturnViewModel : ObservableObject
 
     public ObservableCollection<ExpiryClaimLineViewModel> Batches { get; } = new();
     public ObservableCollection<ExpiryClaimListRowDto> Claims { get; } = new();
+    public ObservableCollection<ExpirySupplierBillOptionDto> SupplierBills { get; } = new();
+    public ObservableCollection<ExpiryClaimEditableLineViewModel> EditableClaimLines { get; } = new();
+
+    private bool _canEditClaimLines;
+    public bool CanEditClaimLines
+    {
+        get => _canEditClaimLines;
+        private set
+        {
+            if (!SetProperty(ref _canEditClaimLines, value)) return;
+            OnPropertyChanged(nameof(IsClaimLinesReadOnly));
+        }
+    }
+
+    public bool IsClaimLinesReadOnly => !CanEditClaimLines;
+    public bool HasEditableClaimLines => EditableClaimLines.Count > 0;
+
+    private bool _claimLinesDirty;
+    public bool ClaimLinesDirty
+    {
+        get => _claimLinesDirty;
+        private set
+        {
+            if (!SetProperty(ref _claimLinesDirty, value)) return;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
 
     public string? Remarks
     {
@@ -145,6 +178,41 @@ public sealed class ExpiryReturnViewModel : ObservableObject
         private set => SetProperty(ref _claimDetail, value);
     }
 
+    public ExpiryCreditSettlementKind SettlementKind
+    {
+        get => _settlementKind;
+        set
+        {
+            if (!SetProperty(ref _settlementKind, value)) return;
+            OnPropertyChanged(nameof(IsCreditNoteSettlement));
+            OnPropertyChanged(nameof(IsPurchaseBillSettlement));
+            OnPropertyChanged(nameof(ShowCreditNoteFields));
+            OnPropertyChanged(nameof(ShowPurchaseBillFields));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public bool IsCreditNoteSettlement
+    {
+        get => SettlementKind == ExpiryCreditSettlementKind.CreditNote;
+        set
+        {
+            if (value) SettlementKind = ExpiryCreditSettlementKind.CreditNote;
+        }
+    }
+
+    public bool IsPurchaseBillSettlement
+    {
+        get => SettlementKind == ExpiryCreditSettlementKind.PurchaseBill;
+        set
+        {
+            if (value) SettlementKind = ExpiryCreditSettlementKind.PurchaseBill;
+        }
+    }
+
+    public bool ShowCreditNoteFields => IsCreditNoteSettlement;
+    public bool ShowPurchaseBillFields => IsPurchaseBillSettlement;
+
     public string CreditNoteNumber
     {
         get => _creditNoteNumber;
@@ -166,6 +234,23 @@ public sealed class ExpiryReturnViewModel : ObservableObject
         get => _creditNoteAmount;
         set => SetProperty(ref _creditNoteAmount, value);
     }
+
+    public ExpirySupplierBillOptionDto? SelectedSupplierBill
+    {
+        get => _selectedSupplierBill;
+        set
+        {
+            if (!SetProperty(ref _selectedSupplierBill, value)) return;
+            if (value is not null && SettlementKind == ExpiryCreditSettlementKind.PurchaseBill)
+                CreditNoteDate = value.InvoiceDate.Date;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    private bool CanSaveSettlement =>
+        SettlementKind == ExpiryCreditSettlementKind.PurchaseBill
+            ? SelectedSupplierBill is not null
+            : !string.IsNullOrWhiteSpace(CreditNoteNumber);
 
     public decimal ClaimTotal => Batches.Where(b => b.IsSelected && b.ClaimQuantity > 0).Sum(b => b.ClaimValue);
     public int ClaimLineCount => Batches.Count(b => b.IsSelected && b.ClaimQuantity > 0);
@@ -190,6 +275,7 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     public ICommand SubmitClaimCommand { get; }
     public ICommand RefreshClaimsCommand { get; }
     public ICommand AttachCreditNoteCommand { get; }
+    public ICommand SaveClaimLinesCommand { get; }
     public ICommand SelectAllCommand { get; }
     public ICommand ClearQtyCommand { get; }
 
@@ -356,15 +442,85 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     private async Task LoadClaimDetailAsync()
     {
         ClaimDetail = null;
+        SupplierBills.Clear();
+        SelectedSupplierBill = null;
+        EditableClaimLines.Clear();
+        ClaimLinesDirty = false;
+        CanEditClaimLines = false;
         if (SelectedClaim is null) return;
+
         var result = await _service.GetClaimAsync(SelectedClaim.Id, _branchId);
-        if (result.IsSuccess)
+        if (!result.IsSuccess || result.Value is null) return;
+
+        ClaimDetail = result.Value;
+        CanEditClaimLines = result.Value.CanEditLines && CanManage;
+        SettlementKind = result.Value.CreditSettlementKind;
+        CreditNoteDate = result.Value.CreditNoteDate ?? DateTime.Today;
+        CreditNoteAmount = result.Value.CreditNoteAmount ?? result.Value.ExpectedCreditAmount;
+
+        foreach (var line in result.Value.Lines)
         {
-            ClaimDetail = result.Value;
-            CreditNoteNumber = result.Value?.CreditNoteNumber ?? "";
-            CreditNoteDate = result.Value?.CreditNoteDate ?? DateTime.Today;
-            CreditNoteAmount = result.Value?.CreditNoteAmount ?? result.Value?.ExpectedCreditAmount;
-            CommandManager.InvalidateRequerySuggested();
+            var edit = new ExpiryClaimEditableLineViewModel(line, CanEditClaimLines);
+            edit.Changed += () => ClaimLinesDirty = true;
+            EditableClaimLines.Add(edit);
+        }
+        OnPropertyChanged(nameof(HasEditableClaimLines));
+
+        var bills = await _service.ListSupplierBillsAsync(result.Value.SupplierId, _branchId);
+        foreach (var b in bills)
+            SupplierBills.Add(b);
+
+        if (result.Value.CreditSettlementKind == ExpiryCreditSettlementKind.PurchaseBill
+            && result.Value.SettledAgainstPurchaseId is int billId)
+        {
+            SelectedSupplierBill = SupplierBills.FirstOrDefault(b => b.PurchaseId == billId);
+            CreditNoteNumber = "";
+        }
+        else
+        {
+            CreditNoteNumber = result.Value.CreditNoteNumber ?? "";
+        }
+
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private async Task SaveClaimLinesAsync()
+    {
+        if (SelectedClaim is null || !CanEditClaimLines) return;
+        IsBusy = true;
+        try
+        {
+            var result = await _service.UpdateClaimLinesAsync(
+                new UpdateExpiryClaimLinesRequest
+                {
+                    ClaimId = SelectedClaim.Id,
+                    Lines = EditableClaimLines.Select(l => new UpdateExpiryClaimLineRequest
+                    {
+                        Id = l.Id,
+                        BatchNumber = l.BatchNumber,
+                        ExpiryDate = l.ExpiryDate,
+                        ClaimQuantity = l.ClaimQuantity,
+                        PurchasePrice = l.PurchasePrice,
+                        GstPercent = l.GstPercent,
+                        RefundPercent = l.RefundPercent
+                    }).ToList()
+                },
+                _currentUser.CurrentUser?.FullName);
+
+            if (result.IsFailure)
+            {
+                _dialog.ShowError(result.Error ?? "Could not save claim lines.");
+                return;
+            }
+
+            ClaimLinesDirty = false;
+            StatusMessage = $"Claim lines saved. Expected credit {result.Value?.ExpectedCreditAmount:N2}.";
+            await RefreshClaimsAsync();
+            await LoadClaimDetailAsync();
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
@@ -375,7 +531,9 @@ public sealed class ExpiryReturnViewModel : ObservableObject
             new AttachExpiryCreditNoteRequest
             {
                 ClaimId = SelectedClaim.Id,
+                SettlementKind = SettlementKind,
                 CreditNoteNumber = CreditNoteNumber,
+                SettledAgainstPurchaseId = SelectedSupplierBill?.PurchaseId,
                 CreditNoteDate = CreditNoteDate,
                 CreditNoteAmount = CreditNoteAmount
             },
@@ -383,11 +541,14 @@ public sealed class ExpiryReturnViewModel : ObservableObject
 
         if (result.IsFailure)
         {
-            _dialog.ShowError(result.Error ?? "Could not save credit note.");
+            _dialog.ShowError(result.Error ?? "Could not save credit settlement.");
             return;
         }
 
-        _dialog.ShowInfo("Supplier credit note recorded.");
+        _dialog.ShowInfo(
+            SettlementKind == ExpiryCreditSettlementKind.PurchaseBill
+                ? "Credit recorded against the selected purchase bill."
+                : "Supplier credit note recorded.");
         await RefreshClaimsAsync();
         await LoadClaimDetailAsync();
     }
@@ -396,6 +557,93 @@ public sealed class ExpiryReturnViewModel : ObservableObject
     {
         foreach (var b in Batches)
             b.ClaimQuantity = fill ? b.Source.StockQuantity : 0;
+    }
+}
+
+public sealed class ExpiryClaimEditableLineViewModel : ObservableObject
+{
+    private string _batchNumber;
+    private DateTime? _expiryDate;
+    private decimal _claimQuantity;
+    private decimal _purchasePrice;
+    private decimal _gstPercent;
+    private decimal _refundPercent;
+    private decimal _lineTotal;
+
+    public ExpiryClaimEditableLineViewModel(ExpiryClaimDetailLineDto source, bool canEdit)
+    {
+        Id = source.Id;
+        MedicineName = source.MedicineName;
+        StockQuantity = source.StockQuantity;
+        PurchaseInvoiceNumber = source.PurchaseInvoiceNumber;
+        PurchaseId = source.PurchaseId;
+        CanEdit = canEdit;
+        _batchNumber = source.BatchNumber;
+        _expiryDate = source.ExpiryDate;
+        _claimQuantity = source.ClaimQuantity;
+        _purchasePrice = source.PurchasePrice;
+        _gstPercent = source.GstPercent;
+        _refundPercent = source.RefundPercent <= 0 ? 100m : source.RefundPercent;
+        _lineTotal = source.LineTotal;
+    }
+
+    public event Action? Changed;
+
+    public int Id { get; }
+    public string MedicineName { get; }
+    public decimal StockQuantity { get; }
+    public string? PurchaseInvoiceNumber { get; }
+    public int? PurchaseId { get; }
+    public bool CanEdit { get; }
+
+    public string BatchNumber
+    {
+        get => _batchNumber;
+        set { if (SetProperty(ref _batchNumber, value)) Changed?.Invoke(); }
+    }
+
+    public DateTime? ExpiryDate
+    {
+        get => _expiryDate;
+        set { if (SetProperty(ref _expiryDate, value)) Changed?.Invoke(); }
+    }
+
+    public decimal ClaimQuantity
+    {
+        get => _claimQuantity;
+        set { if (SetProperty(ref _claimQuantity, Math.Max(0, value))) Recalc(); }
+    }
+
+    public decimal PurchasePrice
+    {
+        get => _purchasePrice;
+        set { if (SetProperty(ref _purchasePrice, Math.Max(0, value))) Recalc(); }
+    }
+
+    public decimal GstPercent
+    {
+        get => _gstPercent;
+        set { if (SetProperty(ref _gstPercent, Math.Max(0, value))) Recalc(); }
+    }
+
+    public decimal RefundPercent
+    {
+        get => _refundPercent;
+        set { if (SetProperty(ref _refundPercent, Math.Clamp(value, 0m, 999m))) Recalc(); }
+    }
+
+    public decimal LineTotal
+    {
+        get => _lineTotal;
+        private set => SetProperty(ref _lineTotal, value);
+    }
+
+    private void Recalc()
+    {
+        var taxable = Math.Round(PurchasePrice * ClaimQuantity, 2);
+        var tax = Math.Round(taxable * GstPercent / 100m, 2);
+        LineTotal = Math.Round((taxable + tax) * RefundPercent / 100m, 2);
+        Changed?.Invoke();
     }
 }
 

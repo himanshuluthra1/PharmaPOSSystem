@@ -87,7 +87,9 @@ public static class ReportTableMapper
                 ("CgstAmount", r.CgstAmount),
                 ("SgstAmount", r.SgstAmount),
                 ("IgstAmount", r.IgstAmount),
-                ("GrandTotal", r.GrandTotal))).ToList()
+                ("GrandTotal", r.GrandTotal),
+                ("SaleId", string.Equals(r.DocumentType, "Sale", StringComparison.OrdinalIgnoreCase) ? r.DocumentId : 0),
+                ("PurchaseId", string.Equals(r.DocumentType, "Purchase", StringComparison.OrdinalIgnoreCase) ? r.DocumentId : 0))).ToList()
         };
 
     public static ReportTableDto FromGstReturn(GstReturnExportDto export)
@@ -136,7 +138,8 @@ public static class ReportTableMapper
                 C("GrossProfit", "GrossProfit", "N2"),
                 C("MarginPercent", "Margin%", "N1")),
             rows.Select(r => Dict(
-                ("InvoiceNumber", (object?)r.InvoiceNumber),
+                ("SaleId", (object?)r.SaleId),
+                ("InvoiceNumber", r.InvoiceNumber),
                 ("InvoiceDateLabel", r.InvoiceDateLabel),
                 ("CustomerName", r.CustomerName),
                 ("Revenue", r.Revenue),
@@ -155,7 +158,8 @@ public static class ReportTableMapper
                 C("GrossProfit", "Profit", "N2"),
                 C("MarginPercent", "Margin%", "N1")),
             rows.Select(r => Dict(
-                ("MedicineName", (object?)r.MedicineName),
+                ("MedicineId", (object?)r.MedicineId),
+                ("MedicineName", r.MedicineName),
                 ("GenericName", r.GenericName),
                 ("QuantitySold", r.QuantitySold),
                 ("Revenue", r.Revenue),
@@ -167,6 +171,7 @@ public static class ReportTableMapper
         => Table(summary,
             Cols(
                 C("MedicineName", "Medicine"),
+                C("SupplierLabel", "Supplier"),
                 C("BatchNumber", "Batch"),
                 C("ExpiryLabel", "Expiry"),
                 C("Quantity", "Qty", "0.##"),
@@ -176,6 +181,8 @@ public static class ReportTableMapper
                 C("StockValue", "CostValue", "N2")),
             rows.Select(r => Dict(
                 ("MedicineName", (object?)r.MedicineName),
+                ("SupplierName", r.SupplierName),
+                ("SupplierLabel", r.SupplierLabel),
                 ("BatchNumber", r.BatchNumber),
                 ("ExpiryLabel", r.ExpiryLabel),
                 ("Quantity", r.Quantity),
@@ -183,6 +190,54 @@ public static class ReportTableMapper
                 ("Mrp", r.Mrp),
                 ("StockAmount", r.StockAmount),
                 ("StockValue", r.StockValue))));
+
+    public static ReportTableDto FromMedicinesSoldByDate(
+        ReportSummaryDto summary, IReadOnlyList<MedicinesSoldByDateRowDto> rows)
+        => Table(summary,
+            Cols(
+                C("SaleDateLabel", "Date"),
+                C("InvoiceNumber", "Invoice"),
+                C("MedicineName", "Medicine"),
+                C("GenericName", "Salt"),
+                C("BatchNumber", "Batch"),
+                C("Quantity", "Qty", "0.##"),
+                C("Revenue", "Amount", "N2")),
+            rows.Select(r => Dict(
+                ("SaleDate", (object?)r.SaleDate),
+                ("SaleDateLabel", r.SaleDateLabel),
+                ("InvoiceNumber", r.InvoiceNumber),
+                ("SaleId", r.SaleId),
+                ("MedicineId", r.MedicineId),
+                ("MedicineName", r.MedicineName),
+                ("GenericName", r.GenericName),
+                ("BatchNumber", r.BatchNumber),
+                ("Quantity", r.Quantity),
+                ("Revenue", r.Revenue))));
+
+    public static ReportTableDto FromStockAdjustments(
+        ReportSummaryDto summary, IReadOnlyList<StockAdjustmentReportRowDto> rows)
+        => Table(summary,
+            Cols(
+                C("AdjustmentDateLabel", "Date"),
+                C("AdjustmentNumber", "Adj #"),
+                C("MedicineName", "Medicine"),
+                C("BatchNumber", "Batch"),
+                C("SystemQuantity", "System", "0.##"),
+                C("PhysicalQuantity", "Physical", "0.##"),
+                C("Difference", "Diff", "0.##"),
+                C("Reason", "Reason"),
+                C("Remarks", "Remarks")),
+            rows.Select(r => Dict(
+                ("AdjustmentDate", (object?)r.AdjustmentDate),
+                ("AdjustmentDateLabel", r.AdjustmentDateLabel),
+                ("AdjustmentNumber", r.AdjustmentNumber),
+                ("MedicineName", r.MedicineName),
+                ("BatchNumber", r.BatchNumber),
+                ("SystemQuantity", r.SystemQuantity),
+                ("PhysicalQuantity", r.PhysicalQuantity),
+                ("Difference", r.Difference),
+                ("Reason", r.Reason),
+                ("Remarks", r.Remarks))));
 
     public static ReportTableDto FromExpiry(ReportSummaryDto summary, IReadOnlyList<ExpiryReportRowDto> rows)
         => Table(summary,
@@ -265,6 +320,7 @@ public static class ReportTableMapper
                 ("ReturnNumber", (object?)r.ReturnNumber),
                 ("ReturnDateLabel", r.ReturnDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)),
                 ("InvoiceNumber", r.OriginalInvoiceNumber),
+                ("SaleId", r.SaleId),
                 ("CustomerName", r.CustomerName),
                 ("RefundAmount", r.RefundAmount),
                 ("RefundMode", r.RefundMode.ToString()),
@@ -280,7 +336,8 @@ public static class ReportTableMapper
                 C("RefundAmount", "Refund", "N2"),
                 C("ReturnCount", "Returns")),
             rows.Select(r => Dict(
-                ("MedicineName", (object?)r.MedicineName),
+                ("MedicineId", (object?)r.MedicineId),
+                ("MedicineName", r.MedicineName),
                 ("BatchNumber", r.BatchNumber),
                 ("ReturnedQuantity", r.ReturnedQuantity),
                 ("RefundAmount", r.RefundAmount),

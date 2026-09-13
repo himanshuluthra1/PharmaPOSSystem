@@ -13,6 +13,7 @@ namespace PharmaPOS.WPF.ViewModels.Accounting;
 public class AccountingViewModel : ObservableObject
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IInvoiceViewerDialogService _invoiceViewer;
     private readonly int? _branchId;
 
     private int _selectedTab;
@@ -24,12 +25,14 @@ public class AccountingViewModel : ObservableObject
         ISettingsService settings,
         IBillShareService billShare,
         IInvoicePrintService print,
+        IInvoiceViewerDialogService invoiceViewer,
         ICurrentUserService currentUser,
         IFinancialYearContext financialYear,
         IDialogService dialog)
     {
         _scopeFactory = scopeFactory;
         _branchId = currentUser.CurrentUser?.BranchId;
+        _invoiceViewer = invoiceViewer;
 
         CanCreateVouchers = currentUser.HasAnyPermission(
             AppConstants.Permissions.AccountingVouchers, AppConstants.Permissions.AccountingManage)
@@ -114,6 +117,29 @@ public class AccountingViewModel : ObservableObject
     public ICommand RefreshCommand { get; }
     public ICommand RecordPaymentCommand { get; }
     public ICommand RecordReceiptCommand { get; }
+
+    /// <summary>Open the underlying sale or purchase invoice for a Parties open-bill row.</summary>
+    public Task OpenPartyBillAsync(PartyBillSettleLineViewModel? line)
+    {
+        if (line is null || line.TransactionId <= 0) return Task.CompletedTask;
+        return PartyLedger.SelectedKind.Kind == PartyLedgerKind.Supplier
+            ? _invoiceViewer.ShowPurchaseAsync(line.TransactionId)
+            : _invoiceViewer.ShowSaleAsync(line.TransactionId);
+    }
+
+    /// <summary>Open the sale invoice for a Customer Dues open-bill row.</summary>
+    public Task OpenCustomerDueBillAsync(PartyBillRowDto? bill)
+    {
+        if (bill is null || bill.TransactionId <= 0) return Task.CompletedTask;
+        return _invoiceViewer.ShowSaleAsync(bill.TransactionId);
+    }
+
+    /// <summary>Open the purchase invoice for a voucher bill-allocation row.</summary>
+    public Task OpenVoucherAllocationBillAsync(BillAllocationLineViewModel? line)
+    {
+        if (line is null || line.PurchaseId <= 0) return Task.CompletedTask;
+        return _invoiceViewer.ShowPurchaseAsync(line.PurchaseId);
+    }
 
     private void OnPartySelected(PartyLedgerRowDto? party)
         => CommandManager.InvalidateRequerySuggested();

@@ -45,10 +45,19 @@ public class PurchaseReturn : BranchEntity
     public bool IsFullReturn { get; set; }
     public string? Remarks { get; set; }
 
-    /// <summary>Debit note / return receipt number issued by the supplier (often filled days later).</summary>
+    /// <summary>Debit note / return receipt number issued by the supplier (often filled days later),
+    /// or the purchase-bill reference when credit came on a later invoice.</summary>
     public string? SupplierReturnReceiptNumber { get; set; }
 
     public DateTime? SupplierReturnReceiptDate { get; set; }
+
+    /// <summary>Whether credit was recorded via a supplier receipt or against a purchase bill.</summary>
+    public PurchaseReturnReceiptSettlementKind ReceiptSettlementKind { get; set; }
+        = PurchaseReturnReceiptSettlementKind.SupplierReceipt;
+
+    /// <summary>When <see cref="ReceiptSettlementKind"/> is PurchaseBill, the bill that absorbed the credit.</summary>
+    public int? SettledAgainstPurchaseId { get; set; }
+    public Purchase? SettledAgainstPurchase { get; set; }
 
     public ICollection<PurchaseReturnItem> Items { get; set; } = new List<PurchaseReturnItem>();
 

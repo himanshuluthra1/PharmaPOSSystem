@@ -54,7 +54,10 @@
                                       IsReadOnly="True"
                                       CanUserAddRows="False"
                                       HeadersVisibility="Column"
-                                      MouseDoubleClick="SearchGrid_MouseDoubleClick">
+                                      Cursor="Hand"
+                                      ToolTip="Double-click / Enter loads for return · Ctrl+Enter / Ctrl+double-click opens invoice popup"
+                                      MouseDoubleClick="SearchGrid_MouseDoubleClick"
+                                      PreviewKeyDown="SearchGrid_PreviewKeyDown">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Invoice #" Binding="{Binding InvoiceNumber}" Width="130" />
                                     <DataGridTextColumn Header="Supplier Inv #" Binding="{Binding SupplierInvoiceNumber}" Width="130" />
@@ -383,42 +386,58 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Margin="0,0,0,4" FontSize="10" TextTrimming="CharacterEllipsis"
                                        Opacity="0.85" Text="{Binding SelectedReturnHint}" />
-                            <Grid Grid.Row="1" IsEnabled="{Binding HasSelectedReturn}">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid Grid.Row="0" Margin="0,0,0,2">
+                            <StackPanel Grid.Row="1" IsEnabled="{Binding HasSelectedReturn}">
+                                <TextBlock Text="Credit received as" Style="{StaticResource FieldCaption}" Margin="0,0,0,4" />
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <RadioButton Content="Receipt #"
+                                                 IsChecked="{Binding IsSupplierReceiptSettlement}"
+                                                 GroupName="PrReceiptSettlementKind"
+                                                 Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <RadioButton Content="Purchase bill number"
+                                                 IsChecked="{Binding IsPurchaseBillSettlement}"
+                                                 GroupName="PrReceiptSettlementKind"
+                                                 VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <Grid Margin="0,0,0,2">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="Receipt #" Style="{StaticResource FieldCaption}" Margin="0,0,8,0" />
-                                    <TextBlock Grid.Column="1" Text="Receipt date" Style="{StaticResource FieldCaption}" Margin="0,0,8,0" />
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0"
+                                                Visibility="{Binding ShowReceiptNumberFields, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Receipt #" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                        <TextBox materialDesign:HintAssist.Hint="Supplier return receipt / debit note number"
+                                                 materialDesign:HintAssist.IsFloating="False"
+                                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                                 Text="{Binding ReceiptNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0"
+                                                Visibility="{Binding ShowPurchaseBillFields, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Purchase bill" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                        <ComboBox ItemsSource="{Binding SupplierBills}"
+                                                  SelectedItem="{Binding SelectedSupplierBill}"
+                                                  DisplayMemberPath="Label"
+                                                  materialDesign:HintAssist.Hint="Select bill number and date"
+                                                  materialDesign:HintAssist.IsFloating="False"
+                                                  Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                        <TextBlock Text="Date" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
+                                        <DatePicker materialDesign:HintAssist.Hint="Receipt / bill date"
+                                                    materialDesign:HintAssist.IsFloating="False"
+                                                    Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                                    SelectedDate="{Binding ReceiptDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="2"
+                                            VerticalAlignment="Bottom"
+                                            Command="{Binding AttachReceiptCommand}"
+                                            Style="{StaticResource MaterialDesignRaisedButton}"
+                                            Padding="8,2" Height="28"
+                                            Content="Save credit" />
                                 </Grid>
-                                <Grid Grid.Row="1">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBox x:Name="ReceiptNumberBox" Grid.Column="0" Margin="0,0,8,0"
-                                         materialDesign:HintAssist.Hint="Supplier return receipt / debit note number"
-                                         materialDesign:HintAssist.IsFloating="False"
-                                         Style="{StaticResource MaterialDesignOutlinedTextBox}"
-                                         Text="{Binding ReceiptNumber, UpdateSourceTrigger=PropertyChanged}" />
-                                <DatePicker Grid.Column="1" Margin="0,0,8,0"
-                                            materialDesign:HintAssist.Hint="Receipt date"
-                                            materialDesign:HintAssist.IsFloating="False"
-                                            Style="{StaticResource MaterialDesignOutlinedDatePicker}"
-                                            SelectedDate="{Binding ReceiptDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <Button Grid.Column="2"
-                                        Command="{Binding AttachReceiptCommand}"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
-                                        Padding="8,2" Height="28"
-                                        Content="Save Receipt #" />
-                                </Grid>
-                            </Grid>
+                            </StackPanel>
                         </Grid>
                     </materialDesign:Card>
 
@@ -439,7 +458,10 @@
                                       HeadersVisibility="Column"
                                       SelectionMode="Single"
                                       SelectionUnit="FullRow"
-                                      MouseDoubleClick="ReturnRecordsGrid_MouseDoubleClick">
+                                      Cursor="Hand"
+                                      ToolTip="Double-click or Enter to open linked purchase invoice"
+                                      MouseDoubleClick="ReturnRecordsGrid_MouseDoubleClick"
+                                      PreviewKeyDown="ReturnRecordsGrid_PreviewKeyDown">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Return #" Binding="{Binding ReturnNumber, Mode=OneWay}" Width="140" />
                                     <DataGridTextColumn Header="Date" Binding="{Binding ReturnDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" Width="110" />
@@ -448,31 +470,43 @@
                                     <DataGridTextColumn Header="Supplier Inv #" Binding="{Binding SupplierInvoiceNumber, Mode=OneWay}" Width="120" />
                                     <DataGridTextColumn Header="Supplier" Binding="{Binding SupplierName, Mode=OneWay}" Width="*" MinWidth="140" />
                                     <DataGridTextColumn Header="Amount" Binding="{Binding GrandTotal, StringFormat=N2, Mode=OneWay}" Width="90" />
-                                    <DataGridTextColumn Header="Supplier Receipt #" Binding="{Binding SupplierReturnReceiptNumber, Mode=OneWay}" Width="140" />
-                                    <DataGridTextColumn Header="Receipt Date" Binding="{Binding SupplierReturnReceiptDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" Width="110" />
+                                    <DataGridTextColumn Header="Settled via" Binding="{Binding SettlementReference, Mode=OneWay}" Width="150" />
+                                    <DataGridTextColumn Header="Date" Binding="{Binding SupplierReturnReceiptDate, StringFormat=dd-MMM-yyyy, Mode=OneWay}" Width="110" />
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <TextBlock Grid.Row="1" Margin="4,10,0,6" FontWeight="SemiBold"
-                                       Text="Medicines in selected return" />
+                            <DockPanel Grid.Row="1" Margin="4,10,0,6" LastChildFill="False">
+                                <TextBlock FontWeight="SemiBold" VerticalAlignment="Center"
+                                           Text="Medicines in selected return" />
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding SaveReturnLinesCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Padding="8,2" Height="28" Margin="8,0,0,0"
+                                        Content="Save line changes"
+                                        Visibility="{Binding CanEditReturnLines, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" FontSize="11" Opacity="0.65"
+                                           Text="Editable until receipt / bill is saved. Refund % defaults to 100."
+                                           Visibility="{Binding CanEditReturnLines, Converter={StaticResource BoolToVisibility}}" />
+                            </DockPanel>
 
                             <DataGrid Grid.Row="2"
-                                      ItemsSource="{Binding SelectedReturnLines}"
+                                      ItemsSource="{Binding EditableReturnLines}"
                                       AutoGenerateColumns="False"
-                                      IsReadOnly="True"
+                                      IsReadOnly="{Binding IsReturnLinesReadOnly}"
                                       CanUserAddRows="False"
                                       HeadersVisibility="Column"
-                                      Visibility="{Binding HasSelectedReturnLines, Converter={StaticResource BoolToVisibility}}">
+                                      Visibility="{Binding HasEditableReturnLines, Converter={StaticResource BoolToVisibility}}">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName, Mode=OneWay}" Width="*" MinWidth="160" />
-                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, Mode=OneWay}" Width="100" />
-                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy, Mode=OneWay}" Width="70" />
-                                    <DataGridTextColumn Header="Quantity" Binding="{Binding ReturnedQuantity, StringFormat=N0, Mode=OneWay}" Width="60" />
-                                    <DataGridTextColumn Header="Free" Binding="{Binding ReturnedFreeQuantity, StringFormat=N0, Mode=OneWay}" Width="50" />
-                                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2, Mode=OneWay}" Width="80" />
-                                    <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, StringFormat=N0, Mode=OneWay}" Width="60" />
-                                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2, Mode=OneWay}" Width="90" />
-                                    <DataGridTextColumn Header="Reason" Binding="{Binding ReasonName, Mode=OneWay}" Width="140" />
+                                    <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="160" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+                                    <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=dd-MMM-yyyy, UpdateSourceTrigger=PropertyChanged}" Width="95" />
+                                    <DataGridTextColumn Header="Quantity" Binding="{Binding ReturnedQuantity, UpdateSourceTrigger=PropertyChanged}" Width="70" />
+                                    <DataGridTextColumn Header="Free" Binding="{Binding ReturnedFreeQuantity, UpdateSourceTrigger=PropertyChanged}" Width="50" />
+                                    <DataGridTextColumn Header="Rate" Binding="{Binding PurchasePrice, StringFormat=N2, UpdateSourceTrigger=PropertyChanged}" Width="80" />
+                                    <DataGridTextColumn Header="GST %" Binding="{Binding GstPercent, UpdateSourceTrigger=PropertyChanged}" Width="60" />
+                                    <DataGridTextColumn Header="Refund %" Binding="{Binding RefundPercent, UpdateSourceTrigger=PropertyChanged}" Width="75" />
+                                    <DataGridTextColumn Header="Amount" Binding="{Binding LineTotal, StringFormat=N2}" Width="90" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Reason" Binding="{Binding ReasonRemarks, UpdateSourceTrigger=PropertyChanged}" Width="140" />
                                 </DataGrid.Columns>
                             </DataGrid>
 

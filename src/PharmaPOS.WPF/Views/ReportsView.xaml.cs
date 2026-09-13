@@ -70,6 +70,14 @@ public partial class ReportsView : UserControl
 
     private void ResultsGrid_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F7)
+        {
+            if (ViewModel?.AddToShortageBookCommand.CanExecute(null) == true)
+                ViewModel.AddToShortageBookCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key != Key.Enter) return;
         if (sender is DataGrid { SelectedItem: ReportRowViewModel row })
         {

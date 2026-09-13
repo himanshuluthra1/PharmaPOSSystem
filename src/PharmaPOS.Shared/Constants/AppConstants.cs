@@ -127,6 +127,8 @@ public static class AppConstants
         public const string ReportsMenuExpiry = "reports.menu.expiry";
         public const string ReportsMenuLowStock = "reports.menu.lowstock";
         public const string ReportsMenuSlowMovingStock = "reports.menu.slowmovingstock";
+        public const string ReportsMenuStockAdjustments = "reports.menu.stockadjustments";
+        public const string ReportsMenuMedicinesSoldByDate = "reports.menu.medicinessoldbydate";
 
         // Settings
         public const string SettingsCompany = "settings.company";

@@ -28,8 +28,10 @@ public class PurchaseReturnViewModel : ObservableObject
     private string? _statusMessage;
     private bool _pendingReceiptOnly = true;
     private PurchaseReturnListRowDto? _selectedReturn;
+    private PurchaseReturnReceiptSettlementKind _receiptSettlementKind = PurchaseReturnReceiptSettlementKind.SupplierReceipt;
     private string _receiptNumber = string.Empty;
     private DateTime? _receiptDate = DateTime.Today;
+    private PurchaseReturnSupplierBillOptionDto? _selectedSupplierBill;
 
     private string _directSupplierSearch = string.Empty;
     private SupplierLookupDto? _directSupplier;
@@ -58,7 +60,12 @@ public class PurchaseReturnViewModel : ObservableObject
         LoadPurchaseCommand = new AsyncRelayCommand(LoadSelectedPurchaseAsync, () => !IsBusy && SelectedSearch is not null);
         ProcessReturnCommand = new AsyncRelayCommand(ProcessReturnAsync, () => !IsBusy && LoadedPurchase is not null && _financialYear.CanEditTransactions);
         RefreshReturnsCommand = new AsyncRelayCommand(RefreshReturnsAsync, () => !IsBusy);
-        AttachReceiptCommand = new AsyncRelayCommand(AttachReceiptAsync, () => !IsBusy && _financialYear.CanEditTransactions);
+        AttachReceiptCommand = new AsyncRelayCommand(
+            AttachReceiptAsync,
+            () => !IsBusy && _financialYear.CanEditTransactions && SelectedReturn is not null && CanSaveSettlement);
+        SaveReturnLinesCommand = new AsyncRelayCommand(
+            SaveReturnLinesAsync,
+            () => !IsBusy && _financialYear.CanEditTransactions && CanEditReturnLines && ReturnLinesDirty);
         ClearCommand = new RelayCommand(ClearLoaded);
 
         AddDirectMedicineCommand = new AsyncRelayCommand(AddDirectMedicineAsync, () => !IsBusy && _financialYear.CanEditTransactions);
@@ -158,14 +165,21 @@ public class PurchaseReturnViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedReturnHint));
             if (value is not null)
             {
-                ReceiptNumber = value.SupplierReturnReceiptNumber ?? string.Empty;
-                ReceiptDate = value.SupplierReturnReceiptDate ?? DateTime.Today;
                 _ = LoadSelectedReturnDetailsAsync(value.Id);
             }
             else
             {
                 SelectedReturnLines.Clear();
+                EditableReturnLines.Clear();
+                CanEditReturnLines = false;
+                OnPropertyChanged(nameof(CanEditReturnLines));
+                OnPropertyChanged(nameof(IsReturnLinesReadOnly));
+                OnPropertyChanged(nameof(HasEditableReturnLines));
                 OnPropertyChanged(nameof(HasSelectedReturnLines));
+                ReturnLinesDirty = false;
+                SupplierBills.Clear();
+                SelectedSupplierBill = null;
+                ReceiptNumber = string.Empty;
             }
             CommandManager.InvalidateRequerySuggested();
         }
@@ -173,18 +187,74 @@ public class PurchaseReturnViewModel : ObservableObject
 
     public bool HasSelectedReturn => SelectedReturn is not null;
 
-    public bool HasSelectedReturnLines => SelectedReturnLines.Count > 0;
+    public bool HasSelectedReturnLines => EditableReturnLines.Count > 0 || SelectedReturnLines.Count > 0;
 
     public string SelectedReturnHint => SelectedReturn is null
-        ? "Select a return from the list below to see medicines and enter the supplier receipt number."
-        : $"Selected {SelectedReturn.ReturnNumber} ({SelectedReturn.SupplierName}) — medicines shown below; enter receipt # here.";
+        ? "Select a return from the list below to see medicines and record the supplier receipt or purchase bill credit."
+        : $"Selected {SelectedReturn.ReturnNumber} ({SelectedReturn.SupplierName}) — medicines shown below; record how credit was received.";
 
     public ObservableCollection<PurchaseReturnDetailLineDto> SelectedReturnLines { get; } = new();
+    public ObservableCollection<PurchaseReturnEditableLineViewModel> EditableReturnLines { get; } = new();
+    public ObservableCollection<PurchaseReturnSupplierBillOptionDto> SupplierBills { get; } = new();
+
+    public bool CanEditReturnLines { get; private set; }
+    public bool IsReturnLinesReadOnly => !CanEditReturnLines;
+    public bool HasEditableReturnLines => EditableReturnLines.Count > 0;
+
+    private bool _returnLinesDirty;
+    public bool ReturnLinesDirty
+    {
+        get => _returnLinesDirty;
+        private set
+        {
+            if (!SetProperty(ref _returnLinesDirty, value)) return;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public PurchaseReturnReceiptSettlementKind ReceiptSettlementKind
+    {
+        get => _receiptSettlementKind;
+        set
+        {
+            if (!SetProperty(ref _receiptSettlementKind, value)) return;
+            OnPropertyChanged(nameof(IsSupplierReceiptSettlement));
+            OnPropertyChanged(nameof(IsPurchaseBillSettlement));
+            OnPropertyChanged(nameof(ShowReceiptNumberFields));
+            OnPropertyChanged(nameof(ShowPurchaseBillFields));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public bool IsSupplierReceiptSettlement
+    {
+        get => ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.SupplierReceipt;
+        set
+        {
+            if (value) ReceiptSettlementKind = PurchaseReturnReceiptSettlementKind.SupplierReceipt;
+        }
+    }
+
+    public bool IsPurchaseBillSettlement
+    {
+        get => ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill;
+        set
+        {
+            if (value) ReceiptSettlementKind = PurchaseReturnReceiptSettlementKind.PurchaseBill;
+        }
+    }
+
+    public bool ShowReceiptNumberFields => IsSupplierReceiptSettlement;
+    public bool ShowPurchaseBillFields => IsPurchaseBillSettlement;
 
     public string ReceiptNumber
     {
         get => _receiptNumber;
-        set => SetProperty(ref _receiptNumber, value);
+        set
+        {
+            if (!SetProperty(ref _receiptNumber, value)) return;
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     public DateTime? ReceiptDate
@@ -192,6 +262,23 @@ public class PurchaseReturnViewModel : ObservableObject
         get => _receiptDate;
         set => SetProperty(ref _receiptDate, value);
     }
+
+    public PurchaseReturnSupplierBillOptionDto? SelectedSupplierBill
+    {
+        get => _selectedSupplierBill;
+        set
+        {
+            if (!SetProperty(ref _selectedSupplierBill, value)) return;
+            if (value is not null && ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill)
+                ReceiptDate = value.InvoiceDate.Date;
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    private bool CanSaveSettlement =>
+        ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
+            ? SelectedSupplierBill is not null
+            : !string.IsNullOrWhiteSpace(ReceiptNumber);
 
     public string DirectSupplierSearch
     {
@@ -247,6 +334,7 @@ public class PurchaseReturnViewModel : ObservableObject
     public ICommand ProcessReturnCommand { get; }
     public ICommand RefreshReturnsCommand { get; }
     public ICommand AttachReceiptCommand { get; }
+    public ICommand SaveReturnLinesCommand { get; }
     public ICommand ClearCommand { get; }
     public ICommand AddDirectMedicineCommand { get; }
     public ICommand RemoveDirectLineCommand { get; }
@@ -533,12 +621,18 @@ public class PurchaseReturnViewModel : ObservableObject
         IsBusy = true;
         try
         {
+            var keepId = SelectedReturn?.Id;
             ReturnRecords.Clear();
-            SelectedReturnLines.Clear();
-            OnPropertyChanged(nameof(HasSelectedReturnLines));
             var rows = await _service.ListReturnsAsync(
                 PendingReceiptOnly, _currentUser.CurrentUser?.BranchId);
             foreach (var r in rows) ReturnRecords.Add(r);
+
+            if (keepId is int id)
+            {
+                var match = ReturnRecords.FirstOrDefault(r => r.Id == id);
+                if (!ReferenceEquals(SelectedReturn, match))
+                    SelectedReturn = match;
+            }
         }
         finally { IsBusy = false; }
     }
@@ -550,18 +644,108 @@ public class PurchaseReturnViewModel : ObservableObject
             var result = await _service.GetReturnDetailsAsync(
                 purchaseReturnId, _currentUser.CurrentUser?.BranchId);
             SelectedReturnLines.Clear();
+            EditableReturnLines.Clear();
+            SupplierBills.Clear();
+            SelectedSupplierBill = null;
+            ReturnLinesDirty = false;
+
             if (result.IsSuccess && result.Value is not null)
             {
+                CanEditReturnLines = result.Value.CanEditLines && _financialYear.CanEditTransactions;
+                OnPropertyChanged(nameof(CanEditReturnLines));
+                OnPropertyChanged(nameof(IsReturnLinesReadOnly));
+
                 foreach (var line in result.Value.Lines)
+                {
                     SelectedReturnLines.Add(line);
+                    var edit = new PurchaseReturnEditableLineViewModel(line, CanEditReturnLines);
+                    edit.Changed += () => ReturnLinesDirty = true;
+                    EditableReturnLines.Add(edit);
+                }
+
+                ReceiptSettlementKind = result.Value.ReceiptSettlementKind;
+                ReceiptDate = result.Value.SupplierReturnReceiptDate ?? DateTime.Today;
+
+                var bills = await _service.ListSupplierBillsAsync(
+                    result.Value.SupplierId, _currentUser.CurrentUser?.BranchId);
+                foreach (var b in bills)
+                    SupplierBills.Add(b);
+
+                if (result.Value.ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
+                    && result.Value.SettledAgainstPurchaseId is int billId)
+                {
+                    SelectedSupplierBill = SupplierBills.FirstOrDefault(b => b.PurchaseId == billId);
+                    ReceiptNumber = string.Empty;
+                }
+                else
+                {
+                    ReceiptNumber = result.Value.SupplierReturnReceiptNumber ?? string.Empty;
+                }
             }
+            else
+            {
+                CanEditReturnLines = false;
+                OnPropertyChanged(nameof(CanEditReturnLines));
+                OnPropertyChanged(nameof(IsReturnLinesReadOnly));
+            }
+
             OnPropertyChanged(nameof(HasSelectedReturnLines));
+            OnPropertyChanged(nameof(HasEditableReturnLines));
+            CommandManager.InvalidateRequerySuggested();
         }
         catch
         {
             SelectedReturnLines.Clear();
+            EditableReturnLines.Clear();
             OnPropertyChanged(nameof(HasSelectedReturnLines));
+            OnPropertyChanged(nameof(HasEditableReturnLines));
         }
+    }
+
+    private async Task SaveReturnLinesAsync()
+    {
+        if (SelectedReturn is null || !CanEditReturnLines) return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _service.UpdateReturnLinesAsync(
+                new UpdatePurchaseReturnLinesRequest
+                {
+                    PurchaseReturnId = SelectedReturn.Id,
+                    Lines = EditableReturnLines.Select(l => new UpdatePurchaseReturnLineRequest
+                    {
+                        Id = l.Id,
+                        BatchNumber = l.BatchNumber,
+                        ExpiryDate = l.ExpiryDate,
+                        ReturnedQuantity = l.ReturnedQuantity,
+                        ReturnedFreeQuantity = l.ReturnedFreeQuantity,
+                        PurchasePrice = l.PurchasePrice,
+                        GstPercent = l.GstPercent,
+                        RefundPercent = l.RefundPercent,
+                        ReasonRemarks = l.ReasonRemarks
+                    }).ToList()
+                },
+                _currentUser.CurrentUser?.FullName);
+
+            if (result.IsFailure)
+            {
+                _dialog.ShowError(result.Error ?? "Could not save return lines.");
+                return;
+            }
+
+            ReturnLinesDirty = false;
+            StatusMessage = $"Return lines saved. Amount {result.Value?.GrandTotal:N2}.";
+            await RefreshReturnsAsync();
+            if (SelectedReturn is not null)
+                await LoadSelectedReturnDetailsAsync(SelectedReturn.Id);
+            else if (result.Value is not null)
+            {
+                var row = ReturnRecords.FirstOrDefault(r => r.Id == result.Value.Id);
+                if (row is not null) SelectedReturn = row;
+            }
+        }
+        finally { IsBusy = false; }
     }
 
     private async Task AttachReceiptAsync()
@@ -576,15 +760,26 @@ public class PurchaseReturnViewModel : ObservableObject
         try
         {
             var result = await _service.AttachSupplierReceiptAsync(
-                SelectedReturn.Id, ReceiptNumber, ReceiptDate, _currentUser.CurrentUser?.FullName);
+                new AttachPurchaseReturnReceiptRequest
+                {
+                    PurchaseReturnId = SelectedReturn.Id,
+                    SettlementKind = ReceiptSettlementKind,
+                    ReceiptNumber = ReceiptNumber,
+                    SettledAgainstPurchaseId = SelectedSupplierBill?.PurchaseId,
+                    ReceiptDate = ReceiptDate
+                },
+                _currentUser.CurrentUser?.FullName);
             if (result.IsFailure)
             {
-                _dialog.ShowError(result.Error ?? "Could not save receipt number.");
+                _dialog.ShowError(result.Error ?? "Could not save credit settlement.");
                 return;
             }
 
-            StatusMessage = $"Receipt {ReceiptNumber.Trim()} saved on {SelectedReturn.ReturnNumber}.";
-            _dialog.ShowInfo($"Receipt number saved on {SelectedReturn.ReturnNumber}.", "Return receipt");
+            var msg = ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
+                ? $"Credit recorded against purchase bill on {SelectedReturn.ReturnNumber}."
+                : $"Receipt number saved on {SelectedReturn.ReturnNumber}.";
+            StatusMessage = msg;
+            _dialog.ShowInfo(msg, "Return credit");
             await RefreshReturnsAsync();
         }
         finally { IsBusy = false; }
@@ -608,6 +803,114 @@ public class PurchaseReturnViewModel : ObservableObject
         _suppressSupplierSearch = false;
         DismissSupplierSuggestions();
         StatusMessage = null;
+    }
+}
+
+public sealed class PurchaseReturnEditableLineViewModel : ObservableObject
+{
+    private string? _batchNumber;
+    private DateTime? _expiryDate;
+    private decimal _returnedQuantity;
+    private decimal _returnedFreeQuantity;
+    private decimal _purchasePrice;
+    private decimal _gstPercent;
+    private decimal _refundPercent;
+    private decimal _lineTotal;
+    private string? _reasonRemarks;
+    private bool _suppress;
+
+    public PurchaseReturnEditableLineViewModel(PurchaseReturnDetailLineDto source, bool canEdit)
+    {
+        Id = source.Id;
+        MedicineName = source.MedicineName;
+        CanEdit = canEdit;
+        _batchNumber = source.BatchNumber;
+        _expiryDate = source.ExpiryDate;
+        _returnedQuantity = source.ReturnedQuantity;
+        _returnedFreeQuantity = source.ReturnedFreeQuantity;
+        _purchasePrice = source.PurchasePrice;
+        DiscountPercent = source.DiscountPercent;
+        _gstPercent = source.GstPercent;
+        _refundPercent = source.RefundPercent <= 0 ? 100m : source.RefundPercent;
+        _lineTotal = source.LineTotal;
+        ReasonName = source.ReasonName;
+        _reasonRemarks = source.ReasonRemarks ?? source.ReasonName;
+    }
+
+    public event Action? Changed;
+
+    public int Id { get; }
+    public string MedicineName { get; }
+    public bool CanEdit { get; }
+    public decimal DiscountPercent { get; }
+    public string? ReasonName { get; }
+
+    public string? BatchNumber
+    {
+        get => _batchNumber;
+        set { if (SetProperty(ref _batchNumber, value)) NotifyChanged(); }
+    }
+
+    public DateTime? ExpiryDate
+    {
+        get => _expiryDate;
+        set { if (SetProperty(ref _expiryDate, value)) NotifyChanged(); }
+    }
+
+    public decimal ReturnedQuantity
+    {
+        get => _returnedQuantity;
+        set { if (SetProperty(ref _returnedQuantity, Math.Max(0, value))) Recalc(); }
+    }
+
+    public decimal ReturnedFreeQuantity
+    {
+        get => _returnedFreeQuantity;
+        set { if (SetProperty(ref _returnedFreeQuantity, Math.Max(0, value))) NotifyChanged(); }
+    }
+
+    public decimal PurchasePrice
+    {
+        get => _purchasePrice;
+        set { if (SetProperty(ref _purchasePrice, Math.Max(0, value))) Recalc(); }
+    }
+
+    public decimal GstPercent
+    {
+        get => _gstPercent;
+        set { if (SetProperty(ref _gstPercent, Math.Max(0, value))) Recalc(); }
+    }
+
+    public decimal RefundPercent
+    {
+        get => _refundPercent;
+        set { if (SetProperty(ref _refundPercent, Math.Clamp(value, 0m, 999m))) Recalc(); }
+    }
+
+    public decimal LineTotal
+    {
+        get => _lineTotal;
+        private set => SetProperty(ref _lineTotal, value);
+    }
+
+    public string? ReasonRemarks
+    {
+        get => _reasonRemarks;
+        set { if (SetProperty(ref _reasonRemarks, value)) NotifyChanged(); }
+    }
+
+    private void Recalc()
+    {
+        if (_suppress) return;
+        var taxable = Math.Round(PurchasePrice * ReturnedQuantity * (1m - Math.Clamp(DiscountPercent, 0m, 100m) / 100m), 2);
+        var tax = Math.Round(taxable * GstPercent / 100m, 2);
+        LineTotal = Math.Round((taxable + tax) * RefundPercent / 100m, 2);
+        NotifyChanged();
+    }
+
+    private void NotifyChanged()
+    {
+        if (!_suppress) Changed?.Invoke();
     }
 }
 

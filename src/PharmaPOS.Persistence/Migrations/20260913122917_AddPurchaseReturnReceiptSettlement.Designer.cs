@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PharmaPOS.Persistence.Context;
 
@@ -11,9 +12,11 @@ using PharmaPOS.Persistence.Context;
 namespace PharmaPOS.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913122917_AddPurchaseReturnReceiptSettlement")]
+    partial class AddPurchaseReturnReceiptSettlement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2122,10 +2125,6 @@ namespace PharmaPOS.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("RefundPercent")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal>("StockQuantity")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -2719,10 +2718,6 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("ReasonRemarks")
                         .HasMaxLength(400)
                         .HasColumnType("nvarchar(400)");
-
-                    b.Property<decimal>("RefundPercent")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("ReturnReasonId")
                         .HasColumnType("int");

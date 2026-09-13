@@ -5,6 +5,7 @@ using PharmaPOS.Domain.Entities.Inventory;
 using PharmaPOS.Domain.Entities.Masters;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.ReportingSync;
+using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Masters;
@@ -17,12 +18,18 @@ public class MastersService : IMastersService
     private readonly IUnitOfWork _uow;
     private readonly IReportingSyncService _reportingSync;
     private readonly IDateTimeProvider _clock;
+    private readonly IMedicineSearchIndex _medicineSearchIndex;
 
-    public MastersService(IUnitOfWork uow, IReportingSyncService reportingSync, IDateTimeProvider clock)
+    public MastersService(
+        IUnitOfWork uow,
+        IReportingSyncService reportingSync,
+        IDateTimeProvider clock,
+        IMedicineSearchIndex medicineSearchIndex)
     {
         _uow = uow;
         _reportingSync = reportingSync;
         _clock = clock;
+        _medicineSearchIndex = medicineSearchIndex;
     }
 
     #region Suppliers
@@ -509,6 +516,7 @@ public class MastersService : IMastersService
             await SyncEmptyBatchRacksAsync(entity.Id, entity.RackNumber, ct);
             await _uow.SaveChangesAsync(ct);
             await _reportingSync.EnqueueMedicineAsync(entity.Id, ct);
+            await _medicineSearchIndex.UpsertAsync(entity.Id, ct);
             return Result.Success(entity.Id);
         }
 
@@ -517,6 +525,7 @@ public class MastersService : IMastersService
         await _uow.Repository<Medicine>().AddAsync(created, ct);
         await _uow.SaveChangesAsync(ct);
         await _reportingSync.EnqueueMedicineAsync(created.Id, ct);
+        await _medicineSearchIndex.UpsertAsync(created.Id, ct);
         return Result.Success(created.Id);
     }
 
@@ -530,6 +539,7 @@ public class MastersService : IMastersService
         _uow.Repository<Medicine>().Update(entity);
         await _uow.SaveChangesAsync(ct);
         await _reportingSync.EnqueueMedicineAsync(entity.Id, ct);
+        _medicineSearchIndex.Remove(entity.Id);
         return Result.Success();
     }
 

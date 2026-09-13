@@ -647,6 +647,32 @@ public class SalesViewModel : ObservableObject
         ShortageSource source)
         => OfferRecordShortageCoreAsync(medicineId, medicineName, requestedQty, availableQty, source, confirm: true);
 
+    public async Task RecordShortageFromCartLineAsync(CartLineViewModel? line)
+    {
+        if (line is null || line.IsEmpty || line.MedicineId <= 0) return;
+
+        try
+        {
+            var onHand = await _shortageBook.GetOnHandQuantityAsync(
+                line.MedicineId, _currentUser.CurrentUser?.BranchId);
+            var defaultRequested = Math.Max(
+                Math.Max(1m, line.Quantity),
+                onHand > 0 ? onHand + 1 : 1m);
+
+            await OfferRecordShortageCoreAsync(
+                line.MedicineId,
+                line.MedicineName,
+                defaultRequested,
+                onHand,
+                ShortageSource.SalesCart,
+                confirm: true);
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+    }
+
     public async Task RecordShortageSilentAsync(
         int medicineId,
         decimal requestedQty,
