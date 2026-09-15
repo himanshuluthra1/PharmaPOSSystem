@@ -18,10 +18,10 @@ public partial class SalesView : UserControl
 {
     /// <summary>Numeric/text cells that support BeginEdit (Item opens the picker instead).</summary>
     private static readonly HashSet<string> EditableColumns = new(StringComparer.Ordinal)
-        { "Batch", "Expiry", "Qty", "MRP", "Sale", "Disc %", "GST %" };
+        { "Batch", "Expiry", "Qty", "Loose", "MRP", "Sale", "Disc %", "GST %" };
 
     /// <summary>Focus order for a filled medicine line.</summary>
-    private static readonly string[] MedicineFocusColumns = ["Item", "Batch", "Expiry", "Qty", "MRP", "Sale", "Disc %", "GST %"];
+    private static readonly string[] MedicineFocusColumns = ["Item", "Batch", "Expiry", "Qty", "Loose", "MRP", "Sale", "Disc %", "GST %"];
 
     private static readonly string[] EmptyRowFocusColumns = ["Item"];
 

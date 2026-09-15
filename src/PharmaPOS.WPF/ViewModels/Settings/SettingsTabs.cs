@@ -36,7 +36,7 @@ public class UsersTabViewModel : ObservableObject
         NewCommand = new RelayCommand(_ => BeginNew(), _ => CanManageUsers);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy && CanManageUsers);
         ResetPasswordCommand = new AsyncRelayCommand(ResetPasswordAsync, () => !IsBusy && CanManageUsers && Editor.Id > 0);
-        RefreshCommand = new AsyncRelayCommand(SearchAsync);
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
     }
 
     public bool CanManageUsers { get; }
@@ -75,7 +75,32 @@ public class UsersTabViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(EditorTitle));
                 OnPropertyChanged(nameof(IsNewRecord));
+                SyncSelectedLookups();
             }
+        }
+    }
+
+    public RoleListDto? SelectedRole
+    {
+        get => Roles.FirstOrDefault(r => r.Id == Editor.RoleId);
+        set
+        {
+            if (value is null) return;
+            if (Editor.RoleId == value.Id) return;
+            Editor.RoleId = value.Id;
+            OnPropertyChanged(nameof(SelectedRole));
+        }
+    }
+
+    public BranchListDto? SelectedBranch
+    {
+        get => Editor.BranchId is int id ? Branches.FirstOrDefault(b => b.Id == id) : null;
+        set
+        {
+            var next = value?.Id;
+            if (Editor.BranchId == next) return;
+            Editor.BranchId = next;
+            OnPropertyChanged(nameof(SelectedBranch));
         }
     }
 
@@ -119,6 +144,12 @@ public class UsersTabViewModel : ObservableObject
         await SearchAsync();
     }
 
+    private async Task RefreshAsync()
+    {
+        await LoadLookupsAsync();
+        await SearchAsync();
+    }
+
     private async Task LoadLookupsAsync()
     {
         var roles = await _settings.ListRolesAsync();
@@ -128,6 +159,14 @@ public class UsersTabViewModel : ObservableObject
         var branches = await _settings.ListBranchesAsync();
         Branches.Clear();
         foreach (var b in branches) Branches.Add(b);
+
+        SyncSelectedLookups();
+    }
+
+    private void SyncSelectedLookups()
+    {
+        OnPropertyChanged(nameof(SelectedRole));
+        OnPropertyChanged(nameof(SelectedBranch));
     }
 
     private async Task SearchAsync()

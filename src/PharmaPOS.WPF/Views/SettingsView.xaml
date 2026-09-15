@@ -567,6 +567,13 @@
                             <CheckBox Content="Allow editing existing purchase bills"
                                       IsChecked="{Binding Editor.AllowEditPurchaseBills}"
                                       Margin="0,0,0,4" />
+                            <TextBlock Text="Dashboard" FontWeight="SemiBold" FontSize="14" Margin="8,12,0,8" />
+                            <CheckBox Content="Show Today's Sales on Dashboard"
+                                      IsChecked="{Binding Editor.ShowDashboardTodaySales}"
+                                      Margin="0,0,0,8" />
+                            <CheckBox Content="Show Monthly Sales on Dashboard"
+                                      IsChecked="{Binding Editor.ShowDashboardMonthlySales}"
+                                      Margin="0,0,0,12" />
                             <TextBlock Text="Master switch for cashier/staff edits. Users with Full Purchase/Sales Access (e.g. Super Admin) can still unlock and edit. Saved invoices lock automatically; click Unlock before changing a locked bill."
                                        Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,12" />
 
@@ -1228,19 +1235,25 @@
                                         </StackPanel>
                                     </Grid>
                                     <TextBlock Text="Role *" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}"
+                                    <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                               ItemsSource="{Binding Roles}" DisplayMemberPath="Name"
-                                              SelectedValue="{Binding Editor.RoleId}" SelectedValuePath="Id"
-                                              IsEnabled="{Binding CanManageUsers}" />
+                                              SelectedItem="{Binding SelectedRole, Mode=TwoWay}"
+                                              IsEnabled="{Binding CanManageUsers}"
+                                              Margin="0,0,0,8" Height="36" MinHeight="36"
+                                              materialDesign:HintAssist.IsFloating="False" />
                                     <TextBlock Text="Branch" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}"
+                                    <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                               ItemsSource="{Binding Branches}" DisplayMemberPath="Name"
-                                              SelectedValue="{Binding Editor.BranchId}" SelectedValuePath="Id"
-                                              IsEnabled="{Binding CanManageUsers}" />
+                                              SelectedItem="{Binding SelectedBranch, Mode=TwoWay}"
+                                              IsEnabled="{Binding CanManageUsers}"
+                                              Margin="0,0,0,8" Height="36" MinHeight="36"
+                                              materialDesign:HintAssist.IsFloating="False" />
                                     <TextBlock Text="Status" Style="{StaticResource FieldCaption}" />
-                                    <ComboBox Style="{StaticResource FieldCombo}"
+                                    <ComboBox Style="{StaticResource MaterialDesignOutlinedComboBox}"
                                               ItemsSource="{Binding EntityStatuses}" SelectedItem="{Binding Editor.Status}"
-                                              IsEnabled="{Binding CanManageUsers}" />
+                                              IsEnabled="{Binding CanManageUsers}"
+                                              Margin="0,0,0,8" Height="36" MinHeight="36"
+                                              materialDesign:HintAssist.IsFloating="False" />
                                     <TextBlock Text="Password (required for new user)" Style="{StaticResource FieldCaption}" />
                                     <PasswordBox x:Name="NewPasswordBox" Style="{StaticResource FieldPassword}"
                                                  IsEnabled="{Binding CanManageUsers}"

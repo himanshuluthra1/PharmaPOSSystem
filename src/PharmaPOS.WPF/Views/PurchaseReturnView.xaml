@@ -129,9 +129,10 @@
                                         <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}" Width="*" MinWidth="140" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDate, StringFormat=MM/yy}" Width="70" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Purchased" Binding="{Binding Quantity, StringFormat=N0}" Width="70" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity, StringFormat=N0}" Width="50" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Available" Binding="{Binding AvailableQty, StringFormat=N0}" Width="50" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Purchased" Binding="{Binding Quantity, StringFormat=0.##}" Width="70" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Free" Binding="{Binding FreeQuantity, StringFormat=0.##}" Width="50" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Stock" Binding="{Binding StockOnHand, StringFormat=0.##}" Width="55" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Available" Binding="{Binding AvailableQty, StringFormat=0.##}" Width="70" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Return Qty"
                                                             Binding="{Binding ReturnQuantity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                             Width="80" />
@@ -375,7 +376,12 @@
                         </Button>
                         <CheckBox Content="Only pending supplier receipt"
                                   IsChecked="{Binding PendingReceiptOnly}"
-                                  VerticalAlignment="Center" />
+                                  VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <TextBox Width="220" Height="28" VerticalAlignment="Center"
+                                 materialDesign:HintAssist.Hint="Filter returns..."
+                                 materialDesign:HintAssist.IsFloating="False"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 Text="{Binding ReturnRecordsFilter, UpdateSourceTrigger=PropertyChanged}" />
                     </WrapPanel>
 
                     <materialDesign:Card Grid.Row="1" UniformCornerRadius="10" Padding="8" Margin="0,0,0,4">
@@ -388,49 +394,61 @@
                                        Opacity="0.85" Text="{Binding SelectedReturnHint}" />
                             <StackPanel Grid.Row="1" IsEnabled="{Binding HasSelectedReturn}">
                                 <TextBlock Text="Credit received as" Style="{StaticResource FieldCaption}" Margin="0,0,0,4" />
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <RadioButton Content="Receipt #"
-                                                 IsChecked="{Binding IsSupplierReceiptSettlement}"
-                                                 GroupName="PrReceiptSettlementKind"
-                                                 Margin="0,0,16,0" VerticalAlignment="Center" />
-                                    <RadioButton Content="Purchase bill number"
-                                                 IsChecked="{Binding IsPurchaseBillSettlement}"
-                                                 GroupName="PrReceiptSettlementKind"
-                                                 VerticalAlignment="Center" />
-                                </StackPanel>
-
                                 <Grid Margin="0,0,0,2">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="160" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0"
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Bottom">
+                                        <RadioButton Content="Receipt #"
+                                                     IsChecked="{Binding IsSupplierReceiptSettlement}"
+                                                     GroupName="PrReceiptSettlementKind"
+                                                     Margin="0,0,12,0" VerticalAlignment="Center" />
+                                        <RadioButton Content="Purchase bill"
+                                                     IsChecked="{Binding IsPurchaseBillSettlement}"
+                                                     GroupName="PrReceiptSettlementKind"
+                                                     VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="0,0,8,0"
                                                 Visibility="{Binding ShowReceiptNumberFields, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Receipt #" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                         <TextBox materialDesign:HintAssist.Hint="Supplier return receipt / debit note number"
                                                  materialDesign:HintAssist.IsFloating="False"
                                                  Style="{StaticResource MaterialDesignOutlinedTextBox}"
                                                  Text="{Binding ReceiptNumber, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0"
+                                    <StackPanel Grid.Column="1" Margin="0,0,8,0"
                                                 Visibility="{Binding ShowPurchaseBillFields, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Purchase bill" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
                                         <ComboBox ItemsSource="{Binding SupplierBills}"
                                                   SelectedItem="{Binding SelectedSupplierBill}"
-                                                  DisplayMemberPath="Label"
                                                   materialDesign:HintAssist.Hint="Select bill number and date"
                                                   materialDesign:HintAssist.IsFloating="False"
-                                                  Style="{StaticResource MaterialDesignOutlinedComboBox}" />
+                                                  Style="{StaticResource MaterialDesignOutlinedComboBox}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Label}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="#C62828" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsPaid}" Value="True">
+                                                                        <Setter Property="Foreground" Value="#2E7D32" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                        <TextBlock Text="Date" Style="{StaticResource FieldCaption}" Margin="0,0,0,2" />
-                                        <DatePicker materialDesign:HintAssist.Hint="Receipt / bill date"
-                                                    materialDesign:HintAssist.IsFloating="False"
-                                                    Style="{StaticResource MaterialDesignOutlinedDatePicker}"
-                                                    SelectedDate="{Binding ReceiptDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <Button Grid.Column="2"
+                                    <DatePicker Grid.Column="2" Margin="0,0,8,0"
+                                                materialDesign:HintAssist.Hint="Date"
+                                                materialDesign:HintAssist.IsFloating="False"
+                                                Style="{StaticResource MaterialDesignOutlinedDatePicker}"
+                                                SelectedDate="{Binding ReceiptDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Grid.Column="3"
                                             VerticalAlignment="Bottom"
                                             Command="{Binding AttachReceiptCommand}"
                                             Style="{StaticResource MaterialDesignRaisedButton}"
@@ -450,7 +468,7 @@
                             </Grid.RowDefinitions>
 
                             <DataGrid Grid.Row="0"
-                                      ItemsSource="{Binding ReturnRecords}"
+                                      ItemsSource="{Binding FilteredReturnRecords}"
                                       SelectedItem="{Binding SelectedReturn, Mode=TwoWay}"
                                       AutoGenerateColumns="False"
                                       IsReadOnly="True"

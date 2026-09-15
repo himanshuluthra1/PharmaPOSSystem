@@ -170,9 +170,14 @@
                                                  Style="{StaticResource AcctOutlinedBox}"
                                                  Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
-                                    <CheckBox Content="Include settled / paid bills"
-                                              IsChecked="{Binding IncludeSettledBills}"
-                                              VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <CheckBox Content="Unpaid"
+                                              IsChecked="{Binding ShowUnpaidBills}"
+                                              VerticalAlignment="Center" Margin="0,0,8,0"
+                                              ToolTip="Show bills with remaining due" />
+                                    <CheckBox Content="Paid"
+                                              IsChecked="{Binding ShowPaidBills}"
+                                              VerticalAlignment="Center" Margin="0,0,8,0"
+                                              ToolTip="Show fully settled / paid bills" />
                                     <Button Command="{Binding DataContext.RecordPaymentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             Style="{StaticResource AcctToolbarButton}"
                                             ToolTip="Record supplier payment">
@@ -196,18 +201,21 @@
                                 </WrapPanel>
 
                                 <Border Margin="0,4,0,0" Padding="6,3" CornerRadius="4"
-                                        Background="#E8F5E9"
+                                        Background="{StaticResource GridHeaderBackgroundBrush}"
                                         Visibility="{Binding DataContext.CanCreateVouchers, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding PaymentAmountLabel}" Style="{StaticResource FieldCaption}"
+                                                   Foreground="{StaticResource GridHeaderForegroundBrush}"
                                                    Margin="0,0,6,0" VerticalAlignment="Center" />
                                         <TextBox Width="100" Height="28" Margin="0,0,8,0" VerticalAlignment="Center"
                                                  Style="{StaticResource AcctOutlinedBox}"
+                                                 Background="White"
                                                  Text="{Binding PaymentAmount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}"
                                                  ToolTip="Enter payment amount, then tick bills. Applied in order until used." />
                                         <Button Content="Use total due"
                                                 Command="{Binding FillPaymentFromDueCommand}"
                                                 Style="{StaticResource MaterialDesignFlatButton}"
+                                                Foreground="{StaticResource GridHeaderForegroundBrush}"
                                                 Padding="6,2" FontSize="11" Height="28" Margin="0,0,8,0"
                                                 VerticalAlignment="Center"
                                                 ToolTip="Fill payment amount from selected (or all open) dues" />
@@ -237,10 +245,12 @@
                                         <Button Content="{Binding SettleButtonLabel}"
                                                 Command="{Binding SettleSelectedCommand}"
                                                 Style="{StaticResource AcctToolbarButton}"
+                                                Background="White"
                                                 Height="28" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <Button Content="Clear"
                                                 Command="{Binding ClearSelectionCommand}"
                                                 Style="{StaticResource MaterialDesignFlatButton}"
+                                                Foreground="{StaticResource GridHeaderForegroundBrush}"
                                                 Padding="6,2" FontSize="11" Height="28" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Border>
@@ -278,13 +288,15 @@
                                                                 IsReadOnly="False"
                                                                 Visibility="{Binding DataContext.CanCreateVouchers, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource BoolToVisibility}}" />
                                         <DataGridTextColumn Header="Invoice" Binding="{Binding InvoiceNumber}" Width="*" MinWidth="90" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Supplier Bill #" Binding="{Binding SupplierBillNumber}" Width="110" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}" Width="90" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Supplier Bill" Binding="{Binding SupplierBillNumber}" Width="110" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Date" Binding="{Binding InvoiceDateLabel}"
+                                                            SortMemberPath="InvoiceDate" Width="90" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="70" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Adjusted" Binding="{Binding AdjustedAmount, StringFormat=N2}" Width="75" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Due" Binding="{Binding BalanceDue, StringFormat=N2}" Width="70" IsReadOnly="True" />
                                         <DataGridTextColumn Header="Apply" Binding="{Binding ApplyAmount, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}"
                                                             Width="70" IsReadOnly="False"
                                                             Visibility="{Binding DataContext.CanCreateVouchers, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource BoolToVisibility}}" />
-                                        <DataGridTextColumn Header="Total" Binding="{Binding GrandTotal, StringFormat=N2}" Width="70" IsReadOnly="True" />
                                         <DataGridTemplateColumn Header="" Width="78"
                                                                 Visibility="{Binding DataContext.CanCreateVouchers, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource BoolToVisibility}}">
                                             <DataGridTemplateColumn.CellTemplate>

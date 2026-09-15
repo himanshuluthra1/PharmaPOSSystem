@@ -61,6 +61,18 @@ public class PurchaseReturn : BranchEntity
 
     public ICollection<PurchaseReturnItem> Items { get; set; } = new List<PurchaseReturnItem>();
 
-    public bool HasSupplierReceipt => !string.IsNullOrWhiteSpace(SupplierReturnReceiptNumber);
+    public bool HasSupplierReceipt => IsRealSupplierReceiptNumber(SupplierReturnReceiptNumber);
     public bool IsDirectReturn => PurchaseId is null;
+
+    /// <summary>
+    /// True when a real supplier debit note / receipt number is present.
+    /// MedWin imports historically stored <c>0</c> for unset notes — treat those as pending.
+    /// </summary>
+    public static bool IsRealSupplierReceiptNumber(string? number)
+    {
+        if (string.IsNullOrWhiteSpace(number)) return false;
+        var text = number.Trim();
+        if (text is "0" or "0.0" or "0.00") return false;
+        return !(decimal.TryParse(text, out var n) && n == 0m);
+    }
 }

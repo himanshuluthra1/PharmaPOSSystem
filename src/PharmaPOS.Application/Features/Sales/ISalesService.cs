@@ -47,6 +47,10 @@ public interface ISalesService
     /// <summary>Distinct patient names for autosuggest while searching bills.</summary>
     Task<List<string>> SuggestPatientNamesAsync(string term, int? branchId, CancellationToken ct = default);
 
+    /// <summary>Autosuggest for bill search with bill counts (patient / mobile / medicine).</summary>
+    Task<List<BillSearchSuggestionDto>> SuggestBillSearchAsync(
+        BillSearchType type, string term, int? branchId, CancellationToken ct = default);
+
     /// <summary>Search completed bills by patient name, mobile, or medicine name.</summary>
     Task<List<BillSearchResultDto>> SearchBillsAsync(BillSearchType type, string term, int? branchId, CancellationToken ct = default);
 

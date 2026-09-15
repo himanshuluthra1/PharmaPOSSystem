@@ -668,18 +668,41 @@ public partial class ReportsService
                 r.GrandTotal,
                 r.CreditAmount,
                 Remaining = r.CreditAmount - r.CreditAppliedAmount,
-                Settlement = string.IsNullOrWhiteSpace(r.SupplierReturnReceiptNumber)
-                    ? "Pending"
-                    : r.ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
-                        ? "Purchase bill"
-                        : "Receipt",
-                Reference = r.SupplierReturnReceiptNumber,
+                r.SupplierReturnReceiptNumber,
+                r.ReceiptSettlementKind,
                 ReceiptDate = r.SupplierReturnReceiptDate
             })
             .ToListAsync(ct);
 
+        var mapped = rows.Select(r =>
+        {
+            var hasReceipt = PurchaseReturn.IsRealSupplierReceiptNumber(r.SupplierReturnReceiptNumber);
+            return new
+            {
+                r.ReturnNumber,
+                r.ReturnDate,
+                r.SupplierId,
+                r.SupplierName,
+                r.Invoice,
+                r.Kind,
+                r.Direct,
+                r.PurchaseId,
+                r.SettledPurchaseId,
+                r.GrandTotal,
+                r.CreditAmount,
+                r.Remaining,
+                Settlement = !hasReceipt
+                    ? "Pending"
+                    : r.ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
+                        ? "Purchase bill"
+                        : "Receipt",
+                Reference = hasReceipt ? r.SupplierReturnReceiptNumber : null,
+                r.ReceiptDate
+            };
+        }).ToList();
+
         return ReportTableMapper.Table(
-            BuildSummary(rows.Count, rows.Sum(r => r.GrandTotal), 0, 0),
+            BuildSummary(mapped.Count, mapped.Sum(r => r.GrandTotal), 0, 0),
             ReportTableMapper.Cols(
                 ReportTableMapper.C("ReturnNumber", "Return#"),
                 ReportTableMapper.C("Date", "Date"),
@@ -693,7 +716,7 @@ public partial class ReportsService
                 ReportTableMapper.C("Settlement", "Settled via"),
                 ReportTableMapper.C("Reference", "Reference"),
                 ReportTableMapper.C("ReceiptDate", "Settled date")),
-            rows.Select(r => ReportTableMapper.Dict(
+            mapped.Select(r => ReportTableMapper.Dict(
                 ("ReturnNumber", (object?)r.ReturnNumber),
                 ("Date", r.ReturnDate.ToString("dd/MM/yyyy")),
                 ("Kind", r.Kind),
@@ -842,16 +865,34 @@ public partial class ReportsService
                 p.InvoiceDate,
                 Supplier = p.Supplier != null ? p.Supplier.Name : "—",
                 p.GrandTotal,
-                p.PaidAmount,
-                BalanceDue = p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m
+                p.PaidAmount
             })
             .ToListAsync(ct);
 
+        // Same source as Accounting → Parties RHS "Adjusted":
+        // any completed return with SettledAgainstPurchaseId (Return Records bill settlement).
+        var returnAdj = await _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+            .Where(r => r.Status == PurchaseReturnStatus.Completed
+                        && r.SettledAgainstPurchaseId != null)
+            .Select(r => new
+            {
+                PurchaseId = r.SettledAgainstPurchaseId!.Value,
+                r.CreditAmount
+            })
+            .ToListAsync(ct);
+
+        var adjustedByPurchase = returnAdj
+            .GroupBy(r => r.PurchaseId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.CreditAmount));
+
         var projected = rows.Select(r =>
         {
-            var status = r.BalanceDue <= 0.009m
+            adjustedByPurchase.TryGetValue(r.Id, out var adjusted);
+            var rawDue = r.GrandTotal - r.PaidAmount - adjusted;
+            var due = rawDue > 0.009m ? rawDue : 0m;
+            var status = due <= 0.009m
                 ? "Paid"
-                : r.PaidAmount <= 0.009m
+                : r.PaidAmount <= 0.009m && adjusted <= 0.009m
                     ? "Pending"
                     : "Partial";
             return new
@@ -863,10 +904,16 @@ public partial class ReportsService
                 r.Supplier,
                 r.GrandTotal,
                 r.PaidAmount,
-                r.BalanceDue,
+                AdjustedAmount = adjusted,
+                BalanceDue = due,
                 Status = status
             };
         }).ToList();
+
+        // Keep period bills even if settled; for "open" extras keep only those still due after adjustments.
+        projected = projected
+            .Where(r => (r.InvoiceDate >= start && r.InvoiceDate < end) || r.BalanceDue > 0.009m)
+            .ToList();
 
         return ReportTableMapper.Table(
             new ReportSummaryDto
@@ -874,7 +921,7 @@ public partial class ReportsService
                 RecordCount = projected.Count,
                 TotalAmount = projected.Sum(r => r.GrandTotal),
                 FooterNote =
-                    $"Paid ₹{projected.Sum(r => r.PaidAmount):N2} · Pending ₹{projected.Sum(r => r.BalanceDue):N2}"
+                    $"Paid ₹{projected.Sum(r => r.PaidAmount):N2} · Adjusted ₹{projected.Sum(r => r.AdjustedAmount):N2} · Pending ₹{projected.Sum(r => r.BalanceDue):N2}"
             },
             ReportTableMapper.Cols(
                 ReportTableMapper.C("InvoiceNumber", "Invoice"),
@@ -883,6 +930,7 @@ public partial class ReportsService
                 ReportTableMapper.C("Supplier", "Supplier"),
                 ReportTableMapper.C("GrandTotal", "BillAmt", "N2"),
                 ReportTableMapper.C("PaidAmount", "Paid", "N2"),
+                ReportTableMapper.C("AdjustedAmount", "Adjusted", "N2"),
                 ReportTableMapper.C("BalanceDue", "Due", "N2"),
                 ReportTableMapper.C("Status", "Status")),
             projected.Select(r => ReportTableMapper.Dict(
@@ -893,6 +941,7 @@ public partial class ReportsService
                 ("Supplier", r.Supplier),
                 ("GrandTotal", r.GrandTotal),
                 ("PaidAmount", r.PaidAmount),
+                ("AdjustedAmount", r.AdjustedAmount),
                 ("BalanceDue", r.BalanceDue),
                 ("Status", r.Status))));
     }

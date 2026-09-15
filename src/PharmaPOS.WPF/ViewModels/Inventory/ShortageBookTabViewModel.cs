@@ -50,6 +50,9 @@ public sealed class ShortageBookTabViewModel : ObservableObject
         CancelEntryCommand = new AsyncRelayCommand(
             _ => CancelSelectedAsync(),
             _ => !IsBusy && SelectedItem is { Status: ShortageStatus.Open or ShortageStatus.Ordered });
+        DeleteEntryCommand = new AsyncRelayCommand(
+            _ => DeleteSelectedAsync(),
+            _ => !IsBusy && SelectedItem is not null);
 
         _ = RefreshAsync();
     }
@@ -106,6 +109,7 @@ public sealed class ShortageBookTabViewModel : ObservableObject
     public ICommand RefreshCommand { get; }
     public ICommand RecordManualCommand { get; }
     public ICommand CancelEntryCommand { get; }
+    public ICommand DeleteEntryCommand { get; }
 
     public async Task RefreshAsync()
     {
@@ -209,6 +213,37 @@ public sealed class ShortageBookTabViewModel : ObservableObject
                 return;
             }
 
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _dialog.ShowError(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (SelectedItem is null) return;
+        if (!_dialog.Confirm(
+                $"Delete shortage row for \"{SelectedItem.MedicineName}\"?\nThis removes it from the shortage book.",
+                "Shortage book"))
+            return;
+
+        IsBusy = true;
+        try
+        {
+            var result = await _shortageBook.DeleteAsync(SelectedItem.Id, _branchId);
+            if (result.IsFailure)
+            {
+                _dialog.ShowError(result.Error ?? "Could not delete.");
+                return;
+            }
+
+            StatusMessage = $"Deleted shortage for {SelectedItem.MedicineName}.";
             await RefreshAsync();
         }
         catch (Exception ex)

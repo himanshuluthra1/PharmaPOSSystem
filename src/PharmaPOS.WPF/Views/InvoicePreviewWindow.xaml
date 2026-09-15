@@ -8,26 +8,42 @@
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         FontFamily="{materialDesign:MaterialDesignFont}">
     <DockPanel>
-        <materialDesign:ColorZone DockPanel.Dock="Top" Mode="PrimaryMid" Padding="12,8">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Paper" VerticalAlignment="Center" Margin="0,0,8,0" Opacity="0.9" />
-                <ComboBox x:Name="PaperSizeBox" Width="200"
-                          DisplayMemberPath="Label"
-                          SelectedValuePath="Value"
-                          SelectionChanged="PaperSizeBox_SelectionChanged"
-                          Style="{StaticResource MaterialDesignOutlinedComboBox}"
-                          Margin="0,0,12,0" />
-                <Button x:Name="PrintButton" Click="PrintButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedLightButton}">
-                    <StackPanel Orientation="Horizontal">
-                        <materialDesign:PackIcon Kind="Printer" VerticalAlignment="Center" />
-                        <TextBlock Text="Print" Margin="6,0,0,0" />
-                    </StackPanel>
-                </Button>
-                <Button Content="Close" Margin="8,0,0,0" Click="CloseButton_Click"
-                        Style="{StaticResource MaterialDesignFlatButton}" />
-            </StackPanel>
-        </materialDesign:ColorZone>
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource MaterialDesignToolBarBackground}"
+                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                BorderThickness="0,1,0,0"
+                Padding="12,10">
+            <DockPanel LastChildFill="False">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Paper" VerticalAlignment="Center" Margin="0,0,8,0" Opacity="0.75" />
+                    <ComboBox x:Name="PaperSizeBox" Width="180"
+                              DisplayMemberPath="Label"
+                              SelectedValuePath="Value"
+                              SelectionChanged="PaperSizeBox_SelectionChanged"
+                              Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                              Margin="0,0,12,0" />
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="PrintButton" Click="PrintButton_Click"
+                            Style="{StaticResource MaterialDesignRaisedButton}" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Printer" VerticalAlignment="Center" />
+                            <TextBlock Text="Print" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PdfButton" Click="PdfButton_Click" Margin="0,0,8,0"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            ToolTip="Download invoice as PDF">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="FilePdfBox" VerticalAlignment="Center" />
+                            <TextBlock Text="Download" Margin="6,0,0,0" />
+                        </StackPanel>
+                    </Button>
+                    <Button Content="Cancel" Click="CloseButton_Click" IsCancel="True"
+                            Style="{StaticResource MaterialDesignFlatButton}" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
 
         <Border Background="#EEEEEE">
             <FlowDocumentPageViewer x:Name="Viewer" Margin="16" Zoom="90" />

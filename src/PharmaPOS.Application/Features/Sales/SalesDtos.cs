@@ -20,7 +20,8 @@ public record MedicineLookupDto(
     string? PackLabel = null,
     decimal Cost = 0m,
     string? HsnCode = null,
-    decimal Mrp = 0m)
+    decimal Mrp = 0m,
+    int UnitsPerPack = 1)
 {
     public string? LocationLabel => StockLocation.Format(RackNumber, BinNumber);
 
@@ -81,10 +82,18 @@ public class SaleLineRequest
     public int MedicineId { get; set; }
     public int MedicineBatchId { get; set; }
     public string? BatchNumber { get; set; }
+    /// <summary>Full packs / strips billed.</summary>
     public decimal Quantity { get; set; }
+    /// <summary>Loose tablets/units from a pack.</summary>
+    public decimal LooseQuantity { get; set; }
+    public int UnitsPerPack { get; set; } = 1;
     public decimal Mrp { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal DiscountPercent { get; set; }
+
+    /// <summary>Stock / pricing quantity in pack units (Qty + Loose/UnitsPerPack).</summary>
+    public decimal StockQuantity =>
+        SaleLooseMath.ToStockQuantity(Quantity, LooseQuantity, UnitsPerPack);
 }
 
 /// <summary>A tender against the bill.</summary>
@@ -154,6 +163,12 @@ public enum BillSearchType
     MedicineName
 }
 
+/// <summary>Autosuggest row for bill search (patient / mobile / medicine) with bill count.</summary>
+public record BillSearchSuggestionDto(string Value, int BillCount)
+{
+    public string DisplayLabel => $"{Value} ({BillCount})";
+}
+
 /// <summary>A bill row returned by the fast-billing search popup.</summary>
 public record BillSearchResultDto(
     int SaleId,
@@ -204,6 +219,8 @@ public class SaleEditLineDto
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime? ExpiryDate { get; set; }
     public decimal Quantity { get; set; }
+    public decimal LooseQuantity { get; set; }
+    public int UnitsPerPack { get; set; } = 1;
     public decimal UnitPrice { get; set; }
     public decimal Mrp { get; set; }
     public decimal GstPercent { get; set; }
@@ -269,7 +286,24 @@ public record SaleReceiptLineDto(
     decimal DiscountAmount,
     decimal GstPercent,
     decimal Amount,
-    bool IsReturnLine = false);
+    bool IsReturnLine = false,
+    decimal LooseQuantity = 0m,
+    int UnitsPerPack = 1)
+{
+    public string QuantityLabel
+    {
+        get
+        {
+            if (LooseQuantity <= 0.009m)
+                return Quantity.ToString("0.##");
+            var upp = UnitsPerPack <= 0 ? 1 : UnitsPerPack;
+            var packs = upp > 1
+                ? Math.Max(0m, Math.Round(Quantity - LooseQuantity / upp, 4))
+                : Math.Max(0m, Quantity - LooseQuantity);
+            return $"{packs:0.##}+{LooseQuantity:0.##}";
+        }
+    }
+}
 
 /// <summary>Medicine snapshot shown from the billing grid (F4 / cart detail strip).</summary>
 public record SaleMedicineDetailDto(

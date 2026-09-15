@@ -1,9 +1,7 @@
-using PharmaPOS.Application.Features.Sales;
-
 namespace PharmaPOS.WPF.Services;
 
-/// <summary>Opens the bill search popup and returns the selected bill, if any.</summary>
+/// <summary>Opens the bill search popup and shows the selected invoice viewer.</summary>
 public interface IBillSearchService
 {
-    Task<SaleListItemDto?> PickBillAsync();
+    Task SearchAndViewAsync();
 }

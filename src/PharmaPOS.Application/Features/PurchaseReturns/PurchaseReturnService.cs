@@ -120,6 +120,17 @@ public class PurchaseReturnService : IPurchaseReturnService
             .Where(m => medIds.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, m => m.Name, ct);
 
+        var batchIds = purchase.Items
+            .Where(i => i.MedicineBatchId is > 0)
+            .Select(i => i.MedicineBatchId!.Value)
+            .Distinct()
+            .ToList();
+        var stockByBatch = batchIds.Count == 0
+            ? new Dictionary<int, decimal>()
+            : await _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+                .Where(b => batchIds.Contains(b.Id))
+                .ToDictionaryAsync(b => b.Id, b => b.QuantityAvailable, ct);
+
         var dto = new PurchaseForReturnDto
         {
             PurchaseId = purchase.Id,
@@ -134,6 +145,7 @@ public class PurchaseReturnService : IPurchaseReturnService
             Lines = purchase.Items.Select(i =>
             {
                 returned.TryGetValue(i.Id, out var r);
+                var stock = i.MedicineBatchId is int bid && stockByBatch.TryGetValue(bid, out var s) ? s : 0m;
                 return new PurchaseReturnLineDto
                 {
                     PurchaseItemId = i.Id,
@@ -146,6 +158,7 @@ public class PurchaseReturnService : IPurchaseReturnService
                     FreeQuantity = i.FreeQuantity,
                     AlreadyReturnedQty = r.Qty,
                     AlreadyReturnedFreeQty = r.Free,
+                    StockOnHand = Math.Max(0, stock),
                     PurchasePrice = i.PurchasePrice,
                     GstPercent = i.GstPercent,
                     DiscountPercent = i.DiscountPercent,
@@ -155,7 +168,16 @@ public class PurchaseReturnService : IPurchaseReturnService
         };
 
         if (dto.Lines.Count == 0)
-            return Result.Failure<PurchaseForReturnDto>("No returnable quantity left on this purchase.");
+        {
+            var anyBillQty = purchase.Items.Any(i =>
+            {
+                returned.TryGetValue(i.Id, out var r);
+                return i.Quantity - r.Qty > 0.009m || i.FreeQuantity - r.Free > 0.009m;
+            });
+            return Result.Failure<PurchaseForReturnDto>(anyBillQty
+                ? "This bill still has returnable lines, but on-hand stock for those batches is 0. Check Inventory / Stock, or use Direct return only if stock exists under another batch."
+                : "No returnable quantity left on this purchase.");
+        }
 
         return Result.Success(dto);
     }
@@ -224,15 +246,20 @@ public class PurchaseReturnService : IPurchaseReturnService
     public async Task<List<PurchaseReturnListRowDto>> ListReturnsAsync(
         bool pendingSupplierReceiptOnly, int? branchId, int take = 100, CancellationToken ct = default)
     {
+        await ClearPlaceholderSupplierReceiptNumbersAsync(ct);
+
         var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
             .Where(r => r.Status == PurchaseReturnStatus.Completed
-                        && r.ReturnKind == PurchaseReturnKind.Standard)
-            .WhereInFinancialYear(_financialYear.Active, r => r.ReturnDate);
+                        && r.ReturnKind == PurchaseReturnKind.Standard);
+        // Pending receipt work spans years (MedWin imports); do not FY-scope that filter.
+        if (!pendingSupplierReceiptOnly)
+            q = q.WhereInFinancialYear(_financialYear.Active, r => r.ReturnDate);
         if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
         if (pendingSupplierReceiptOnly)
             q = q.Where(r => r.SupplierReturnReceiptNumber == null || r.SupplierReturnReceiptNumber == "");
 
-        return await q.OrderByDescending(r => r.ReturnDate).Take(take)
+        var limit = pendingSupplierReceiptOnly ? Math.Max(take, 2000) : take;
+        return await q.OrderByDescending(r => r.ReturnDate).Take(limit)
             .Select(r => new PurchaseReturnListRowDto(
                 r.Id,
                 r.ReturnNumber,
@@ -257,6 +284,27 @@ public class PurchaseReturnService : IPurchaseReturnService
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Clears MedWin-era placeholder debit notes ("0") so returns stay pending until a real receipt is saved.
+    /// </summary>
+    private async Task ClearPlaceholderSupplierReceiptNumbersAsync(CancellationToken ct)
+    {
+        var placeholders = await _uow.Repository<PurchaseReturn>().Query()
+            .Where(r => r.SupplierReturnReceiptNumber == "0"
+                        || r.SupplierReturnReceiptNumber == "0.0"
+                        || r.SupplierReturnReceiptNumber == "0.00")
+            .ToListAsync(ct);
+        if (placeholders.Count == 0) return;
+
+        foreach (var row in placeholders)
+        {
+            row.SupplierReturnReceiptNumber = null;
+            row.SupplierReturnReceiptDate = null;
+        }
+
+        await _uow.SaveChangesAsync(ct);
+    }
+
     public async Task<List<PurchaseReturnSupplierBillOptionDto>> ListSupplierBillsAsync(
         int supplierId, int? branchId, CancellationToken ct = default)
     {
@@ -268,15 +316,40 @@ public class PurchaseReturnService : IPurchaseReturnService
                         && p.Status != PurchaseStatus.Draft);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
-        return await q.OrderByDescending(p => p.InvoiceDate).ThenByDescending(p => p.Id)
+        var rows = await q.OrderByDescending(p => p.InvoiceDate).ThenByDescending(p => p.Id)
             .Take(200)
-            .Select(p => new PurchaseReturnSupplierBillOptionDto(
+            .Select(p => new
+            {
                 p.Id,
                 p.InvoiceNumber,
                 p.SupplierInvoiceNumber,
                 p.InvoiceDate,
-                p.GrandTotal))
+                p.GrandTotal,
+                p.PaidAmount
+            })
             .ToListAsync(ct);
+
+        var ids = rows.Select(r => r.Id).ToList();
+        var adjusted = new Dictionary<int, decimal>();
+        if (ids.Count > 0)
+        {
+            adjusted = await _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+                .Where(r => r.Status == PurchaseReturnStatus.Completed
+                            && r.SettledAgainstPurchaseId != null
+                            && ids.Contains(r.SettledAgainstPurchaseId.Value))
+                .GroupBy(r => r.SettledAgainstPurchaseId!.Value)
+                .Select(g => new { Id = g.Key, Adj = g.Sum(x => x.CreditAmount) })
+                .ToDictionaryAsync(x => x.Id, x => x.Adj, ct);
+        }
+
+        return rows.Select(p => new PurchaseReturnSupplierBillOptionDto(
+            p.Id,
+            p.InvoiceNumber,
+            p.SupplierInvoiceNumber,
+            p.InvoiceDate,
+            p.GrandTotal,
+            p.PaidAmount,
+            adjusted.TryGetValue(p.Id, out var a) ? a : 0m)).ToList();
     }
 
     public async Task<Result<PurchaseReturnDetailDto>> GetReturnDetailsAsync(
@@ -498,7 +571,7 @@ public class PurchaseReturnService : IPurchaseReturnService
             if (request.SettledAgainstPurchaseId is null or <= 0)
                 return Result.Failure("Select the purchase bill that includes this credit.");
 
-            var bill = await _uow.Repository<Purchase>().Query().AsNoTracking()
+            var bill = await _uow.Repository<Purchase>().Query()
                 .FirstOrDefaultAsync(p => p.Id == request.SettledAgainstPurchaseId.Value, ct);
             if (bill is null)
                 return Result.Failure("Purchase bill not found.");
@@ -512,6 +585,14 @@ public class PurchaseReturnService : IPurchaseReturnService
                 ? bill.InvoiceNumber
                 : $"{bill.InvoiceNumber} / {bill.SupplierInvoiceNumber}";
             settlementDate = request.ReceiptDate?.Date ?? bill.InvoiceDate.Date;
+
+            // Keep purchase.ReturnCreditApplied in sync so bill viewer / purchase register
+            // show the same credit Parties use for Adjusted (PaidAmount stays cash-only).
+            var previousApplied = ret.SettledAgainstPurchaseId == bill.Id ? ret.CreditAmount : 0m;
+            var nextApplied = Math.Max(0m, bill.ReturnCreditApplied - previousApplied + ret.CreditAmount);
+            bill.ReturnCreditApplied = nextApplied;
+            bill.ModifiedBy = userName;
+            _uow.Repository<Purchase>().Update(bill);
         }
         else
         {
@@ -519,12 +600,27 @@ public class PurchaseReturnService : IPurchaseReturnService
             if (string.IsNullOrWhiteSpace(settlementRef))
                 return Result.Failure("Enter the supplier return receipt / debit note number.");
             settlementDate = request.ReceiptDate?.Date ?? _clock.Now.Date;
+
+            // Clearing a prior bill settlement restores that bill's ReturnCreditApplied.
+            if (ret.SettledAgainstPurchaseId is int priorBillId)
+            {
+                var priorBill = await _uow.Repository<Purchase>().Query()
+                    .FirstOrDefaultAsync(p => p.Id == priorBillId, ct);
+                if (priorBill is not null)
+                {
+                    priorBill.ReturnCreditApplied = Math.Max(0m, priorBill.ReturnCreditApplied - ret.CreditAmount);
+                    priorBill.ModifiedBy = userName;
+                    _uow.Repository<Purchase>().Update(priorBill);
+                }
+            }
         }
 
         ret.ReceiptSettlementKind = request.SettlementKind;
         ret.SettledAgainstPurchaseId = settledPurchaseId;
         ret.SupplierReturnReceiptNumber = settlementRef;
         ret.SupplierReturnReceiptDate = settlementDate;
+        if (settledPurchaseId is not null)
+            ret.CreditAppliedAmount = ret.CreditAmount;
         ret.ModifiedBy = userName;
         _uow.Repository<PurchaseReturn>().Update(ret);
         await _uow.SaveChangesAsync(ct);
@@ -562,14 +658,31 @@ public class PurchaseReturnService : IPurchaseReturnService
                 throw new PurchaseReturnException("A selected purchase line no longer exists.");
 
             returned.TryGetValue(item.Id, out var prev);
-            var availQty = item.Quantity - prev.Qty;
-            var availFree = item.FreeQuantity - prev.Free;
-            if (line.ReturnQuantity > availQty)
+            var billQty = Math.Max(0, item.Quantity - prev.Qty);
+            var billFree = Math.Max(0, item.FreeQuantity - prev.Free);
+
+            if (line.ReturnQuantity > billQty + 0.0001m)
                 throw new PurchaseReturnException(
-                    $"Return qty exceeds available for batch {item.BatchNumber} (max {availQty:0.##}).");
-            if (line.ReturnFreeQuantity > availFree)
+                    $"Return qty exceeds available for batch {item.BatchNumber} (max {billQty:0.##}). " +
+                    (billQty <= 0.009m
+                        ? "This purchase line is already fully returned — use Direct return if stock still exists on another/open batch."
+                        : string.Empty));
+            if (line.ReturnFreeQuantity > billFree + 0.0001m)
                 throw new PurchaseReturnException(
-                    $"Return free qty exceeds available for batch {item.BatchNumber} (max {availFree:0.##}).");
+                    $"Return free qty exceeds available for batch {item.BatchNumber} (max {billFree:0.##}).");
+
+            decimal stockOnHand = 0m;
+            if (item.MedicineBatchId is int batchIdForStock)
+            {
+                var stockBatch = await _uow.Repository<MedicineBatch>().Query().AsNoTracking()
+                    .FirstOrDefaultAsync(b => b.Id == batchIdForStock, ct);
+                stockOnHand = Math.Max(0, stockBatch?.QuantityAvailable ?? 0m);
+            }
+
+            var needStock = line.ReturnQuantity + line.ReturnFreeQuantity;
+            if (needStock > stockOnHand + 0.0001m)
+                throw new PurchaseReturnException(
+                    $"Insufficient stock for batch {item.BatchNumber}. On hand {stockOnHand:0.##}, need {needStock:0.##}.");
 
             // Value on paid qty. MedWin lines sometimes have LineTotal=0 — fall back to price + GST.
             var lineTotal = Math.Round(UnitReturnValue(item) * line.ReturnQuantity, 2);

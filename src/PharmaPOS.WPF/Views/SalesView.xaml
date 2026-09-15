@@ -377,6 +377,10 @@
                         <DataGridTextColumn Header="Qty" Width="0.45*" MinWidth="44"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" />
+                        <DataGridTextColumn Header="Loose" Width="0.4*" MinWidth="40"
+                                            IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
+                                            Binding="{Binding LooseQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                            ToolTipService.ToolTip="Loose tablets / units from a pack" />
                         <DataGridTextColumn Header="MRP" Width="0.55*" MinWidth="52"
                                             IsReadOnly="{Binding DataContext.CanCreate, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBool}}"
                                             Binding="{Binding Mrp, UpdateSourceTrigger=PropertyChanged, StringFormat=N2}" />

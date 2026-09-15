@@ -62,7 +62,11 @@ public class AccountingService : IAccountingService
 
         if (kind == PartyLedgerKind.Supplier)
         {
-            var dueBySupplier = await ComputeAllSupplierOpenDuesAsync(branchId, ct);
+            // Same net formula as Parties Due column (bill Adjusted + pending return credit).
+            var dueBySupplier = await ComputeAllSupplierOpenDuesAsync(
+                branchId, ct, netOfReturnCredits: true);
+            var unusedCredits = await GetUnusedPurchaseReturnCreditsBySupplierAsync(
+                branchId, supplierIds: null, ct);
 
             var q = _uow.Repository<Supplier>().Query().AsNoTracking()
                 .Where(s => s.Status == EntityStatus.Active);
@@ -74,10 +78,11 @@ public class AccountingService : IAccountingService
             }
             else if (owedOnly)
             {
-                // Customer Dues-style lists: only parties with open dues (avoids Take-before-dues bug).
                 var owedIds = dueBySupplier
                     .Where(kv => kv.Value > 0.009m)
                     .Select(kv => kv.Key)
+                    .Union(unusedCredits.Where(kv => kv.Value > 0.009m).Select(kv => kv.Key))
+                    .Distinct()
                     .ToList();
                 if (owedIds.Count == 0) return [];
                 q = FilterSupplierByIdChunks(q, owedIds);
@@ -87,13 +92,19 @@ public class AccountingService : IAccountingService
                 .Select(s => new { s.Id, s.Name, s.Phone })
                 .ToListAsync(ct);
 
+            var activityIds = owedOnly
+                ? dueBySupplier.Where(kv => kv.Value > 0.009m).Select(kv => kv.Key)
+                    .Union(unusedCredits.Where(kv => kv.Value > 0.009m).Select(kv => kv.Key))
+                    .ToHashSet()
+                : null;
+
             return suppliers
                 .Select(s => new PartyLedgerRowDto(
                     s.Id,
                     s.Name,
                     s.Phone,
                     dueBySupplier.GetValueOrDefault(s.Id)))
-                .Where(s => !owedOnly || s.OutstandingBalance > 0.009m)
+                .Where(s => !owedOnly || (activityIds?.Contains(s.PartyId) ?? false))
                 .OrderByDescending(s => s.OutstandingBalance)
                 .ThenBy(s => s.Name)
                 .Take(500)
@@ -174,10 +185,13 @@ public class AccountingService : IAccountingService
     /// <summary>
     /// Open purchase dues for all suppliers, plus remaining <see cref="Supplier.OpeningBalance"/>.
     /// Outstanding payables are not FY-scoped (prior-year unpaid bills remain due).
+    /// When <paramref name="netOfReturnCredits"/> is true, Return Records settlements and
+    /// unused return credit are applied so the total matches the Parties Due column sum.
     /// </summary>
     private async Task<Dictionary<int, decimal>> ComputeAllSupplierOpenDuesAsync(
         int? branchId,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool netOfReturnCredits = true)
     {
         var q = _uow.Repository<Purchase>().Query().AsNoTracking()
             .Where(p => p.Status != PurchaseStatus.Cancelled
@@ -185,10 +199,22 @@ public class AccountingService : IAccountingService
                         && p.GrandTotal > p.PaidAmount);
         if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
-        var dueByPurchase = await q
-            .GroupBy(p => p.SupplierId)
-            .Select(g => new { SupplierId = g.Key, Due = g.Sum(p => p.GrandTotal - p.PaidAmount) })
-            .ToDictionaryAsync(x => x.SupplierId, x => x.Due, ct);
+        var purchases = await q
+            .Select(p => new { p.Id, p.SupplierId, Due = p.GrandTotal - p.PaidAmount })
+            .ToListAsync(ct);
+
+        var dueBySupplier = new Dictionary<int, decimal>();
+        Dictionary<int, decimal>? adjustedByPurchase = null;
+        if (netOfReturnCredits)
+            adjustedByPurchase = await GetReturnAdjustedByPurchaseIdAsync(branchId, supplierIds: null, ct);
+
+        foreach (var p in purchases)
+        {
+            var adj = adjustedByPurchase?.GetValueOrDefault(p.Id) ?? 0m;
+            var due = p.Due - adj;
+            if (due <= 0.009m) continue;
+            dueBySupplier[p.SupplierId] = dueBySupplier.GetValueOrDefault(p.SupplierId) + due;
+        }
 
         var suppliersQ = _uow.Repository<Supplier>().Query().AsNoTracking()
             .Where(s => s.Status == EntityStatus.Active && s.OpeningBalance > 0.009m);
@@ -199,9 +225,11 @@ public class AccountingService : IAccountingService
             .ToListAsync(ct);
 
         foreach (var row in openings)
-            dueByPurchase[row.Id] = dueByPurchase.GetValueOrDefault(row.Id) + row.OpeningBalance;
+            dueBySupplier[row.Id] = dueBySupplier.GetValueOrDefault(row.Id) + row.OpeningBalance;
 
-        return dueByPurchase;
+        if (netOfReturnCredits)
+            await SubtractUnusedPurchaseReturnCreditsAsync(dueBySupplier, branchId, supplierIds: null, ct);
+        return dueBySupplier;
     }
 
     /// <summary>
@@ -225,10 +253,18 @@ public class AccountingService : IAccountingService
                             && p.GrandTotal > p.PaidAmount);
             if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
 
-            var dueByPurchase = await q
-                .GroupBy(p => p.SupplierId)
-                .Select(g => new { SupplierId = g.Key, Due = g.Sum(p => p.GrandTotal - p.PaidAmount) })
-                .ToDictionaryAsync(x => x.SupplierId, x => x.Due, ct);
+            var purchases = await q
+                .Select(p => new { p.Id, p.SupplierId, Due = p.GrandTotal - p.PaidAmount })
+                .ToListAsync(ct);
+
+            var adjustedByPurchase = await GetReturnAdjustedByPurchaseIdAsync(branchId, ids, ct);
+            var dueByPurchase = new Dictionary<int, decimal>();
+            foreach (var p in purchases)
+            {
+                var due = p.Due - adjustedByPurchase.GetValueOrDefault(p.Id);
+                if (due <= 0.009m) continue;
+                dueByPurchase[p.SupplierId] = dueByPurchase.GetValueOrDefault(p.SupplierId) + due;
+            }
 
             var openings = await _uow.Repository<Supplier>().Query().AsNoTracking()
                 .Where(s => ids.Contains(s.Id) && s.OpeningBalance > 0.009m)
@@ -237,6 +273,7 @@ public class AccountingService : IAccountingService
             foreach (var row in openings)
                 dueByPurchase[row.Id] = dueByPurchase.GetValueOrDefault(row.Id) + row.OpeningBalance;
 
+            await SubtractUnusedPurchaseReturnCreditsAsync(dueByPurchase, branchId, ids, ct);
             return dueByPurchase;
         }
 
@@ -244,6 +281,84 @@ public class AccountingService : IAccountingService
         return supplierIds
             .Where(all.ContainsKey)
             .ToDictionary(id => id, id => all[id]);
+    }
+
+    /// <summary>
+    /// Credit amounts saved in Return Records against a purchase bill number.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> GetReturnAdjustedByPurchaseIdAsync(
+        int? branchId,
+        IReadOnlyList<int>? supplierIds,
+        CancellationToken ct)
+    {
+        // SettledAgainstPurchaseId is the source of truth (Return Records → purchase bill).
+        // Do not require receipt-string heuristics — MedWin refs like "MW-P-355 / 113" are valid.
+        var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+            .Where(r => r.Status == PurchaseReturnStatus.Completed
+                        && r.SettledAgainstPurchaseId != null);
+        if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
+        if (supplierIds is { Count: > 0 })
+            q = q.Where(r => supplierIds.Contains(r.SupplierId));
+
+        return await q
+            .GroupBy(r => r.SettledAgainstPurchaseId!.Value)
+            .Select(g => new { PurchaseId = g.Key, Credit = g.Sum(x => x.CreditAmount) })
+            .ToDictionaryAsync(x => x.PurchaseId, x => x.Credit, ct);
+    }
+
+    /// <summary>
+    /// Unused purchase-return credit by supplier (pending Return Records settlement).
+    /// Returns already settled via receipt # or purchase bill are excluded.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> GetUnusedPurchaseReturnCreditsBySupplierAsync(
+        int? branchId,
+        IReadOnlyList<int>? supplierIds,
+        CancellationToken ct)
+    {
+        var q = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+            .Where(r => r.Status == PurchaseReturnStatus.Completed
+                        && r.CreditAmount > r.CreditAppliedAmount
+                        && (r.SupplierReturnReceiptNumber == null || r.SupplierReturnReceiptNumber == ""));
+        if (branchId.HasValue) q = q.Where(r => r.BranchId == branchId);
+        if (supplierIds is { Count: > 0 })
+            q = q.Where(r => supplierIds.Contains(r.SupplierId));
+
+        return await q
+            .GroupBy(r => r.SupplierId)
+            .Select(g => new
+            {
+                SupplierId = g.Key,
+                Credit = g.Sum(r => r.CreditAmount - r.CreditAppliedAmount)
+            })
+            .ToDictionaryAsync(x => x.SupplierId, x => x.Credit, ct);
+    }
+
+    private static void ApplyUnusedPurchaseReturnCredits(
+        Dictionary<int, decimal> dueBySupplier,
+        IReadOnlyDictionary<int, decimal> unusedCredits)
+    {
+        foreach (var (supplierId, credit) in unusedCredits)
+        {
+            if (credit <= 0.009m) continue;
+            var due = dueBySupplier.GetValueOrDefault(supplierId) - credit;
+            if (due > 0.009m)
+                dueBySupplier[supplierId] = due;
+            else
+                dueBySupplier.Remove(supplierId);
+        }
+    }
+
+    /// <summary>
+    /// Unused purchase-return credit reduces supplier outstanding (MedWin return bills).
+    /// </summary>
+    private async Task SubtractUnusedPurchaseReturnCreditsAsync(
+        Dictionary<int, decimal> dueBySupplier,
+        int? branchId,
+        IReadOnlyList<int>? supplierIds,
+        CancellationToken ct)
+    {
+        var credits = await GetUnusedPurchaseReturnCreditsBySupplierAsync(branchId, supplierIds, ct);
+        ApplyUnusedPurchaseReturnCredits(dueBySupplier, credits);
     }
 
     /// <summary>
@@ -397,19 +512,65 @@ public class AccountingService : IAccountingService
                             && p.Status != PurchaseStatus.Cancelled
                             && p.Status != PurchaseStatus.Draft);
             if (branchId.HasValue) q = q.Where(p => p.BranchId == branchId);
-            if (openOnly) q = q.Where(p => p.GrandTotal > p.PaidAmount);
 
-            var bills = await q
+            var purchaseRows = await q
                 .OrderByDescending(p => p.InvoiceDate)
-                .Select(p => new PartyBillRowDto(
+                .Select(p => new
+                {
                     p.Id,
                     p.InvoiceNumber,
                     p.InvoiceDate,
                     p.GrandTotal,
                     p.PaidAmount,
-                    p.GrandTotal - p.PaidAmount,
-                    p.SupplierInvoiceNumber))
+                    p.SupplierInvoiceNumber
+                })
                 .ToListAsync(ct);
+
+            var returnQuery = _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+                .Where(r => r.SupplierId == partyId
+                            && r.Status == PurchaseReturnStatus.Completed);
+            if (branchId.HasValue) returnQuery = returnQuery.Where(r => r.BranchId == branchId);
+
+            var returnRows = await returnQuery
+                .OrderByDescending(r => r.ReturnDate)
+                .ThenByDescending(r => r.Id)
+                .Select(r => new
+                {
+                    r.Id,
+                    r.ReturnNumber,
+                    r.ReturnDate,
+                    r.CreditAmount,
+                    r.CreditAppliedAmount,
+                    r.SupplierReturnReceiptNumber,
+                    r.ReceiptSettlementKind,
+                    r.SettledAgainstPurchaseId,
+                    r.PurchaseId
+                })
+                .ToListAsync(ct);
+
+            var adjustedByPurchase = returnRows
+                .Where(r => r.SettledAgainstPurchaseId is int)
+                .GroupBy(r => r.SettledAgainstPurchaseId!.Value)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.CreditAmount));
+
+            var bills = purchaseRows
+                .Select(p =>
+                {
+                    adjustedByPurchase.TryGetValue(p.Id, out var adjusted);
+                    var rawDue = p.GrandTotal - p.PaidAmount - adjusted;
+                    var due = rawDue > 0.009m ? rawDue : 0m;
+                    return new PartyBillRowDto(
+                        p.Id,
+                        p.InvoiceNumber,
+                        p.InvoiceDate,
+                        p.GrandTotal,
+                        p.PaidAmount,
+                        due,
+                        p.SupplierInvoiceNumber,
+                        false,
+                        adjusted);
+                })
+                .ToList();
 
             var supplier = await _uow.Repository<Supplier>().Query().AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == partyId, ct);
@@ -421,7 +582,70 @@ public class AccountingService : IAccountingService
                     supplier.CreatedAtUtc == default ? _clock.Today : supplier.CreatedAtUtc,
                     supplier.OpeningBalance,
                     0m,
-                    supplier.OpeningBalance));
+                    supplier.OpeningBalance,
+                    null,
+                    false,
+                    0m));
+            }
+
+            Dictionary<int, string>? purchaseInvoiceById = null;
+            var purchaseIds = returnRows
+                .Where(r => r.PurchaseId is int)
+                .Select(r => r.PurchaseId!.Value)
+                .Distinct()
+                .ToList();
+            if (purchaseIds.Count > 0)
+            {
+                purchaseInvoiceById = await _uow.Repository<Purchase>().Query().AsNoTracking()
+                    .Where(p => purchaseIds.Contains(p.Id))
+                    .Select(p => new { p.Id, p.InvoiceNumber })
+                    .ToDictionaryAsync(p => p.Id, p => p.InvoiceNumber, ct);
+            }
+
+            var returnCredits = returnRows
+                .Select(r =>
+                {
+                    var hasReceipt = PurchaseReturn.IsRealSupplierReceiptNumber(r.SupplierReturnReceiptNumber);
+                    var settledOnBill = r.SettledAgainstPurchaseId is int;
+                    var settledOnReceipt = !settledOnBill && hasReceipt;
+
+                    // Receipt #: Adjusted on the return only (no bill).
+                    // Bill settlement: Adjusted on the bill row AND shown on the return so
+                    // rows like "MW-P-355 / 113" are visibly marked as adjusted.
+                    var adjusted = (settledOnReceipt || settledOnBill) ? r.CreditAmount : 0m;
+                    decimal due;
+                    if (settledOnBill || settledOnReceipt)
+                        due = 0m;
+                    else
+                    {
+                        var remaining = r.CreditAmount - r.CreditAppliedAmount;
+                        due = remaining > 0.009m ? -remaining : 0m;
+                    }
+
+                    string? linkedInvoice = null;
+                    if (r.PurchaseId is int pid)
+                        purchaseInvoiceById?.TryGetValue(pid, out linkedInvoice);
+
+                    return new PartyBillRowDto(
+                        -r.Id,
+                        r.ReturnNumber,
+                        r.ReturnDate,
+                        r.CreditAmount,
+                        r.CreditAppliedAmount,
+                        due,
+                        r.SupplierReturnReceiptNumber ?? linkedInvoice,
+                        true,
+                        adjusted);
+                })
+                .ToList();
+            if (returnCredits.Count > 0)
+                bills.AddRange(returnCredits);
+
+            if (openOnly)
+            {
+                // Keep purchase-return rows visible even when Due/Adjusted settle to zero,
+                // so Enter/double-click can open the return document.
+                bills = bills.Where(b => b.IsPurchaseReturn || Math.Abs(b.BalanceDue) > 0.009m).ToList();
             }
 
             return bills;
@@ -470,7 +694,9 @@ public class AccountingService : IAccountingService
                     s.InvoiceDate,
                     s.GrandTotal,
                     s.PaidAmount,
-                    due > 0 ? due : 0m);
+                    due > 0 ? due : 0m,
+                    null,
+                    false);
             })
             .Where(b => !openOnly || b.BalanceDue > 0)
             .ToList();
@@ -512,7 +738,8 @@ public class AccountingService : IAccountingService
             bills.Count,
             pending.Count,
             bills.Sum(b => b.GrandTotal),
-            pending.Sum(b => b.BalanceDue),
+            // Net outstanding = sum of Due (purchase dues minus return credits).
+            bills.Sum(b => b.BalanceDue),
             pending.Count > 0 ? pending.Min(b => b.InvoiceDate) : null,
             pending.Count > 0 ? pending.Max(b => b.InvoiceDate) : null);
     }

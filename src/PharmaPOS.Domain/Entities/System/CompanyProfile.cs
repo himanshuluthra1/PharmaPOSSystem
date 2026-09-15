@@ -48,6 +48,12 @@ public class CompanyProfile : BaseEntity
     /// </summary>
     public int? ViewFinancialYearStartYear { get; set; }
 
+    /// <summary>When true, Dashboard shows Today's Sales KPI.</summary>
+    public bool ShowDashboardTodaySales { get; set; } = true;
+
+    /// <summary>When true, Dashboard shows Monthly Sales section.</summary>
+    public bool ShowDashboardMonthlySales { get; set; } = true;
+
     // Sale return policy (configurable).
     public int SaleReturnAllowedDays { get; set; } = 30;
     public decimal SaleReturnHighValueThreshold { get; set; } = 5000m;

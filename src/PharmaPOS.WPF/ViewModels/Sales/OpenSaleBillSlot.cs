@@ -86,6 +86,8 @@ internal sealed class ParkedCartLine
     public decimal AvailableStock { get; init; }
     public string? LocationLabel { get; init; }
     public decimal Quantity { get; init; }
+    public decimal LooseQuantity { get; init; }
+    public int UnitsPerPack { get; init; } = 1;
     public decimal UnitPrice { get; init; }
     public decimal DiscountPercent { get; init; }
     public decimal OriginalQuantity { get; init; }

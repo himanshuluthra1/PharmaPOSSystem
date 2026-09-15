@@ -20,6 +20,8 @@ public class SaleItem : BaseEntity
     public DateTime? ExpiryDate { get; set; }
 
     public decimal Quantity { get; set; }
+    /// <summary>Loose units sold from a pack (tablets etc.). Stock deduction uses packs + loose/UnitsPerPack.</summary>
+    public decimal LooseQuantity { get; set; }
     public decimal Mrp { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal DiscountPercent { get; set; }

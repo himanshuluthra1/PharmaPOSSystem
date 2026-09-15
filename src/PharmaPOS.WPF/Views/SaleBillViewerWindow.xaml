@@ -12,8 +12,16 @@
     <DockPanel>
         <materialDesign:ColorZone DockPanel.Dock="Top" Mode="PrimaryMid" Padding="12,8">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Close" Click="CloseButton_Click"
-                        Style="{StaticResource MaterialDesignFlatLightButton}" Padding="12,4" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Print" Click="PrintButton_Click"
+                            Style="{StaticResource MaterialDesignRaisedLightButton}" Padding="12,4"
+                            ToolTip="Print invoice in invoice format" />
+                    <Button Content="Download" Click="PdfButton_Click" Margin="8,0,0,0"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Padding="12,4"
+                            ToolTip="Download invoice PDF" />
+                    <Button Content="Close" Click="CloseButton_Click" Margin="8,0,0,0"
+                            Style="{StaticResource MaterialDesignFlatLightButton}" Padding="12,4" />
+                </StackPanel>
                 <StackPanel>
                     <TextBlock Text="Sale Invoice" FontSize="16" FontWeight="SemiBold" />
                     <TextBlock Opacity="0.9" FontSize="12">
@@ -30,8 +38,16 @@
         <Border DockPanel.Dock="Bottom" Padding="16,12" BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource MaterialDesignDivider}">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="Close" IsCancel="True" Click="CloseButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}" Padding="20,8" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Print" Click="PrintButton_Click"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Padding="16,8"
+                            ToolTip="Print invoice in invoice format" />
+                    <Button Content="Download" Click="PdfButton_Click" Margin="8,0,0,0"
+                            Style="{StaticResource MaterialDesignOutlinedButton}" Padding="16,8"
+                            ToolTip="Download invoice PDF" />
+                    <Button Content="Close" IsCancel="True" Click="CloseButton_Click" Margin="8,0,0,0"
+                            Style="{StaticResource MaterialDesignRaisedButton}" Padding="20,8" />
+                </StackPanel>
                 <UniformGrid Columns="4" HorizontalAlignment="Left">
                     <StackPanel Margin="0,0,24,0">
                         <TextBlock Text="Grand Total" Style="{StaticResource FieldCaption}" />

@@ -57,7 +57,8 @@ export default async function StockPage({
           { key: "batch", label: "Batch" },
           { key: "expiry", label: "Expiry" },
           { key: "qty", label: "Qty", className: "text-right" },
-          { key: "value", label: "Value", className: "text-right" },
+          { key: "value", label: "Cost value", className: "text-right" },
+          { key: "mrpValue", label: "MRP value", className: "text-right" },
           { key: "rack", label: "Rack" },
         ]}
         rows={rows.map((r) => ({
@@ -77,6 +78,7 @@ export default async function StockPage({
           value: inr(
             Number(r.quantity_available) * Number(r.purchase_price)
           ),
+          mrpValue: inr(Number(r.quantity_available) * Number(r.mrp)),
           rack: String(r.rack_number || "—"),
         }))}
       />

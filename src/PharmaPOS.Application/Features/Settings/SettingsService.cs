@@ -74,14 +74,18 @@ public class SettingsService : ISettingsService
                 AllowEditSalesBills = c.AllowEditSalesBills,
                 AllowEditPurchaseBills = c.AllowEditPurchaseBills,
                 InvoicePaperSize = c.InvoicePaperSize,
-                ViewFinancialYearStartYear = c.ViewFinancialYearStartYear
+                ViewFinancialYearStartYear = c.ViewFinancialYearStartYear,
+                ShowDashboardTodaySales = c.ShowDashboardTodaySales,
+                ShowDashboardMonthlySales = c.ShowDashboardMonthlySales
             })
             .FirstOrDefaultAsync(ct);
 
         return prefs ?? new AppPreferencesDto
         {
             NearExpiryDays = AppConstants.Config.NearExpiryDays,
-            DefaultLowStockThreshold = AppConstants.Config.DefaultLowStockThreshold
+            DefaultLowStockThreshold = AppConstants.Config.DefaultLowStockThreshold,
+            ShowDashboardTodaySales = true,
+            ShowDashboardMonthlySales = true
         };
     }
 
@@ -114,6 +118,8 @@ public class SettingsService : ISettingsService
         entity.AllowEditPurchaseBills = dto.AllowEditPurchaseBills;
         entity.InvoicePaperSize = dto.InvoicePaperSize;
         entity.ViewFinancialYearStartYear = dto.ViewFinancialYearStartYear;
+        entity.ShowDashboardTodaySales = dto.ShowDashboardTodaySales;
+        entity.ShowDashboardMonthlySales = dto.ShowDashboardMonthlySales;
         _uow.Repository<CompanyProfile>().Update(entity);
         await _uow.SaveChangesAsync(ct);
         return Result.Success();

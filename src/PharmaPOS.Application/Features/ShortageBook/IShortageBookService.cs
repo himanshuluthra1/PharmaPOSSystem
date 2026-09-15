@@ -59,6 +59,9 @@ public interface IShortageBookService
 
     Task<Result> CancelAsync(int id, int? branchId, CancellationToken ct = default);
 
+    /// <summary>Soft-deletes a shortage book row so it no longer appears in the grid.</summary>
+    Task<Result> DeleteAsync(int id, int? branchId, CancellationToken ct = default);
+
     Task MarkOrderedAsync(
         IReadOnlyDictionary<int, int> medicineIdToPurchaseOrderId, int? branchId, CancellationToken ct = default);
 
@@ -66,4 +69,16 @@ public interface IShortageBookService
         IEnumerable<int> medicineIds, int? branchId, CancellationToken ct = default);
 
     Task<decimal> GetOnHandQuantityAsync(int medicineId, int? branchId, CancellationToken ct = default);
+
+    /// <summary>
+    /// If on-hand quantity is below <paramref name="threshold"/>, upsert an open shortage entry
+    /// requesting enough to bring stock back to the threshold.
+    /// </summary>
+    Task EnsureLowStockAsync(
+        int medicineId,
+        int? branchId,
+        int threshold,
+        ShortageSource source,
+        string? recordedBy,
+        CancellationToken ct = default);
 }

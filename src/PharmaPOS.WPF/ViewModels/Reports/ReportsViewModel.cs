@@ -832,8 +832,12 @@ public class ReportsViewModel : ObservableObject
             ReportKind.Sales or ReportKind.Purchases or ReportKind.SupplierPayments => option switch
             {
                 "due" => ToDecimal(Get(row, "BalanceDue")) > 0,
-                "unpaid" => ToDecimal(Get(row, "PaidAmount")) <= 0 && ToDecimal(Get(row, "BalanceDue")) > 0,
-                "partial" => ToDecimal(Get(row, "PaidAmount")) > 0 && ToDecimal(Get(row, "BalanceDue")) > 0,
+                "unpaid" => ToDecimal(Get(row, "PaidAmount")) <= 0
+                            && ToDecimal(Get(row, "AdjustedAmount")) <= 0
+                            && ToDecimal(Get(row, "BalanceDue")) > 0,
+                "partial" => (ToDecimal(Get(row, "PaidAmount")) > 0
+                              || ToDecimal(Get(row, "AdjustedAmount")) > 0)
+                             && ToDecimal(Get(row, "BalanceDue")) > 0,
                 "paid" => ToDecimal(Get(row, "BalanceDue")) <= 0,
                 _ => true
             },
@@ -978,6 +982,10 @@ public class ReportsViewModel : ObservableObject
             _ => discount
         };
 
+        var adjustedPayments = SelectedReport.Kind == ReportKind.SupplierPayments
+            ? SumKey("AdjustedAmount")
+            : 0m;
+
         var totalSource = _allRows.Count;
         Summary = new ReportSummaryDto
         {
@@ -994,7 +1002,7 @@ public class ReportsViewModel : ObservableObject
                     : SelectedReport.Kind == ReportKind.ScheduleRegister
                         ? $"{count} line(s) — total qty {amount:0.##}"
                         : SelectedReport.Kind == ReportKind.SupplierPayments
-                            ? $"{count} bill(s) — paid {tax:N2} · pending {discount:N2}"
+                            ? $"{count} bill(s) — paid {tax:N2} · adjusted {adjustedPayments:N2} · pending {discount:N2}"
                         : ShowGstReturnExport
                             ? $"{count} GST line(s) — taxable {discount:N2} · tax {tax:N2}"
                             : $"{count} record(s) — total {amount:N2}"

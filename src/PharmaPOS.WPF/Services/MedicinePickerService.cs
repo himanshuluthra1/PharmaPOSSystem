@@ -174,14 +174,17 @@ public class MedicinePickerService : IMedicinePickerService
             medicine.Name,
             medicine.DefaultDiscountPercent,
             branchId,
-            medicine.LocationLabel);
+            medicine.LocationLabel,
+            unitsPerPack: SaleLooseMath.ResolveUnitsPerPack(
+                medicine.UnitsPerPack, medicine.PackLabel, medicine.PackLabel),
+            packLabel: medicine.PackLabel);
 
     private static async Task<MedicineBatchSelection?> PickBatchForSaleAsync(
-        ISalesService salesService, int medicineId, string medicineName, decimal defaultDiscountPercent, int? branchId, string? locationLabel)
+        ISalesService salesService, int medicineId, string medicineName, decimal defaultDiscountPercent, int? branchId, string? locationLabel, int unitsPerPack = 1, string? packLabel = null)
     {
         var batches = await salesService.GetBatchesAsync(medicineId, branchId);
         if (batches.Count == 0) return null;
-        return PickBatchFromList(medicineId, medicineName, defaultDiscountPercent, batches, locationLabel);
+        return PickBatchFromList(medicineId, medicineName, defaultDiscountPercent, batches, locationLabel, unitsPerPack, packLabel);
     }
 
     private static MedicineBatchSelection? PickBatchFromList(
@@ -189,7 +192,9 @@ public class MedicinePickerService : IMedicinePickerService
         string medicineName,
         decimal defaultDiscountPercent,
         IReadOnlyList<BatchLookupDto> batches,
-        string? locationFallback = null)
+        string? locationFallback = null,
+        int unitsPerPack = 1,
+        string? packLabel = null)
     {
         BatchLookupDto batch;
         if (batches.Count == 1)
@@ -208,6 +213,7 @@ public class MedicinePickerService : IMedicinePickerService
             batch = batchVm.SelectedBatch;
         }
 
+        var resolvedUpp = SaleLooseMath.ResolveUnitsPerPack(unitsPerPack, packLabel, packLabel);
         return new MedicineBatchSelection(
             medicineId,
             batch.BatchId,
@@ -219,6 +225,8 @@ public class MedicinePickerService : IMedicinePickerService
             batch.SellingPrice > 0 ? batch.SellingPrice : batch.Mrp,
             batch.QuantityAvailable,
             defaultDiscountPercent,
-            batch.LocationLabel ?? locationFallback);
+            batch.LocationLabel ?? locationFallback,
+            resolvedUpp,
+            packLabel);
     }
 }

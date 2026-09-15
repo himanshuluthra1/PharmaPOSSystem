@@ -92,12 +92,32 @@ public partial class ReportsService : IReportsService
             })
             .ToListAsync(ct);
 
+        // Return Records bill settlements (same Adjusted source as Parties / Purchase Payments).
+        var purchaseIds = raw.Select(p => p.Id).ToList();
+        var adjustedByPurchase = new Dictionary<int, decimal>();
+        if (purchaseIds.Count > 0)
+        {
+            var returnAdj = await _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+                .Where(r => r.Status == PurchaseReturnStatus.Completed
+                            && r.SettledAgainstPurchaseId != null
+                            && purchaseIds.Contains(r.SettledAgainstPurchaseId.Value))
+                .GroupBy(r => r.SettledAgainstPurchaseId!.Value)
+                .Select(g => new { PurchaseId = g.Key, Credit = g.Sum(x => x.CreditAmount) })
+                .ToListAsync(ct);
+            adjustedByPurchase = returnAdj.ToDictionary(x => x.PurchaseId, x => x.Credit);
+        }
+
         var rows = raw.Select(p =>
         {
+            adjustedByPurchase.TryGetValue(p.Id, out var settledAdj);
+            // Prefer live Return Records total; fall back to purchase-time ReturnCreditApplied.
+            var adjusted = settledAdj > 0.009m ? settledAdj : p.ReturnCreditApplied;
             var cashPaid = p.PaidAmount > p.ReturnCreditApplied
                 ? p.PaidAmount - p.ReturnCreditApplied
                 : 0m;
-            var netDue = p.GrandTotal > p.PaidAmount ? p.GrandTotal - p.PaidAmount : 0m;
+            // PaidAmount is cash/bank only for Return Records settlements (not increased on attach).
+            var rawDue = p.GrandTotal - p.PaidAmount - adjusted;
+            var netDue = rawDue > 0.009m ? rawDue : 0m;
             return new PurchaseReportRowDto(
                 p.Id,
                 p.InvoiceNumber,
@@ -112,7 +132,7 @@ public partial class ReportsService : IReportsService
                 p.GrandTotal,
                 p.PaidAmount,
                 cashPaid,
-                p.ReturnCreditApplied,
+                adjusted,
                 netDue,
                 FormatPurchaseDueReason(p.PartialPaymentReason, p.PartialPaymentNotes, p.LinkedReturnNumber, netDue));
         }).ToList();

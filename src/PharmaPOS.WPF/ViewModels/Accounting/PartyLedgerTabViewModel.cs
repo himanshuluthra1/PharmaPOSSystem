@@ -22,19 +22,25 @@ public sealed class PartyBillSettleLineViewModel : ObservableObject
         TransactionId = bill.TransactionId;
         InvoiceNumber = bill.InvoiceNumber;
         SupplierBillNumber = bill.SupplierBillNumber;
+        InvoiceDate = bill.InvoiceDate;
         InvoiceDateLabel = bill.InvoiceDateLabel;
         GrandTotal = bill.GrandTotal;
         BalanceDue = bill.BalanceDue;
-        CanSelect = bill.BalanceDue > 0.009m;
+        AdjustedAmount = bill.AdjustedAmount;
+        IsPurchaseReturn = bill.IsPurchaseReturn;
+        CanSelect = !bill.IsPurchaseReturn && bill.BalanceDue > 0.009m;
     }
 
     public PartyBillRowDto Bill { get; }
     public int TransactionId { get; }
     public string InvoiceNumber { get; }
     public string? SupplierBillNumber { get; }
+    public DateTime InvoiceDate { get; }
     public string InvoiceDateLabel { get; }
     public decimal GrandTotal { get; }
+    public decimal AdjustedAmount { get; }
     public decimal BalanceDue { get; }
+    public bool IsPurchaseReturn { get; }
     public bool CanSelect { get; }
 
     public bool IsSelected
@@ -58,7 +64,7 @@ public sealed class PartyBillSettleLineViewModel : ObservableObject
         get => _applyAmount;
         set
         {
-            var clamped = Math.Clamp(Math.Round(value, 2), 0m, BalanceDue);
+            var clamped = Math.Clamp(Math.Round(value, 2), 0m, Math.Max(0m, BalanceDue));
             if (!SetProperty(ref _applyAmount, clamped)) return;
             if (clamped > 0 && !_isSelected && CanSelect)
                 SetProperty(ref _isSelected, true, nameof(IsSelected));
@@ -72,7 +78,7 @@ public sealed class PartyBillSettleLineViewModel : ObservableObject
     public void SetApplySilent(decimal amount)
     {
         _suppressCallback = true;
-        var clamped = Math.Clamp(Math.Round(amount, 2), 0m, BalanceDue);
+        var clamped = Math.Clamp(Math.Round(amount, 2), 0m, Math.Max(0m, BalanceDue));
         _applyAmount = clamped;
         OnPropertyChanged(nameof(ApplyAmount));
         if (clamped > 0 && !_isSelected && CanSelect)
@@ -101,7 +107,8 @@ public class PartyLedgerTabViewModel : ObservableObject
     private PartyLedgerRowDto? _selectedParty;
     private string? _statusMessage;
     private bool _isBusy;
-    private bool _includeSettledBills;
+    private bool _showUnpaidBills = true;
+    private bool _showPaidBills = true;
     private PartyBillsSummaryDto _selectedPartySummary = PartyBillsSummaryDto.Empty;
     private decimal _totalReceivables;
     private decimal _totalPayables;
@@ -178,12 +185,22 @@ public class PartyLedgerTabViewModel : ObservableObject
         }
     }
 
-    public bool IncludeSettledBills
+    public bool ShowUnpaidBills
     {
-        get => _includeSettledBills;
+        get => _showUnpaidBills;
         set
         {
-            if (!SetProperty(ref _includeSettledBills, value)) return;
+            if (!SetProperty(ref _showUnpaidBills, value)) return;
+            _ = RefreshAsync();
+        }
+    }
+
+    public bool ShowPaidBills
+    {
+        get => _showPaidBills;
+        set
+        {
+            if (!SetProperty(ref _showPaidBills, value)) return;
             _ = RefreshAsync();
         }
     }
@@ -306,7 +323,7 @@ public class PartyLedgerTabViewModel : ObservableObject
             using (var scope = _scopeFactory.CreateScope())
             {
                 var accounting = scope.ServiceProvider.GetRequiredService<IAccountingService>();
-                rows = await accounting.ListPartyLedgersAsync(kind, term, _branchId, owedOnly: !IncludeSettledBills)
+                rows = await accounting.ListPartyLedgersAsync(kind, term, _branchId, owedOnly: !ShowPaidBills)
                     .ConfigureAwait(true);
                 acctSummary = await accounting.GetSummaryAsync(_branchId).ConfigureAwait(true);
             }
@@ -520,8 +537,15 @@ public class PartyLedgerTabViewModel : ObservableObject
             using var scope = _scopeFactory.CreateScope();
             var accounting = scope.ServiceProvider.GetRequiredService<IAccountingService>();
             var rows = await accounting.ListPartyBillsAsync(
-                    kind, party.PartyId, _branchId, openOnly: !IncludeSettledBills)
+                    kind, party.PartyId, _branchId, openOnly: !ShowPaidBills)
                 .ConfigureAwait(true);
+
+            if (!ShowUnpaidBills)
+                rows = rows.Where(b => b.IsPurchaseReturn || Math.Abs(b.BalanceDue) <= 0.009m).ToList();
+            if (!ShowPaidBills)
+                rows = rows.Where(b => b.IsPurchaseReturn || Math.Abs(b.BalanceDue) > 0.009m).ToList();
+            if (!ShowUnpaidBills && !ShowPaidBills)
+                rows = rows.Where(b => b.IsPurchaseReturn).ToList();
 
             foreach (var row in rows)
             {
@@ -532,6 +556,7 @@ public class PartyLedgerTabViewModel : ObservableObject
             SelectedPartySummary = await accounting.GetPartyBillsSummaryAsync(
                     kind, party.PartyId, _branchId)
                 .ConfigureAwait(true);
+            SyncSelectedPartyOutstanding(SelectedPartySummary.PendingAmount);
             NotifySettlementProps();
         }
         catch (Exception ex)
@@ -539,6 +564,29 @@ public class PartyLedgerTabViewModel : ObservableObject
             StatusMessage = $"Could not load bills: {ex.Message}";
             SelectedPartySummary = PartyBillsSummaryDto.Empty;
         }
+    }
+
+    /// <summary>Keep left-list Outstanding in lockstep with sum of Due on the RHS grid.</summary>
+    private void SyncSelectedPartyOutstanding(decimal outstanding)
+    {
+        if (SelectedParty is null) return;
+        var rounded = Math.Round(outstanding, 2);
+        if (Math.Abs(SelectedParty.OutstandingBalance - rounded) < 0.005m) return;
+
+        var updated = SelectedParty with { OutstandingBalance = rounded };
+        var idx = -1;
+        for (var i = 0; i < Parties.Count; i++)
+        {
+            if (Parties[i].PartyId != updated.PartyId) continue;
+            idx = i;
+            break;
+        }
+
+        if (idx >= 0)
+            Parties[idx] = updated;
+
+        _selectedParty = updated;
+        OnPropertyChanged(nameof(SelectedParty));
     }
 
     private void OnBillLineChanged()
@@ -577,9 +625,9 @@ public class PartyLedgerTabViewModel : ObservableObject
             var remaining = PaymentAmount;
             foreach (var line in Bills)
             {
-                if (!line.IsSelected || !line.CanSelect)
+                if (line.IsPurchaseReturn || !line.IsSelected || !line.CanSelect)
                 {
-                    if (!line.IsSelected)
+                    if (!line.IsPurchaseReturn && !line.IsSelected)
                         line.SetApplySilent(0m);
                     continue;
                 }
@@ -600,9 +648,9 @@ public class PartyLedgerTabViewModel : ObservableObject
         var remaining = PaymentAmount;
         foreach (var line in Bills)
         {
-            if (!line.IsSelected || !line.CanSelect)
+            if (line.IsPurchaseReturn || !line.IsSelected || !line.CanSelect)
             {
-                if (!line.IsSelected)
+                if (!line.IsPurchaseReturn && !line.IsSelected)
                     line.SetApplySilent(0m);
                 continue;
             }

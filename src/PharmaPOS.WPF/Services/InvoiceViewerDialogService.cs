@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using PharmaPOS.Application.Common.Abstractions;
+using PharmaPOS.Application.Features.PurchaseReturns;
 using PharmaPOS.Application.Features.Purchases;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.WPF.Views;
@@ -9,8 +10,9 @@ namespace PharmaPOS.WPF.Services;
 /// <summary>Opens sale/purchase invoices in a modal popup over the current screen.</summary>
 public interface IInvoiceViewerDialogService
 {
-    Task ShowSaleAsync(int saleId);
+    Task ShowSaleAsync(int saleId, System.Windows.Window? owner = null);
     Task ShowPurchaseAsync(int purchaseId);
+    Task ShowPurchaseReturnAsync(int purchaseReturnId);
 }
 
 public sealed class InvoiceViewerDialogService : IInvoiceViewerDialogService
@@ -29,7 +31,7 @@ public sealed class InvoiceViewerDialogService : IInvoiceViewerDialogService
         _dialog = dialog;
     }
 
-    public async Task ShowSaleAsync(int saleId)
+    public async Task ShowSaleAsync(int saleId, System.Windows.Window? owner = null)
     {
         if (saleId <= 0) return;
 
@@ -46,9 +48,10 @@ public sealed class InvoiceViewerDialogService : IInvoiceViewerDialogService
         var receipt = result.Value;
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            var window = new SaleBillViewerWindow(receipt)
+            var print = scope.ServiceProvider.GetService<IInvoicePrintService>();
+            var window = new SaleBillViewerWindow(receipt, print)
             {
-                Owner = System.Windows.Application.Current.MainWindow
+                Owner = owner ?? System.Windows.Application.Current.MainWindow
             };
             window.ShowDialog();
         });
@@ -72,6 +75,31 @@ public sealed class InvoiceViewerDialogService : IInvoiceViewerDialogService
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
             var window = new PurchaseBillViewerWindow(purchase)
+            {
+                Owner = System.Windows.Application.Current.MainWindow
+            };
+            window.ShowDialog();
+        });
+    }
+
+    public async Task ShowPurchaseReturnAsync(int purchaseReturnId)
+    {
+        if (purchaseReturnId <= 0) return;
+
+        var branchId = _currentUser.CurrentUser?.BranchId;
+        using var scope = _scopeFactory.CreateScope();
+        var returns = scope.ServiceProvider.GetRequiredService<IPurchaseReturnService>();
+        var result = await returns.GetReturnDetailsAsync(purchaseReturnId, branchId);
+        if (result.IsFailure || result.Value is null)
+        {
+            _dialog.ShowError(result.Error ?? "Could not load the purchase return.");
+            return;
+        }
+
+        var detail = result.Value;
+        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            var window = new PurchaseReturnViewerWindow(detail)
             {
                 Owner = System.Windows.Application.Current.MainWindow
             };

@@ -100,15 +100,15 @@ public class InvoicePrintService : IInvoicePrintService
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(0, 0, 0, 2)
         });
-        if (!string.IsNullOrWhiteSpace(r.CompanyAddress))
-            doc.Blocks.Add(CenterMuted(r.CompanyAddress, layout.FontSize - 1));
-        var gstLine = string.Join("  ", new[]
-        {
-            string.IsNullOrWhiteSpace(r.CompanyPhone) ? null : "Ph " + r.CompanyPhone,
-            string.IsNullOrWhiteSpace(r.CompanyGst) ? null : "GST " + r.CompanyGst
-        }.Where(s => s is not null));
-        if (gstLine.Length > 0)
-            doc.Blocks.Add(CenterMuted(gstLine, layout.FontSize - 1));
+        doc.Blocks.Add(CenterMuted(
+            string.IsNullOrWhiteSpace(r.CompanyAddress) ? "Address: —" : r.CompanyAddress!,
+            layout.FontSize - 1));
+        doc.Blocks.Add(CenterMuted(
+            $"Mobile: {(string.IsNullOrWhiteSpace(r.CompanyPhone) ? "—" : r.CompanyPhone)}",
+            layout.FontSize - 1));
+        doc.Blocks.Add(CenterMuted(
+            $"GSTIN: {(string.IsNullOrWhiteSpace(r.CompanyGst) ? "—" : r.CompanyGst)}",
+            layout.FontSize - 1));
 
         doc.Blocks.Add(new Paragraph(new Run("TAX INVOICE"))
         {
@@ -135,7 +135,7 @@ public class InvoicePrintService : IInvoicePrintService
                 Margin = new Thickness(0, 4, 0, 0),
                 FontWeight = FontWeights.SemiBold
             });
-            var detail = $"{l.Quantity:0.##} x {l.UnitPrice.ToString("0.00", Inr)}";
+            var detail = $"{l.QuantityLabel} x {l.UnitPrice.ToString("0.00", Inr)}";
             if (!string.IsNullOrWhiteSpace(l.BatchNumber))
                 detail = $"{l.BatchNumber} {l.ExpiryDate:MM/yy}  {detail}";
             doc.Blocks.Add(new Paragraph
@@ -290,9 +290,8 @@ public class InvoicePrintService : IInvoicePrintService
             "PharmaPOS", "SharedBills");
         Directory.CreateDirectory(dir);
 
-        var safeInvoice = Regex.Replace(receipt.InvoiceNumber ?? "bill", @"[^a-zA-Z0-9._-]+", "_");
-        if (string.IsNullOrWhiteSpace(safeInvoice)) safeInvoice = "bill";
-        var path = Path.Combine(dir, $"{safeInvoice}_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+        var fileName = InvoicePageLayout.BuildPdfFileName(receipt.InvoiceNumber, receipt.CustomerName);
+        var path = Path.Combine(dir, Path.GetFileNameWithoutExtension(fileName) + $"_{DateTime.Now:yyyyMMddHHmmss}.pdf");
 
         var layout = InvoicePageLayout.For(paperSize ?? receipt.InvoicePaperSize);
         var doc = BuildDocument(receipt, layout.Size);
@@ -892,6 +891,19 @@ public class InvoicePrintService : IInvoicePrintService
         return cell;
     }
 
+    private static Paragraph BuildCompanyContactBlock(
+        string? address, string? phone, string? gst, string? drugLicense, double fontSize)
+    {
+        var sub = new Paragraph { Margin = new Thickness(0, 2, 0, 0), FontSize = fontSize };
+        sub.Inlines.Add(new Run($"Address: {(string.IsNullOrWhiteSpace(address) ? "—" : address.Trim())}\n"));
+        sub.Inlines.Add(new Run($"Mobile: {(string.IsNullOrWhiteSpace(phone) ? "—" : phone.Trim())}\n"));
+        var gstLine = $"GSTIN: {(string.IsNullOrWhiteSpace(gst) ? "—" : gst.Trim())}";
+        if (!string.IsNullOrWhiteSpace(drugLicense))
+            gstLine += $"   |   DL: {drugLicense.Trim()}";
+        sub.Inlines.Add(new Run(gstLine));
+        return sub;
+    }
+
     private static Block BuildHeader(SaleReceiptDto r, InvoicePageLayout layout)
     {
         var section = new Section();
@@ -904,14 +916,7 @@ public class InvoicePrintService : IInvoicePrintService
             Margin = new Thickness(0)
         });
 
-        var sub = new Paragraph { Margin = new Thickness(0, 2, 0, 0), FontSize = 11 };
-        if (!string.IsNullOrWhiteSpace(r.CompanyAddress)) sub.Inlines.Add(new Run(r.CompanyAddress + "\n"));
-        var line3 = new List<string>();
-        if (!string.IsNullOrWhiteSpace(r.CompanyPhone)) line3.Add("Ph: " + r.CompanyPhone);
-        if (!string.IsNullOrWhiteSpace(r.CompanyGst)) line3.Add("GSTIN: " + r.CompanyGst);
-        if (!string.IsNullOrWhiteSpace(r.CompanyDrugLicense)) line3.Add("DL: " + r.CompanyDrugLicense);
-        if (line3.Count > 0) sub.Inlines.Add(new Run(string.Join("   |   ", line3)));
-        section.Blocks.Add(sub);
+        section.Blocks.Add(BuildCompanyContactBlock(r.CompanyAddress, r.CompanyPhone, r.CompanyGst, r.CompanyDrugLicense, 11));
 
         section.Blocks.Add(new Paragraph(new Run("TAX INVOICE"))
         {
@@ -938,14 +943,7 @@ public class InvoicePrintService : IInvoicePrintService
             Margin = new Thickness(0)
         });
 
-        var sub = new Paragraph { Margin = new Thickness(0, 2, 0, 0), FontSize = 11 };
-        if (!string.IsNullOrWhiteSpace(r.CompanyAddress)) sub.Inlines.Add(new Run(r.CompanyAddress + "\n"));
-        var line3 = new List<string>();
-        if (!string.IsNullOrWhiteSpace(r.CompanyPhone)) line3.Add("Ph: " + r.CompanyPhone);
-        if (!string.IsNullOrWhiteSpace(r.CompanyGst)) line3.Add("GSTIN: " + r.CompanyGst);
-        if (!string.IsNullOrWhiteSpace(r.CompanyDrugLicense)) line3.Add("DL: " + r.CompanyDrugLicense);
-        if (line3.Count > 0) sub.Inlines.Add(new Run(string.Join("   |   ", line3)));
-        section.Blocks.Add(sub);
+        section.Blocks.Add(BuildCompanyContactBlock(r.CompanyAddress, r.CompanyPhone, r.CompanyGst, r.CompanyDrugLicense, 11));
 
         section.Blocks.Add(new Paragraph(new Run("CREDIT NOTE / REFUND"))
         {
@@ -1069,7 +1067,7 @@ public class InvoicePrintService : IInvoicePrintService
                     item += $"\n{l.BatchNumber}  {l.ExpiryDate:MM/yy}";
                 row.Cells.Add(TextCell(l.SerialNo.ToString(), TextAlignment.Center));
                 row.Cells.Add(TextCell(item, TextAlignment.Left));
-                row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.QuantityLabel, TextAlignment.Right));
                 row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
                 row.Cells.Add(TextCell(l.Amount.ToString("N2", Inr), TextAlignment.Right));
             }
@@ -1079,7 +1077,7 @@ public class InvoicePrintService : IInvoicePrintService
                 row.Cells.Add(TextCell(l.MedicineName, TextAlignment.Left));
                 row.Cells.Add(TextCell(l.BatchNumber, TextAlignment.Left));
                 row.Cells.Add(TextCell(l.ExpiryDate?.ToString("MM/yy") ?? "-", TextAlignment.Center));
-                row.Cells.Add(TextCell(l.Quantity.ToString("0.##"), TextAlignment.Right));
+                row.Cells.Add(TextCell(l.QuantityLabel, TextAlignment.Right));
                 row.Cells.Add(TextCell(l.Mrp.ToString("N2", Inr), TextAlignment.Right));
                 row.Cells.Add(TextCell(l.UnitPrice.ToString("N2", Inr), TextAlignment.Right));
                 row.Cells.Add(TextCell(l.DiscountAmount != 0 ? l.DiscountAmount.ToString("N2", Inr) : "-", TextAlignment.Right));

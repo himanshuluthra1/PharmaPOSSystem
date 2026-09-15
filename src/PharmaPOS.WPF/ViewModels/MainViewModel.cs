@@ -24,7 +24,7 @@ namespace PharmaPOS.WPF.ViewModels;
 /// </summary>
 public class MainViewModel : ObservableObject
 {
-    private static readonly SolidColorBrush CurrentFyBarBrush = CreateFrozenBrush("#2E7D32");
+    private static readonly SolidColorBrush CurrentFyBarBrush = CreateFrozenBrush("#00695C");
     private static readonly SolidColorBrush PriorFyBarBrush = CreateFrozenBrush("#F9A825");
 
     private readonly INavigationService _navigation;

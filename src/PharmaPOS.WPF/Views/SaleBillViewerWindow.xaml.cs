@@ -1,19 +1,78 @@
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
+using Microsoft.Win32;
 using PharmaPOS.Application.Features.Sales;
+using PharmaPOS.WPF.Services;
 
 namespace PharmaPOS.WPF.Views;
 
-/// <summary>Read-only popup showing a sale invoice from Reports.</summary>
+/// <summary>Read-only popup showing a sale invoice, with print/PDF in invoice format.</summary>
 public partial class SaleBillViewerWindow : Window
 {
-    public SaleBillViewerWindow(SaleReceiptDto receipt)
+    private readonly SaleReceiptDto _receipt;
+    private readonly IInvoicePrintService? _printService;
+
+    public SaleBillViewerWindow(SaleReceiptDto receipt, IInvoicePrintService? printService = null)
     {
         InitializeComponent();
+        _receipt = receipt;
+        _printService = printService;
         DataContext = new SaleBillViewerModel(receipt);
         Title = $"Sale Invoice — {receipt.InvoiceNumber}";
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void PrintButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_printService is null)
+        {
+            MessageBox.Show(this, "Print service is not available.", "Print",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            _printService.Print(_receipt);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Print failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void PdfButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_printService is null)
+        {
+            MessageBox.Show(this, "PDF service is not available.", "PDF",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var generated = _printService.ExportPrintablePdf(_receipt);
+            var dialog = new SaveFileDialog
+            {
+                Title = "Save invoice PDF",
+                Filter = "PDF files (*.pdf)|*.pdf",
+                FileName = InvoicePageLayout.BuildPdfFileName(_receipt.InvoiceNumber, _receipt.CustomerName),
+                AddExtension = true,
+                DefaultExt = ".pdf"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            File.Copy(generated, dialog.FileName, overwrite: true);
+            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "PDF export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 }
 
 public sealed class SaleBillViewerModel

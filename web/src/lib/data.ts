@@ -5,6 +5,18 @@ import type { SessionUser } from "./session";
 
 type StoreScopedUser = Pick<SessionUser, "storeIds" | "selectedStoreId">;
 
+export type ShopProfitTodayRow = {
+  storeId: string;
+  shopName: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  marginPct: number;
+  bills: number;
+  avgBill: number;
+  avgBillProfit: number;
+};
+
 function stores(user: StoreScopedUser) {
   const ids = storeFilter(user);
   if (ids.length === 0) return { ids: [] as string[], ph: "NULL" };
@@ -17,10 +29,13 @@ export async function getDashboardKpis(user: StoreScopedUser) {
     return {
       todaySales: 0,
       todayBills: 0,
+      todayProfit: 0,
+      todayCost: 0,
       mtdSales: 0,
       todayPurchases: 0,
       mtdPurchases: 0,
       stockValue: 0,
+      stockValueMrp: 0,
       lowStock: 0,
       nearExpiry: 0,
       expired: 0,
@@ -28,6 +43,7 @@ export async function getDashboardKpis(user: StoreScopedUser) {
       supplierPayables: 0,
       paymentMix: [] as { method: number; amount: number }[],
       recentSales: [] as RowDataPacket[],
+      shopProfitToday: [] as ShopProfitTodayRow[],
       lastSyncAt: null as string | null,
     };
   }
@@ -65,7 +81,9 @@ export async function getDashboardKpis(user: StoreScopedUser) {
   );
 
   const [stock] = await query<RowDataPacket[]>(
-    `SELECT COALESCE(SUM(b.quantity_available * b.purchase_price),0) AS value
+    `SELECT
+       COALESCE(SUM(b.quantity_available * b.purchase_price),0) AS cost_value,
+       COALESCE(SUM(b.quantity_available * b.mrp),0) AS mrp_value
      FROM medicine_batches b
      WHERE b.store_id IN (${ph}) AND b.is_deleted=0 AND b.quantity_available > 0`,
     ids
@@ -135,13 +153,20 @@ export async function getDashboardKpis(user: StoreScopedUser) {
     ids
   );
 
+  const shopProfitToday = await getShopProfitToday(ids, ph);
+  const todayCost = shopProfitToday.reduce((sum, r) => sum + r.cost, 0);
+  const todaySalesAmount = Number(todaySales?.amount ?? 0);
+
   return {
-    todaySales: Number(todaySales?.amount ?? 0),
+    todaySales: todaySalesAmount,
     todayBills: Number(todaySales?.bills ?? 0),
+    todayProfit: todaySalesAmount - todayCost,
+    todayCost,
     mtdSales: Number(mtdSales?.amount ?? 0),
     todayPurchases: Number(todayPurchases?.amount ?? 0),
     mtdPurchases: Number(mtdPurchases?.amount ?? 0),
-    stockValue: Number(stock?.value ?? 0),
+    stockValue: Number(stock?.cost_value ?? 0),
+    stockValueMrp: Number(stock?.mrp_value ?? 0),
     lowStock: Number(alerts?.low_stock ?? 0),
     nearExpiry: Number(alerts?.near_expiry ?? 0),
     expired: Number(alerts?.expired ?? 0),
@@ -152,10 +177,92 @@ export async function getDashboardKpis(user: StoreScopedUser) {
       amount: Number(r.amount),
     })),
     recentSales,
+    shopProfitToday,
     lastSyncAt: lastSync?.last_sync
       ? new Date(lastSync.last_sync as Date).toISOString()
       : null,
   };
+}
+
+async function getShopProfitToday(ids: string[], ph: string): Promise<ShopProfitTodayRow[]> {
+  const names = await query<RowDataPacket[]>(
+    `SELECT sa.store_id,
+            COALESCE(NULLIF(ts.display_name,''), NULLIF(sa.machine_name,''), sa.store_code, sa.store_id) AS shop_name
+     FROM store_activations sa
+     LEFT JOIN tenant_stores ts ON ts.store_id = sa.store_id
+     WHERE sa.store_id IN (${ph})`,
+    ids
+  );
+
+  const nameById = new Map(names.map((n) => [String(n.store_id), String(n.shop_name || n.store_id)]));
+
+  // Prefer tenant display names when activation row is missing.
+  const tenantNames = await query<RowDataPacket[]>(
+    `SELECT store_id, display_name FROM tenant_stores WHERE store_id IN (${ph})`,
+    ids
+  );
+  for (const t of tenantNames) {
+    const id = String(t.store_id);
+    if (!nameById.has(id) && t.display_name)
+      nameById.set(id, String(t.display_name));
+  }
+
+  const metrics = await query<RowDataPacket[]>(
+    `SELECT s.store_id,
+            COALESCE(SUM(s.grand_total),0) AS revenue,
+            COUNT(*) AS bills,
+            COALESCE(SUM(line_cost.cost_amount),0) AS cost
+     FROM sales s
+     LEFT JOIN (
+       SELECT i.store_id, i.sale_local_id,
+              SUM(i.quantity * COALESCE(b.purchase_price, m.purchase_price, 0)) AS cost_amount
+       FROM sale_items i
+       LEFT JOIN medicine_batches b
+         ON b.store_id = i.store_id
+        AND b.local_id = i.medicine_batch_local_id
+        AND b.is_deleted = 0
+       LEFT JOIN medicines m
+         ON m.store_id = i.store_id
+        AND m.local_id = i.medicine_local_id
+        AND m.is_deleted = 0
+       WHERE i.store_id IN (${ph}) AND i.is_deleted = 0
+       GROUP BY i.store_id, i.sale_local_id
+     ) line_cost
+       ON line_cost.store_id = s.store_id AND line_cost.sale_local_id = s.local_id
+     WHERE s.store_id IN (${ph}) AND s.is_deleted = 0
+       AND DATE(s.invoice_date) = CURDATE()
+     GROUP BY s.store_id`,
+    [...ids, ...ids]
+  );
+
+  const byStore = new Map(
+    metrics.map((r) => [
+      String(r.store_id),
+      {
+        revenue: Number(r.revenue ?? 0),
+        cost: Number(r.cost ?? 0),
+        bills: Number(r.bills ?? 0),
+      },
+    ])
+  );
+
+  return ids
+    .map((storeId) => {
+      const m = byStore.get(storeId) ?? { revenue: 0, cost: 0, bills: 0 };
+      const profit = m.revenue - m.cost;
+      return {
+        storeId,
+        shopName: nameById.get(storeId) ?? storeId,
+        revenue: m.revenue,
+        cost: m.cost,
+        profit,
+        marginPct: m.revenue > 0 ? Math.round((profit / m.revenue) * 1000) / 10 : 0,
+        bills: m.bills,
+        avgBill: m.bills > 0 ? m.revenue / m.bills : 0,
+        avgBillProfit: m.bills > 0 ? profit / m.bills : 0,
+      } satisfies ShopProfitTodayRow;
+    })
+    .sort((a, b) => b.profit - a.profit || b.revenue - a.revenue);
 }
 
 export async function listSales(

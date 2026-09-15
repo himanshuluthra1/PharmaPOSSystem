@@ -9,6 +9,30 @@
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         FontFamily="{materialDesign:MaterialDesignFont}"
         PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <SolidColorBrush x:Key="BillSearchSelectionBrush" Color="#1565C0" />
+        <SolidColorBrush x:Key="BillSearchSelectionTextBrush" Color="#FFFFFF" />
+        <Style x:Key="BillSearchListItem" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BillSearchSelectionBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource BillSearchSelectionTextBrush}" />
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True" />
+                        <Condition Property="IsMouseOver" Value="True" />
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="#0D47A1" />
+                    <Setter Property="Foreground" Value="{StaticResource BillSearchSelectionTextBrush}" />
+                </MultiTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -49,13 +73,14 @@
             <Border Grid.Row="0" Margin="0,0,0,8"
                     BorderBrush="{DynamicResource MaterialDesignDivider}"
                     BorderThickness="1" CornerRadius="4"
-                    Visibility="{Binding ShowPatientSuggestions, Converter={StaticResource BoolToVisibility}}">
+                    Visibility="{Binding ShowSuggestions, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Patient suggestions"
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding SuggestionsHeader}"
                                FontSize="11" Opacity="0.6" Margin="8,6,8,4" />
                     <ListBox x:Name="SuggestionList"
-                             ItemsSource="{Binding PatientSuggestions}"
+                             ItemsSource="{Binding Suggestions}"
                              SelectedIndex="{Binding SelectedSuggestionIndex, Mode=TwoWay}"
+                             ItemContainerStyle="{StaticResource BillSearchListItem}"
                              MaxHeight="110"
                              BorderThickness="0"
                              Focusable="False"
@@ -63,7 +88,8 @@
                              PreviewMouseLeftButtonUp="SuggestionList_PreviewMouseLeftButtonUp">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" Padding="8,4" />
+                                <TextBlock Text="{Binding DisplayLabel}" Padding="8,4"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -76,6 +102,7 @@
                 <ListBox x:Name="ResultsList"
                          ItemsSource="{Binding Results}"
                          SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                         ItemContainerStyle="{StaticResource BillSearchListItem}"
                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                          Focusable="False"
                          PreviewKeyDown="ResultsList_PreviewKeyDown"
@@ -92,23 +119,25 @@
                                 <TextBlock Grid.Column="0"
                                            Text="{Binding InvoiceNumber}"
                                            FontWeight="SemiBold"
-                                           VerticalAlignment="Center" />
+                                           VerticalAlignment="Center"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}" />
                                 <TextBlock Grid.Column="1"
                                            Text="{Binding BillDateLabel}"
                                            Margin="12,0,0,0"
-                                           Opacity="0.9"
-                                           VerticalAlignment="Center" />
+                                           VerticalAlignment="Center"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}" />
                                 <TextBlock Grid.Column="2"
                                            Text="{Binding BillPatientLabel}"
                                            Margin="12,0,0,0"
                                            VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}" />
                                 <TextBlock Grid.Column="3"
                                            Text="{Binding DetailLabel}"
                                            Margin="12,0,0,0"
-                                           Opacity="0.85"
                                            VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" />
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Foreground}" />
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -117,9 +146,10 @@
         </Grid>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <TextBlock Text="↑↓ navigate  •  Enter open bill  •  Esc cancel" Opacity="0.5"
+            <TextBlock Text="↑↓ navigate suggestions/bills  •  Enter / double-click opens invoice (search stays open)  •  Esc close"
+                       Opacity="0.5"
                        VerticalAlignment="Center" Margin="0,0,16,0" FontSize="11" />
-            <Button Content="Cancel" Style="{StaticResource MaterialDesignOutlinedButton}"
+            <Button Content="Close" Style="{StaticResource MaterialDesignOutlinedButton}"
                     Margin="0,0,8,0" IsCancel="True" />
             <Button Content="Open Bill" Style="{StaticResource MaterialDesignRaisedButton}"
                     IsDefault="True" Click="OpenBillButton_Click" />

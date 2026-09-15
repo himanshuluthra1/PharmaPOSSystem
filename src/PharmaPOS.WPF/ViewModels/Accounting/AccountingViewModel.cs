@@ -118,10 +118,13 @@ public class AccountingViewModel : ObservableObject
     public ICommand RecordPaymentCommand { get; }
     public ICommand RecordReceiptCommand { get; }
 
-    /// <summary>Open the underlying sale or purchase invoice for a Parties open-bill row.</summary>
+    /// <summary>Open the underlying sale, purchase, or purchase-return for a Parties open-bill row.</summary>
     public Task OpenPartyBillAsync(PartyBillSettleLineViewModel? line)
     {
-        if (line is null || line.TransactionId <= 0) return Task.CompletedTask;
+        if (line is null) return Task.CompletedTask;
+        if (line.IsPurchaseReturn)
+            return _invoiceViewer.ShowPurchaseReturnAsync(line.Bill.DocumentId);
+        if (line.TransactionId <= 0) return Task.CompletedTask;
         return PartyLedger.SelectedKind.Kind == PartyLedgerKind.Supplier
             ? _invoiceViewer.ShowPurchaseAsync(line.TransactionId)
             : _invoiceViewer.ShowSaleAsync(line.TransactionId);

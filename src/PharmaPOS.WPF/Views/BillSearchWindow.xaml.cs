@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.WPF.ViewModels.Sales;
 
 namespace PharmaPOS.WPF.Views;
@@ -8,11 +9,14 @@ namespace PharmaPOS.WPF.Views;
 public partial class BillSearchWindow : Window
 {
     private readonly BillSearchViewModel _viewModel;
+    private readonly Func<int, Task>? _openBillAsync;
+    private bool _isOpeningBill;
 
-    public BillSearchWindow(BillSearchViewModel viewModel)
+    public BillSearchWindow(BillSearchViewModel viewModel, Func<int, Task>? openBillAsync = null)
     {
         InitializeComponent();
         _viewModel = viewModel;
+        _openBillAsync = openBillAsync;
         DataContext = viewModel;
         Loaded += (_, _) =>
         {
@@ -44,8 +48,8 @@ public partial class BillSearchWindow : Window
                 e.Handled = true;
                 break;
             case Key.Enter:
-                if (_viewModel.TryConfirmSelection())
-                    ConfirmSelection();
+                if (_viewModel.TryConfirmBillSelection())
+                    _ = OpenSelectedBillAsync();
                 else
                     ScrollToSelected();
                 e.Handled = true;
@@ -55,26 +59,48 @@ public partial class BillSearchWindow : Window
 
     private void SuggestionList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (SuggestionList.SelectedItem is string name)
-            _viewModel.SelectPatientSuggestion(name);
+        if (SuggestionList.SelectedItem is BillSearchSuggestionDto suggestion)
+        {
+            _viewModel.FocusSuggestion(suggestion);
+            ScrollToSelected();
+        }
     }
 
     private void ResultsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        => ConfirmSelection();
+        => _ = OpenSelectedBillAsync();
 
     private void OpenBillButton_Click(object sender, RoutedEventArgs e)
-        => ConfirmSelection();
+        => _ = OpenSelectedBillAsync();
 
-    private void ConfirmSelection()
+    private async Task OpenSelectedBillAsync()
     {
-        if (_viewModel.SelectedBill is null) return;
-        DialogResult = true;
-        Close();
+        if (_isOpeningBill || _viewModel.SelectedBill is null) return;
+        _isOpeningBill = true;
+        try
+        {
+            if (_openBillAsync is not null)
+                await _openBillAsync(_viewModel.SelectedBill.SaleId);
+            else
+            {
+                DialogResult = true;
+                Close();
+            }
+        }
+        finally
+        {
+            _isOpeningBill = false;
+            Activate();
+            if (_viewModel.SelectedIndex >= 0)
+                ResultsList.Focus();
+            else
+                SearchBox.Focus();
+        }
     }
 
     private void ScrollToSelected()
     {
-        if (_viewModel.SelectedSuggestionIndex >= 0 &&
+        if (_viewModel.SelectedIndex < 0 &&
+            _viewModel.SelectedSuggestionIndex >= 0 &&
             _viewModel.SelectedSuggestionIndex < SuggestionList.Items.Count)
         {
             SuggestionList.ScrollIntoView(SuggestionList.Items[_viewModel.SelectedSuggestionIndex]);

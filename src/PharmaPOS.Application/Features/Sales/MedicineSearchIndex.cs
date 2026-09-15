@@ -120,7 +120,8 @@ public sealed class MedicineSearchIndex : IMedicineSearchIndex
                 m.Barcode, m.BarcodeSearchKey, m.GstPercent, m.DefaultDiscountPercent,
                 m.PrescriptionRequired, m.RackNumber, m.BinNumber, m.Brand, m.ScheduleType,
                 m.PackInfo ?? (m.UnitsPerPack > 1 ? $"x{m.UnitsPerPack}" : null),
-                m.PurchasePrice, m.HsnCode, m.Mrp, m.Status, m.IsDeleted))
+                m.PurchasePrice, m.HsnCode, m.Mrp, m.UnitsPerPack > 0 ? m.UnitsPerPack : 1,
+                m.Status, m.IsDeleted))
             .FirstOrDefaultAsync(ct);
 
         await _gate.WaitAsync(ct);
@@ -185,7 +186,8 @@ public sealed class MedicineSearchIndex : IMedicineSearchIndex
                 m.Barcode, m.BarcodeSearchKey, m.GstPercent, m.DefaultDiscountPercent,
                 m.PrescriptionRequired, m.RackNumber, m.BinNumber, m.Brand, m.ScheduleType,
                 m.PackInfo ?? (m.UnitsPerPack > 1 ? $"x{m.UnitsPerPack}" : null),
-                m.PurchasePrice, m.HsnCode, m.Mrp, m.Status, m.IsDeleted))
+                m.PurchasePrice, m.HsnCode, m.Mrp, m.UnitsPerPack > 0 ? m.UnitsPerPack : 1,
+                m.Status, m.IsDeleted))
             .ToListAsync(ct);
 
     private static List<MedicineSearchEntry> MatchPrefix(
@@ -272,7 +274,8 @@ public sealed class MedicineSearchIndex : IMedicineSearchIndex
             m.GstPercent, m.DefaultDiscountPercent, m.PrescriptionRequired,
             TotalStock: 0m,
             m.RackNumber, m.BinNumber, m.Brand, m.ScheduleType,
-            m.PackLabel, m.Cost, m.HsnCode, m.Mrp);
+            m.PackLabel, m.Cost, m.HsnCode, m.Mrp,
+            m.UnitsPerPack > 0 ? m.UnitsPerPack : 1);
 
     private sealed record MedicineSearchEntry(
         int Id,
@@ -293,6 +296,7 @@ public sealed class MedicineSearchIndex : IMedicineSearchIndex
         decimal Cost,
         string? HsnCode,
         decimal Mrp,
+        int UnitsPerPack,
         EntityStatus Status,
         bool IsDeleted);
 }

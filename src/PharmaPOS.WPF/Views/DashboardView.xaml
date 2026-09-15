@@ -57,7 +57,8 @@
 
             <!-- All KPIs in one compact wrap strip -->
             <WrapPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <Border Style="{StaticResource KpiChip}">
+                <Border Style="{StaticResource KpiChip}"
+                        Visibility="{Binding ShowTodaySales, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <materialDesign:PackIcon Kind="CashMultiple" Width="14" Height="14"
@@ -134,6 +135,26 @@
             </WrapPanel>
 
             <UniformGrid Columns="2">
+                <materialDesign:Card Style="{StaticResource ListCard}"
+                                     Visibility="{Binding ShowMonthlySales, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="Monthly Sales"
+                                   FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6" TextTrimming="CharacterEllipsis" />
+                        <ItemsControl ItemsSource="{Binding MonthlySales}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,3" LastChildFill="True">
+                                        <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                   FontWeight="SemiBold" Margin="8,0,0,0" FontSize="12"
+                                                   Text="{Binding Amount, StringFormat='{}₹ {0:N2}'}" />
+                                        <TextBlock Text="{Binding Month}" TextTrimming="CharacterEllipsis" FontSize="12" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </materialDesign:Card>
+
                 <materialDesign:Card Style="{StaticResource ListCard}">
                     <StackPanel>
                         <TextBlock Text="Top Selling Medicines (30 days)"
@@ -153,28 +174,6 @@
                     </StackPanel>
                 </materialDesign:Card>
 
-                <materialDesign:Card Style="{StaticResource ListCard}" Margin="0,0,0,8">
-                    <StackPanel>
-                        <TextBlock Text="Monthly Sales (6 months)"
-                                   FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6" />
-                        <ItemsControl ItemsSource="{Binding MonthlySales}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <DockPanel Margin="0,3" LastChildFill="True">
-                                        <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                                   Margin="10,0,0,0" FontSize="12"
-                                                   Text="{Binding Amount, StringFormat='{}₹ {0:N0}'}" />
-                                        <TextBlock DockPanel.Dock="Left" Text="{Binding Month}" Width="64"
-                                                   FontSize="12" TextTrimming="CharacterEllipsis" />
-                                        <ProgressBar Value="{Binding Amount, Mode=OneWay}" Maximum="100000"
-                                                     Height="6" VerticalAlignment="Center" Margin="0,0,8,0"
-                                                     Style="{StaticResource MaterialDesignLinearProgressBar}" />
-                                    </DockPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </materialDesign:Card>
             </UniformGrid>
         </StackPanel>
     </ScrollViewer>

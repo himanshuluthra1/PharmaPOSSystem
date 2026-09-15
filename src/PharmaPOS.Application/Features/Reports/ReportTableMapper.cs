@@ -41,7 +41,7 @@ public static class ReportTableMapper
                 C("ItemCount", "Items"),
                 C("GrandTotal", "Total", "N2"),
                 C("CashPaid", "CashPaid", "N2"),
-                C("ReturnCreditApplied", "ReturnCredit", "N2"),
+                C("ReturnCreditApplied", "Adjusted", "N2"),
                 C("BalanceDue", "Due", "N2"),
                 C("DueReason", "DueReason")),
             rows.Select(r => Dict(
@@ -54,6 +54,7 @@ public static class ReportTableMapper
                 ("PaidAmount", r.PaidAmount),
                 ("CashPaid", r.CashPaid),
                 ("ReturnCreditApplied", r.ReturnCreditApplied),
+                ("AdjustedAmount", r.ReturnCreditApplied),
                 ("BalanceDue", r.BalanceDue),
                 ("DueReason", r.DueReason))));
 

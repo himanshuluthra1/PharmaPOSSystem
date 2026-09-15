@@ -8,6 +8,7 @@ using PharmaPOS.Domain.Entities.Sales;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.Application.Features.Settings;
 using PharmaPOS.Application.Features.ReportingSync;
+using PharmaPOS.Application.Features.ShortageBook;
 using PharmaPOS.Shared.Results;
 
 namespace PharmaPOS.Application.Features.Inventory;
@@ -19,19 +20,22 @@ public class InventoryService : IInventoryService
     private readonly ISettingsService _settings;
     private readonly IReportingSyncService _reportingSync;
     private readonly IFinancialYearContext _financialYear;
+    private readonly IShortageBookService _shortageBook;
 
     public InventoryService(
         IUnitOfWork uow,
         IDateTimeProvider clock,
         ISettingsService settings,
         IReportingSyncService reportingSync,
-        IFinancialYearContext financialYear)
+        IFinancialYearContext financialYear,
+        IShortageBookService shortageBook)
     {
         _uow = uow;
         _clock = clock;
         _settings = settings;
         _reportingSync = reportingSync;
         _financialYear = financialYear;
+        _shortageBook = shortageBook;
     }
 
     public async Task<StockSummaryDto> GetStockSummaryAsync(int? branchId, CancellationToken ct = default)
@@ -690,6 +694,14 @@ public class InventoryService : IInventoryService
                 .ToListAsync(ct);
             foreach (var movementId in movementIds)
                 await _reportingSync.EnqueueStockMovementAsync(movementId, ct);
+
+            var prefs = await _settings.GetPreferencesAsync(ct);
+            var threshold = prefs.DefaultLowStockThreshold > 0 ? prefs.DefaultLowStockThreshold : 10;
+            foreach (var medicineId in lines.Select(l => l.MedicineId).Distinct())
+            {
+                await _shortageBook.EnsureLowStockAsync(
+                    medicineId, branchId, threshold, ShortageSource.LowStock, recordedBy: null, ct);
+            }
 
             return Result.Success(receipt);
         }

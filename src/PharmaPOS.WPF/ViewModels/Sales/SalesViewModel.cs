@@ -891,7 +891,7 @@ public class SalesViewModel : ObservableObject
     {
         var lines = Cart.Where(l => !l.IsEmpty).ToList();
         var summary = SaleLinePricing.ComputeBillSummary(
-            lines.Select(l => (l.Mrp, l.Quantity, l.UnitPrice, l.GstPercent)));
+            lines.Select(l => (l.Mrp, l.StockQuantity, l.UnitPrice, l.GstPercent)));
 
         SubTotal = summary.SubTotalMrp;
         DiscountTotal = summary.Discount;
@@ -1175,12 +1175,7 @@ public class SalesViewModel : ObservableObject
 
     private async Task OpenBillSearchAsync()
     {
-        var bill = await _billSearch.PickBillAsync();
-        if (bill is null) return;
-
-        _selectedBill = BillHistory.FirstOrDefault(b => b.SaleId == bill.SaleId) ?? bill;
-        OnPropertyChanged(nameof(SelectedBill));
-        await LoadBillFromDropdownAsync(bill, focusGridAfterLoad: true);
+        await _billSearch.SearchAndViewAsync();
     }
 
     private async Task OpenInlineReturnAsync()
@@ -1383,7 +1378,14 @@ public class SalesViewModel : ObservableObject
 
         foreach (var line in lines)
         {
-            if (line.Quantity > line.AvailableStock)
+            if (line.LooseQuantity > 0.009m && line.UnitsPerPack <= 1)
+            {
+                _dialog.ShowError(
+                    $"Set Units/Pack on {line.MedicineName} before selling loose quantity.");
+                return;
+            }
+
+            if (line.StockQuantity > line.AvailableStock)
             {
                 _dialog.ShowError($"Insufficient stock for {line.MedicineName} (batch {line.BatchNumber}).");
                 return;
@@ -1426,6 +1428,8 @@ public class SalesViewModel : ObservableObject
             MedicineBatchId = l.BatchId,
             BatchNumber = l.BatchNumber,
             Quantity = l.Quantity,
+            LooseQuantity = l.LooseQuantity,
+            UnitsPerPack = l.UnitsPerPack,
             Mrp = l.Mrp,
             UnitPrice = l.UnitPrice,
             DiscountPercent = l.DiscountPercent

@@ -38,6 +38,9 @@ public class AppPreferencesDto
     /// View FY start year (e.g. 2024 for FY 2024-25). Null = current FY.
     /// </summary>
     public int? ViewFinancialYearStartYear { get; set; }
+
+    public bool ShowDashboardTodaySales { get; set; } = true;
+    public bool ShowDashboardMonthlySales { get; set; } = true;
 }
 
 public record BranchListDto(int Id, string Code, string Name, string? City, bool IsHeadOffice, EntityStatus Status);

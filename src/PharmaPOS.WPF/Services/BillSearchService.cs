@@ -10,28 +10,34 @@ public class BillSearchService : IBillSearchService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ICurrentUserService _currentUser;
+    private readonly IInvoiceViewerDialogService _invoiceViewer;
 
-    public BillSearchService(IServiceScopeFactory scopeFactory, ICurrentUserService currentUser)
+    public BillSearchService(
+        IServiceScopeFactory scopeFactory,
+        ICurrentUserService currentUser,
+        IInvoiceViewerDialogService invoiceViewer)
     {
         _scopeFactory = scopeFactory;
         _currentUser = currentUser;
+        _invoiceViewer = invoiceViewer;
     }
 
-    public Task<SaleListItemDto?> PickBillAsync()
+    public Task SearchAndViewAsync()
     {
         var branchId = _currentUser.CurrentUser?.BranchId;
         using var scope = _scopeFactory.CreateScope();
         var salesService = scope.ServiceProvider.GetRequiredService<ISalesService>();
         var viewModel = new BillSearchViewModel(salesService, branchId);
-        var window = new BillSearchWindow(viewModel)
+
+        BillSearchWindow? window = null;
+        window = new BillSearchWindow(
+            viewModel,
+            openBillAsync: saleId => _invoiceViewer.ShowSaleAsync(saleId, window))
         {
             Owner = System.Windows.Application.Current.MainWindow
         };
 
-        if (window.ShowDialog() != true || viewModel.SelectedBill is not BillSearchResultDto bill)
-            return Task.FromResult<SaleListItemDto?>(null);
-
-        return Task.FromResult<SaleListItemDto?>(
-            new SaleListItemDto(bill.SaleId, bill.InvoiceNumber, bill.InvoiceDate, bill.PatientName, bill.Status));
+        window.ShowDialog();
+        return Task.CompletedTask;
     }
 }

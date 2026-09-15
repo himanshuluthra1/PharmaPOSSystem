@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PharmaPOS.Persistence.Context;
 
@@ -11,9 +12,11 @@ using PharmaPOS.Persistence.Context;
 namespace PharmaPOS.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260915114759_AddSaleItemLooseQuantity")]
+    partial class AddSaleItemLooseQuantity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3823,12 +3826,6 @@ namespace PharmaPOS.Persistence.Migrations
                     b.Property<string>("SalesInvoicePrefix")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("ShowDashboardMonthlySales")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ShowDashboardTodaySales")
-                        .HasColumnType("bit");
 
                     b.Property<string>("State")
                         .HasColumnType("nvarchar(max)");

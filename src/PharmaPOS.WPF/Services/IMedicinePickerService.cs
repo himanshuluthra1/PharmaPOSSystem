@@ -14,7 +14,9 @@ public record MedicineBatchSelection(
     decimal UnitPrice,
     decimal AvailableStock,
     decimal DefaultDiscountPercent,
-    string? LocationLabel = null);
+    string? LocationLabel = null,
+    int UnitsPerPack = 1,
+    string? PackLabel = null);
 
 /// <summary>
 /// Shows medicine search and optional batch-variant picker dialogs used by the

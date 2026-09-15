@@ -519,6 +519,13 @@
                                         ToolTip="Cancel selected open/ordered entry">
                                     <TextBlock Text="Cancel" />
                                 </Button>
+                                <Button Command="{Binding DeleteEntryCommand}" Style="{StaticResource InvToolbarButton}"
+                                        ToolTip="Delete selected shortage row from the book">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Delete" Width="14" Height="14" VerticalAlignment="Center" />
+                                        <TextBlock Text="Delete" Margin="4,0,0,0" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
                                 <Button Command="{Binding RefreshCommand}"
                                         Style="{StaticResource MaterialDesignIconButton}" Width="28" Height="28"
                                         ToolTip="Refresh">

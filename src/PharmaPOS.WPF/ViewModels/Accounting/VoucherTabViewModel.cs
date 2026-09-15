@@ -45,7 +45,7 @@ public sealed class BillAllocationLineViewModel : ObservableObject
         get => _applyAmount;
         set
         {
-            var clamped = Math.Clamp(value, 0m, BalanceDue);
+            var clamped = Math.Clamp(value, 0m, Math.Max(0m, BalanceDue));
             if (SetProperty(ref _applyAmount, clamped))
             {
                 if (clamped > 0 && !_isSelected)
@@ -300,7 +300,10 @@ public class VoucherTabViewModel : ObservableObject
         {
             var bills = await _accounting.ListPartyBillsAsync(
                 PartyLedgerKind.Supplier, supplierId, _branchId);
-            foreach (var bill in bills.OrderBy(b => b.InvoiceDate).ThenBy(b => b.TransactionId))
+            foreach (var bill in bills
+                         .Where(b => !b.IsPurchaseReturn && b.BalanceDue > 0.009m)
+                         .OrderBy(b => b.InvoiceDate)
+                         .ThenBy(b => b.TransactionId))
             {
                 var line = new BillAllocationLineViewModel(bill);
                 line.SelectionChanged = () => CommandManager.InvalidateRequerySuggested();

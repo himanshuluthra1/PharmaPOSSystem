@@ -27,6 +27,7 @@ public class PurchaseReturnViewModel : ObservableObject
     private bool _isBusy;
     private string? _statusMessage;
     private bool _pendingReceiptOnly = true;
+    private string _returnRecordsFilter = string.Empty;
     private PurchaseReturnListRowDto? _selectedReturn;
     private PurchaseReturnReceiptSettlementKind _receiptSettlementKind = PurchaseReturnReceiptSettlementKind.SupplierReceipt;
     private string _receiptNumber = string.Empty;
@@ -83,6 +84,23 @@ public class PurchaseReturnViewModel : ObservableObject
     public ObservableCollection<PurchaseReturnLineRow> Lines { get; } = new();
     public ObservableCollection<ReturnReasonOptionDto> Reasons { get; } = new();
     public ObservableCollection<PurchaseReturnListRowDto> ReturnRecords { get; } = new();
+
+    public IEnumerable<PurchaseReturnListRowDto> FilteredReturnRecords
+    {
+        get
+        {
+            var term = ReturnRecordsFilter.Trim();
+            if (string.IsNullOrWhiteSpace(term))
+                return ReturnRecords;
+            return ReturnRecords.Where(r =>
+                r.ReturnNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || r.SupplierName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || r.PurchaseInvoiceNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || (r.SupplierInvoiceNumber?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (r.SettlementReference?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (r.SupplierReturnReceiptNumber?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+    }
     public ObservableCollection<SupplierLookupDto> DirectSupplierResults { get; } = new();
     public ObservableCollection<DirectReturnLineRow> DirectLines { get; } = new();
 
@@ -152,6 +170,16 @@ public class PurchaseReturnViewModel : ObservableObject
         {
             if (SetProperty(ref _pendingReceiptOnly, value))
                 _ = RefreshReturnsAsync();
+        }
+    }
+
+    public string ReturnRecordsFilter
+    {
+        get => _returnRecordsFilter;
+        set
+        {
+            if (SetProperty(ref _returnRecordsFilter, value ?? string.Empty))
+                OnPropertyChanged(nameof(FilteredReturnRecords));
         }
     }
 
@@ -626,6 +654,7 @@ public class PurchaseReturnViewModel : ObservableObject
             var rows = await _service.ListReturnsAsync(
                 PendingReceiptOnly, _currentUser.CurrentUser?.BranchId);
             foreach (var r in rows) ReturnRecords.Add(r);
+            OnPropertyChanged(nameof(FilteredReturnRecords));
 
             if (keepId is int id)
             {
@@ -753,6 +782,15 @@ public class PurchaseReturnViewModel : ObservableObject
         if (SelectedReturn is null)
         {
             _dialog.ShowInfo("Select a return from the list first.", "Return receipt");
+            return;
+        }
+
+        if (ReceiptSettlementKind == PurchaseReturnReceiptSettlementKind.PurchaseBill
+            && SelectedSupplierBill is { IsPaid: true }
+            && !_dialog.Confirm(
+                "This bill is already Paid. Do you want to continue?",
+                "Paid purchase bill"))
+        {
             return;
         }
 
@@ -933,6 +971,7 @@ public class PurchaseReturnLineRow : ObservableObject
         FreeQuantity = source.FreeQuantity;
         AvailableQty = source.AvailableQty;
         AvailableFreeQty = source.AvailableFreeQty;
+        StockOnHand = source.StockOnHand;
         PurchasePrice = source.PurchasePrice;
         GstPercent = source.GstPercent;
         LineTotal = source.LineTotal;
@@ -950,6 +989,7 @@ public class PurchaseReturnLineRow : ObservableObject
     public decimal FreeQuantity { get; }
     public decimal AvailableQty { get; }
     public decimal AvailableFreeQty { get; }
+    public decimal StockOnHand { get; }
     public decimal PurchasePrice { get; }
     public decimal GstPercent { get; }
     public decimal LineTotal { get; }

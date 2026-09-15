@@ -10,6 +10,27 @@ public static class ImportHelpers
     public static string? Trunc(string? value, int max)
         => string.IsNullOrWhiteSpace(value) ? null : (value.Trim().Length <= max ? value.Trim() : value.Trim()[..max]);
 
+    /// <summary>
+    /// MedWin <c>pdbnote</c> is an Access Integer — unset returns are 0, not blank.
+    /// Only non-zero / non-placeholder values are real supplier debit-note numbers.
+    /// </summary>
+    public static string? MeaningfulReceiptNumber(object? value, int max = 60)
+    {
+        if (value is null or DBNull) return null;
+        if (value is int i) return i == 0 ? null : Trunc(i.ToString(CultureInfo.InvariantCulture), max);
+        if (value is short s) return s == 0 ? null : Trunc(s.ToString(CultureInfo.InvariantCulture), max);
+        if (value is long l) return l == 0 ? null : Trunc(l.ToString(CultureInfo.InvariantCulture), max);
+        if (value is decimal d) return d == 0m ? null : Trunc(d.ToString(CultureInfo.InvariantCulture), max);
+        if (value is double db) return db == 0d ? null : Trunc(db.ToString(CultureInfo.InvariantCulture), max);
+
+        var text = Trunc(Convert.ToString(value, CultureInfo.InvariantCulture), max);
+        if (text is null) return null;
+        if (text is "0" or "0.0" or "0.00") return null;
+        if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var n) && n == 0m)
+            return null;
+        return text;
+    }
+
     public static decimal Dec(object? value)
     {
         if (value is null or DBNull) return 0m;

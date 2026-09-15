@@ -77,8 +77,20 @@ public class PurchaseReturnLineDto
     public decimal FreeQuantity { get; set; }
     public decimal AlreadyReturnedQty { get; set; }
     public decimal AlreadyReturnedFreeQty { get; set; }
-    public decimal AvailableQty => Math.Max(0, Quantity - AlreadyReturnedQty);
-    public decimal AvailableFreeQty => Math.Max(0, FreeQuantity - AlreadyReturnedFreeQty);
+    /// <summary>Current on-hand stock for the linked batch (packs).</summary>
+    public decimal StockOnHand { get; set; }
+    /// <summary>Returnable paid qty = min(bill remaining, stock).</summary>
+    public decimal AvailableQty => Math.Max(0, Math.Min(Quantity - AlreadyReturnedQty, StockOnHand));
+    /// <summary>Returnable free qty, capped by leftover stock after paid availability.</summary>
+    public decimal AvailableFreeQty
+    {
+        get
+        {
+            var billFree = Math.Max(0, FreeQuantity - AlreadyReturnedFreeQty);
+            var stockLeft = Math.Max(0, StockOnHand - Math.Max(0, Math.Min(Quantity - AlreadyReturnedQty, StockOnHand)));
+            return Math.Min(billFree, stockLeft);
+        }
+    }
     public decimal PurchasePrice { get; set; }
     public decimal GstPercent { get; set; }
     public decimal DiscountPercent { get; set; }
@@ -232,12 +244,33 @@ public record PurchaseReturnSupplierBillOptionDto(
     string InvoiceNumber,
     string? SupplierBillNumber,
     DateTime InvoiceDate,
-    decimal GrandTotal)
+    decimal GrandTotal,
+    decimal PaidAmount = 0m,
+    decimal AdjustedAmount = 0m)
 {
-    public string Label =>
-        string.IsNullOrWhiteSpace(SupplierBillNumber)
-            ? $"{InvoiceNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}"
-            : $"{InvoiceNumber} / {SupplierBillNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}";
+    public decimal BalanceDue
+    {
+        get
+        {
+            var raw = GrandTotal - PaidAmount - AdjustedAmount;
+            return raw > 0.009m ? raw : 0m;
+        }
+    }
+
+    public bool IsPaid => BalanceDue <= 0.009m;
+
+    public string PaymentStatusLabel => IsPaid ? "Paid" : "Unpaid";
+
+    public string Label
+    {
+        get
+        {
+            var head = string.IsNullOrWhiteSpace(SupplierBillNumber)
+                ? $"{InvoiceNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}"
+                : $"{InvoiceNumber} / {SupplierBillNumber} · {InvoiceDate:dd-MMM-yyyy} · {GrandTotal:N2}";
+            return $"{head} · {PaymentStatusLabel}";
+        }
+    }
 }
 
 public class AttachPurchaseReturnReceiptRequest

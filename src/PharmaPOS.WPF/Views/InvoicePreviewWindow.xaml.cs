@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using PharmaPOS.Application.Features.Sales;
 using PharmaPOS.Domain.Enums;
 using PharmaPOS.WPF.Services;
@@ -44,6 +47,30 @@ public partial class InvoicePreviewWindow : Window
 
     private void PrintButton_Click(object sender, RoutedEventArgs e)
         => _printService.Print(_receipt, _paperSize);
+
+    private void PdfButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var generated = _printService.ExportPrintablePdf(_receipt, _paperSize);
+            var dialog = new SaveFileDialog
+            {
+                Title = "Save invoice PDF",
+                Filter = "PDF files (*.pdf)|*.pdf",
+                FileName = InvoicePageLayout.BuildPdfFileName(_receipt.InvoiceNumber, _receipt.CustomerName),
+                AddExtension = true,
+                DefaultExt = ".pdf"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+
+            File.Copy(generated, dialog.FileName, overwrite: true);
+            Process.Start(new ProcessStartInfo(dialog.FileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "PDF export failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 }

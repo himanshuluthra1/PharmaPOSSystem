@@ -19,6 +19,8 @@ public class CartLineViewModel : ObservableObject
     private decimal _gstPercent;
     private decimal _availableStock;
     private decimal _quantity;
+    private decimal _looseQuantity;
+    private int _unitsPerPack = 1;
     private decimal _unitPrice;
     private decimal _discountPercent;
     private bool _isReturnLine;
@@ -135,11 +137,33 @@ public class CartLineViewModel : ObservableObject
         private set => SetProperty(ref _availableStock, value);
     }
 
+    public int UnitsPerPack
+    {
+        get => _unitsPerPack;
+        private set => SetProperty(ref _unitsPerPack, value <= 0 ? 1 : value);
+    }
+
+    /// <summary>Full packs / strips.</summary>
     public decimal Quantity
     {
         get => _quantity;
-        set { if (SetProperty(ref _quantity, value)) Recalculate(); }
+        set { if (SetProperty(ref _quantity, Math.Max(0m, value))) Recalculate(); }
     }
+
+    /// <summary>Loose tablets / units from a pack.</summary>
+    public decimal LooseQuantity
+    {
+        get => _looseQuantity;
+        set
+        {
+            // Allow typing freely; SaveAsync / SalesService validate pack size when loose > 0.
+            if (SetProperty(ref _looseQuantity, Math.Max(0m, value))) Recalculate();
+        }
+    }
+
+    /// <summary>Stock units deducted (pack qty + loose/UnitsPerPack).</summary>
+    public decimal StockQuantity =>
+        SaleLooseMath.ToStockQuantity(Quantity, LooseQuantity, UnitsPerPack);
 
     public decimal UnitPrice
     {
@@ -177,9 +201,33 @@ public class CartLineViewModel : ObservableObject
     public bool IsEditable => !IsEmpty && !IsReturnLine;
     public string? ReturnNumber => _returnNumber;
 
-    public decimal Gross => SaleLinePricing.GrossAtMrp(Mrp, Quantity);
-    public decimal DiscountAmount => SaleLinePricing.DiscountAmount(Mrp, UnitPrice, Quantity);
-    public decimal NetInclusive => SaleLinePricing.LineTotal(UnitPrice, Quantity);
+    public decimal Gross
+    {
+        get
+        {
+            var (gross, _, _) = SaleLooseMath.ComputeAmounts(Mrp, UnitPrice, Quantity, LooseQuantity, UnitsPerPack);
+            return gross;
+        }
+    }
+
+    public decimal DiscountAmount
+    {
+        get
+        {
+            var (_, discount, _) = SaleLooseMath.ComputeAmounts(Mrp, UnitPrice, Quantity, LooseQuantity, UnitsPerPack);
+            return discount;
+        }
+    }
+
+    public decimal NetInclusive
+    {
+        get
+        {
+            var (_, _, lineTotal) = SaleLooseMath.ComputeAmounts(Mrp, UnitPrice, Quantity, LooseQuantity, UnitsPerPack);
+            return lineTotal;
+        }
+    }
+
     public decimal Taxable => Math.Round(NetInclusive / (1 + GstPercent / 100m), 2);
     public decimal TaxAmount => NetInclusive - Taxable;
     public decimal LineTotal => NetInclusive;
@@ -202,6 +250,10 @@ public class CartLineViewModel : ObservableObject
         ExpiryDate = selection.ExpiryDate;
         GstPercent = selection.GstPercent;
         AvailableStock = selection.AvailableStock;
+        UnitsPerPack = SaleLooseMath.ResolveUnitsPerPack(
+            selection.UnitsPerPack,
+            selection.PackLabel,
+            selection.PackLabel);
         LocationLabel = selection.LocationLabel;
         _mrp = selection.Mrp;
         _unitPrice = selection.UnitPrice;
@@ -213,12 +265,13 @@ public class CartLineViewModel : ObservableObject
         else
             UpdateDiscountFromPrices();
 
+        LooseQuantity = 0;
         // Never invent stock qty: clamp to available (0 when out of stock).
         if (AvailableStock <= 0)
             Quantity = 0;
         else if (Quantity <= 0)
             Quantity = 1;
-        else if (Quantity > AvailableStock)
+        else if (StockQuantity > AvailableStock)
             Quantity = AvailableStock;
 
         OriginalQuantity = 0;
@@ -235,6 +288,7 @@ public class CartLineViewModel : ObservableObject
         GstPercent = line.GstPercent;
         AvailableStock = line.AvailableStock;
         LocationLabel = line.LocationLabel;
+        UnitsPerPack = line.UnitsPerPack > 0 ? line.UnitsPerPack : 1;
         _isReturnLine = line.IsReturnLine;
         _returnNumber = line.ReturnNumber;
         OnPropertyChanged(nameof(IsReturnLine));
@@ -245,7 +299,13 @@ public class CartLineViewModel : ObservableObject
         OnPropertyChanged(nameof(Mrp));
         OnPropertyChanged(nameof(UnitPrice));
         UpdateDiscountFromPrices();
-        Quantity = line.Quantity;
+        LooseQuantity = Math.Max(0m, line.LooseQuantity);
+        var upp = UnitsPerPack > 0 ? UnitsPerPack : 1;
+        // line.Quantity is stock (pack-equivalent). Recover pack qty for the Qty column.
+        if (LooseQuantity > 0.009m && upp > 1)
+            Quantity = Math.Max(0m, Math.Round(line.Quantity - LooseQuantity / upp, 4));
+        else
+            Quantity = line.Quantity;
         OriginalQuantity = line.IsReturnLine ? 0 : line.Quantity;
         Recalculate();
     }
@@ -260,6 +320,7 @@ public class CartLineViewModel : ObservableObject
         Mrp = 0;
         GstPercent = 0;
         AvailableStock = 0;
+        UnitsPerPack = 1;
         LocationLabel = null;
         UnitPrice = 0;
         DiscountPercent = 0;
@@ -270,6 +331,7 @@ public class CartLineViewModel : ObservableObject
         OnPropertyChanged(nameof(IsEditable));
         OnPropertyChanged(nameof(ReturnNumber));
         Quantity = 0;
+        LooseQuantity = 0;
         Recalculate();
     }
 
@@ -285,6 +347,8 @@ public class CartLineViewModel : ObservableObject
         AvailableStock = AvailableStock,
         LocationLabel = LocationLabel,
         Quantity = Quantity,
+        LooseQuantity = LooseQuantity,
+        UnitsPerPack = UnitsPerPack,
         UnitPrice = UnitPrice,
         DiscountPercent = DiscountPercent,
         OriginalQuantity = OriginalQuantity,
@@ -302,6 +366,7 @@ public class CartLineViewModel : ObservableObject
         GstPercent = line.GstPercent;
         AvailableStock = line.AvailableStock;
         LocationLabel = line.LocationLabel;
+        UnitsPerPack = line.UnitsPerPack > 0 ? line.UnitsPerPack : 1;
         _isReturnLine = line.IsReturnLine;
         _returnNumber = line.ReturnNumber;
         OnPropertyChanged(nameof(IsReturnLine));
@@ -314,6 +379,7 @@ public class CartLineViewModel : ObservableObject
         OnPropertyChanged(nameof(UnitPrice));
         OnPropertyChanged(nameof(DiscountPercent));
         Quantity = line.Quantity;
+        LooseQuantity = line.LooseQuantity;
         OriginalQuantity = line.OriginalQuantity;
         Recalculate();
     }
@@ -328,6 +394,7 @@ public class CartLineViewModel : ObservableObject
 
     private void Recalculate()
     {
+        OnPropertyChanged(nameof(StockQuantity));
         OnPropertyChanged(nameof(Gross));
         OnPropertyChanged(nameof(DiscountAmount));
         OnPropertyChanged(nameof(NetInclusive));

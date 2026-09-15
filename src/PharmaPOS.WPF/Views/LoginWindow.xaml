@@ -79,9 +79,6 @@
                     <ProgressBar IsIndeterminate="True" Margin="0,16,0,0"
                                  Style="{StaticResource MaterialDesignLinearProgressBar}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
-
-                    <TextBlock Margin="0,24,0,0" Opacity="0.5" FontSize="12" TextAlignment="Center"
-                               Text="Default login: admin / Admin@123" />
                 </StackPanel>
             </Border>
         </Grid>

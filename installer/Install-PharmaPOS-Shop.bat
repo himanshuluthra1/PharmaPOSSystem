@@ -14,7 +14,7 @@ REM      (one line: PharmaPOS-Setup-x.y.z.exe)
 REM ============================================================
 
 set "BASE_URL=http://bills.cloudpharma.site/bills/updates"
-set "SETUP_FILE=PharmaPOS-Setup-1.3.6.exe"
+set "SETUP_FILE=PharmaPOS-Setup-1.3.7.exe"
 set "DOWNLOAD_DIR=%TEMP%\PharmaPOS-Install"
 
 echo.

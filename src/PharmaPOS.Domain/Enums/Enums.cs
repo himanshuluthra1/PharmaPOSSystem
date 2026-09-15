@@ -185,7 +185,9 @@ public enum ShortageSource
     SalesCart = 0,
     Barcode = 1,
     Refill = 2,
-    Manual = 3
+    Manual = 3,
+    /// <summary>Stock fell below the configured low-stock threshold after sale / adjustment.</summary>
+    LowStock = 4
 }
 
 /// <summary>Invoice / receipt paper template used for preview, print and PDF.</summary>

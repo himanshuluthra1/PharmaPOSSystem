@@ -283,27 +283,64 @@ public static class MedWinTransactionImporter
         using var med = ctx.OpenMedWin();
         med.Open();
 
+        int sourceCount;
+        try
+        {
+            using var countCmd = new OleDbCommand("SELECT COUNT(*) FROM purchase_return", med);
+            sourceCount = ImportHelpers.Int(countCmd.ExecuteScalar());
+        }
+        catch (Exception ex)
+        {
+            ctx.Log($"  purchase_return table not available ({ex.Message}). Skipping.");
+            return;
+        }
+
+        if (sourceCount == 0)
+        {
+            ctx.Log("  No MedWin purchase returns found.");
+            return;
+        }
+
         if (!ctx.Force)
         {
             var existing = await MedWinImporter.ScalarIntAsync(target,
                 "SELECT COUNT(*) FROM PurchaseReturns WHERE ReturnNumber LIKE 'MW-PR-%'");
-            using var countCmd = new OleDbCommand("SELECT COUNT(*) FROM purchase_return", med);
-            var sourceCount = ImportHelpers.Int(countCmd.ExecuteScalar());
-            if (existing >= sourceCount && sourceCount > 0)
+            var existingItems = await MedWinImporter.ScalarIntAsync(target, """
+                SELECT COUNT(*)
+                FROM PurchaseReturnItems i
+                INNER JOIN PurchaseReturns r ON r.Id = i.PurchaseReturnId
+                WHERE r.ReturnNumber LIKE 'MW-PR-%' AND i.IsDeleted = 0
+                """);
+            int sourceLines = 0;
+            try
             {
-                ctx.Log($"  MedWin purchase returns already imported ({existing:N0}). Use --force to import again.");
+                using var lineCount = new OleDbCommand("SELECT COUNT(*) FROM dpurchas_return", med);
+                sourceLines = ImportHelpers.Int(lineCount.ExecuteScalar());
+            }
+            catch { /* detail table optional for early-exit check */ }
+
+            if (existing >= sourceCount && existingItems >= sourceLines && sourceCount > 0)
+            {
+                ctx.Log($"  MedWin purchase returns already imported ({existing:N0} bills / {existingItems:N0} lines). Use --force to import again.");
+                await ClearPlaceholderMedWinReturnReceiptsAsync(ctx, target);
+                await ApplyUnappliedPurchaseReturnCreditsAsync(ctx, target);
                 return;
             }
+
+            if (existing > 0 && existing < sourceCount)
+                ctx.Log($"  Resuming purchase returns ({existing:N0}/{sourceCount:N0} already imported)...");
+            else if (existing >= sourceCount && existingItems < sourceLines)
+                ctx.Log($"  Re-checking purchase return lines ({existingItems:N0}/{sourceLines:N0})...");
         }
 
         using var headerCmd = new OleDbCommand("""
-            SELECT purblno, purbldt, billtime, purparty, pactamt, pgrossamt, purtaxam, pdbnote
+            SELECT purblno, purbldt, billtime, purparty, pactamt, pbillamt, pgrossamt, purtaxam, pdbnote
             FROM purchase_return
             ORDER BY purblno
             """, med);
         using var headers = headerCmd.ExecuteReader();
 
-        int imported = 0, skipped = 0;
+        int imported = 0, skipped = 0, skippedNoSupplier = 0;
         while (headers.Read())
         {
             var billNo = ImportHelpers.Int(headers["purblno"]);
@@ -317,6 +354,7 @@ public static class MedWinTransactionImporter
             var party = ImportHelpers.Int(headers["purparty"]);
             if (!ctx.SupplierMap.TryGetValue(party, out var supplierId))
             {
+                skippedNoSupplier++;
                 skipped++;
                 continue;
             }
@@ -324,20 +362,24 @@ public static class MedWinTransactionImporter
             var returnDate = ImportHelpers.CombineDateAndTime(
                 ImportHelpers.Date(headers["purbldt"]), Convert.ToString(headers["billtime"]));
             var grandTotal = ImportHelpers.Dec(headers["pactamt"]);
-            var dbNote = ImportHelpers.Trunc(Convert.ToString(headers["pdbnote"]), 60);
+            var billAmt = ImportHelpers.Dec(headers["pbillamt"]);
+            if (grandTotal <= 0 && billAmt > 0) grandTotal = billAmt;
+            var dbNote = ImportHelpers.MeaningfulReceiptNumber(headers["pdbnote"]);
 
             await using var ins = new SqlCommand("""
                 INSERT INTO PurchaseReturns
                     (ReturnNumber, PurchaseId, SupplierId, ReturnDate,
                      SubTotal, DiscountAmount, TaxableAmount, CgstAmount, SgstAmount, RoundOff,
                      GrandTotal, CreditAmount, CreditAppliedAmount, SettlementMode, Status, IsFullReturn,
-                     Remarks, SupplierReturnReceiptNumber, BranchId, CreatedAtUtc, IsDeleted)
+                     ReturnKind, Remarks, SupplierReturnReceiptNumber,
+                     BranchId, CreatedAtUtc, IsDeleted)
                 OUTPUT INSERTED.Id
                 VALUES
                     (@ReturnNumber, NULL, @SupplierId, @ReturnDate,
                      @GrandTotal, 0, @GrandTotal, 0, 0, 0,
                      @GrandTotal, @GrandTotal, 0, 0, 1, 0,
-                     @Remarks, @DbNote, @BranchId, @Now, 0)
+                     0, @Remarks, @DbNote,
+                     @BranchId, @Now, 0)
                 """, target);
             ins.Parameters.AddWithValue("@ReturnNumber", returnNumber);
             ins.Parameters.AddWithValue("@SupplierId", supplierId);
@@ -350,10 +392,140 @@ public static class MedWinTransactionImporter
             var returnId = (int)await ins.ExecuteScalarAsync();
 
             await ImportPurchaseReturnLinesAsync(ctx, target, med, billNo, returnId, returnNumber, returnDate);
+            await ApplyPurchaseReturnCreditToOpenPurchasesAsync(ctx, target, returnId, supplierId, grandTotal);
             imported++;
         }
 
-        ctx.Log($"  Purchase returns imported: {imported:N0} ({skipped:N0} skipped).");
+        ctx.Log($"  Purchase returns imported: {imported:N0} ({skipped:N0} skipped" +
+                (skippedNoSupplier > 0 ? $", {skippedNoSupplier:N0} missing supplier map" : "") + ").");
+        await ClearPlaceholderMedWinReturnReceiptsAsync(ctx, target);
+        await ApplyUnappliedPurchaseReturnCreditsAsync(ctx, target);
+    }
+
+    /// <summary>
+    /// Older imports stored MedWin <c>pdbnote = 0</c> as receipt "0", which made every
+    /// return look settled. Clear those placeholders so Return Records → pending works.
+    /// </summary>
+    private static async Task ClearPlaceholderMedWinReturnReceiptsAsync(
+        MedWinImportContext ctx, SqlConnection target)
+    {
+        await using var cmd = new SqlCommand("""
+            UPDATE PurchaseReturns
+            SET SupplierReturnReceiptNumber = NULL,
+                SupplierReturnReceiptDate = NULL,
+                ModifiedAtUtc = @Now
+            WHERE ReturnNumber LIKE 'MW-PR-%'
+              AND IsDeleted = 0
+              AND SupplierReturnReceiptNumber IS NOT NULL
+              AND LTRIM(RTRIM(SupplierReturnReceiptNumber)) IN ('0', '0.0', '0.00')
+            """, target);
+        cmd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+        var cleared = await cmd.ExecuteNonQueryAsync();
+        if (cleared > 0)
+            ctx.Log($"  Cleared placeholder debit-note '0' on {cleared:N0} MedWin purchase return(s).");
+    }
+
+    /// <summary>
+    /// Applies leftover MedWin return credit onto open supplier purchases (FIFO),
+    /// so Accounting outstanding matches MedWin after import.
+    /// </summary>
+    private static async Task ApplyUnappliedPurchaseReturnCreditsAsync(MedWinImportContext ctx, SqlConnection target)
+    {
+        await using var cmd = new SqlCommand("""
+            SELECT Id, SupplierId, CreditAmount - CreditAppliedAmount AS Remaining
+            FROM PurchaseReturns
+            WHERE ReturnNumber LIKE 'MW-PR-%'
+              AND IsDeleted = 0
+              AND Status = 1
+              AND CreditAmount > CreditAppliedAmount
+            ORDER BY ReturnDate, Id
+            """, target);
+        await using var r = await cmd.ExecuteReaderAsync();
+        var rows = new List<(int Id, int SupplierId, decimal Remaining)>();
+        while (await r.ReadAsync())
+            rows.Add((r.GetInt32(0), r.GetInt32(1), r.GetDecimal(2)));
+        await r.DisposeAsync();
+
+        var applied = 0;
+        foreach (var row in rows)
+        {
+            if (row.Remaining <= 0.009m) continue;
+            await ApplyPurchaseReturnCreditToOpenPurchasesAsync(ctx, target, row.Id, row.SupplierId, row.Remaining);
+            applied++;
+        }
+
+        if (applied > 0)
+            ctx.Log($"  Applied unused purchase-return credit on {applied:N0} return(s).");
+    }
+
+    private static async Task ApplyPurchaseReturnCreditToOpenPurchasesAsync(
+        MedWinImportContext ctx, SqlConnection target, int returnId, int supplierId, decimal credit)
+    {
+        if (credit <= 0.009m) return;
+
+        await using var openCmd = new SqlCommand("""
+            SELECT Id, GrandTotal, PaidAmount
+            FROM Purchases
+            WHERE SupplierId = @SupplierId
+              AND IsDeleted = 0
+              AND Status NOT IN (0, 5)
+              AND GrandTotal > PaidAmount
+            ORDER BY InvoiceDate, Id
+            """, target);
+        openCmd.Parameters.AddWithValue("@SupplierId", supplierId);
+        await using var open = await openCmd.ExecuteReaderAsync();
+        var bills = new List<(int Id, decimal Due)>();
+        while (await open.ReadAsync())
+        {
+            var due = open.GetDecimal(1) - open.GetDecimal(2);
+            if (due > 0.009m) bills.Add((open.GetInt32(0), due));
+        }
+        await open.DisposeAsync();
+
+        var remaining = credit;
+        decimal appliedTotal = 0m;
+        foreach (var bill in bills)
+        {
+            if (remaining <= 0.009m) break;
+            var apply = Math.Min(remaining, bill.Due);
+            if (apply <= 0.009m) continue;
+
+            // LinkedPurchaseReturnId is unique (one return → one purchase). MedWin credit may
+            // settle several open bills; only bump paid/credit amounts here.
+            await using var upd = new SqlCommand("""
+                UPDATE Purchases
+                SET PaidAmount = PaidAmount + @Apply,
+                    ReturnCreditApplied = ISNULL(ReturnCreditApplied, 0) + @Apply,
+                    PaymentStatus = CASE
+                        WHEN PaidAmount + @Apply >= GrandTotal - 0.009 THEN 2
+                        WHEN PaidAmount + @Apply > 0.009 THEN 1
+                        ELSE 0 END,
+                    ModifiedAtUtc = @Now
+                WHERE Id = @Id
+                """, target);
+            upd.Parameters.AddWithValue("@Apply", apply);
+            upd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+            upd.Parameters.AddWithValue("@Id", bill.Id);
+            await upd.ExecuteNonQueryAsync();
+
+            remaining -= apply;
+            appliedTotal += apply;
+        }
+
+        if (appliedTotal <= 0.009m) return;
+
+        await using var retUpd = new SqlCommand("""
+            UPDATE PurchaseReturns
+            SET CreditAppliedAmount = CASE
+                    WHEN CreditAppliedAmount + @Apply > CreditAmount THEN CreditAmount
+                    ELSE CreditAppliedAmount + @Apply END,
+                ModifiedAtUtc = @Now
+            WHERE Id = @Id
+            """, target);
+        retUpd.Parameters.AddWithValue("@Apply", appliedTotal);
+        retUpd.Parameters.AddWithValue("@Now", ctx.NowUtc);
+        retUpd.Parameters.AddWithValue("@Id", returnId);
+        await retUpd.ExecuteNonQueryAsync();
     }
 
     private static async Task ImportPurchaseReturnLinesAsync(

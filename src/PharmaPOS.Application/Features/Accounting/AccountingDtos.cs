@@ -56,9 +56,14 @@ public record PartyBillRowDto(
     decimal GrandTotal,
     decimal PaidAmount,
     decimal BalanceDue,
-    string? SupplierBillNumber = null)
+    string? SupplierBillNumber = null,
+    bool IsPurchaseReturn = false,
+    decimal AdjustedAmount = 0m)
 {
     public string InvoiceDateLabel => InvoiceDate.ToString("dd/MM/yyyy hh:mm tt");
+
+    /// <summary>Positive purchase/sale id, or purchase-return id when <see cref="IsPurchaseReturn"/>.</summary>
+    public int DocumentId => IsPurchaseReturn ? Math.Abs(TransactionId) : TransactionId;
 }
 
 public record PartyBillsSummaryDto(

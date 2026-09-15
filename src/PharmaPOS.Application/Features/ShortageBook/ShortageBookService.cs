@@ -179,6 +179,28 @@ public sealed class ShortageBookService : IShortageBookService
         return Result.Success();
     }
 
+    public async Task<Result> DeleteAsync(int id, int? branchId, CancellationToken ct = default)
+    {
+        var entry = await _uow.Repository<ShortageBookEntry>().Query()
+            .FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted, ct);
+        if (entry is null)
+            return Result.Failure("Shortage entry not found.");
+        if (branchId.HasValue && entry.BranchId != branchId)
+            return Result.Failure("Shortage entry belongs to another branch.");
+
+        entry.IsDeleted = true;
+        entry.DeletedAtUtc = _clock.UtcNow;
+        if (entry.Status is ShortageStatus.Open or ShortageStatus.Ordered)
+        {
+            entry.Status = ShortageStatus.Cancelled;
+            entry.ResolvedAtUtc ??= _clock.UtcNow;
+        }
+
+        _uow.Repository<ShortageBookEntry>().Update(entry);
+        await _uow.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+
     public async Task MarkOrderedAsync(
         IReadOnlyDictionary<int, int> medicineIdToPurchaseOrderId,
         int? branchId,
@@ -247,6 +269,31 @@ public sealed class ShortageBookService : IShortageBookService
             q = q.Where(b => b.BranchId == branchId);
 
         return await q.SumAsync(b => (decimal?)b.QuantityAvailable, ct) ?? 0m;
+    }
+
+    public async Task EnsureLowStockAsync(
+        int medicineId,
+        int? branchId,
+        int threshold,
+        ShortageSource source,
+        string? recordedBy,
+        CancellationToken ct = default)
+    {
+        if (medicineId <= 0 || threshold <= 0) return;
+
+        var onHand = await GetOnHandQuantityAsync(medicineId, branchId, ct);
+        if (onHand >= threshold) return;
+
+        await RecordAsync(
+            new RecordShortageRequest(
+                medicineId,
+                RequestedQuantity: threshold,
+                AvailableQuantity: onHand,
+                Source: source,
+                Notes: $"Auto: stock {onHand:0.##} below threshold {threshold}"),
+            branchId,
+            recordedBy,
+            ct);
     }
 
     private async Task<ShortageBookListItemDto?> MapOneAsync(int id, CancellationToken ct)
