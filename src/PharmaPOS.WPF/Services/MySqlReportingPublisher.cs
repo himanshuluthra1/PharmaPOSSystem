@@ -84,7 +84,35 @@ public sealed class MySqlReportingPublisher : IMySqlReportingPublisher
         }
 
         await tx.CommitAsync(ct);
+        await TryRecordSyncEventAsync(entry, ct);
         await TryNotifyDashboardAsync(entry, ct);
+    }
+
+    /// <summary>
+    /// Writes a sync_events row so the local/cloud dashboard can poll MySQL for live refresh
+    /// even when HTTP notify is misconfigured or unreachable.
+    /// </summary>
+    private async Task TryRecordSyncEventAsync(SyncOutboxEntry entry, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = CreateConnection();
+            await conn.OpenAsync(ct);
+            await using var cmd = new MySqlCommand(
+                """
+                INSERT INTO sync_events (store_id, entity_type, local_id)
+                VALUES (@store_id, @entity_type, @local_id)
+                """,
+                conn);
+            cmd.Parameters.AddWithValue("@store_id", entry.StoreCode);
+            cmd.Parameters.AddWithValue("@entity_type", entry.EntityType);
+            cmd.Parameters.AddWithValue("@local_id", entry.LocalId);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch
+        {
+            // Best-effort; table may not exist on older reporting DBs.
+        }
     }
 
     private async Task TryNotifyDashboardAsync(SyncOutboxEntry entry, CancellationToken ct)
@@ -362,6 +390,35 @@ public sealed class MySqlReportingPublisher : IMySqlReportingPublisher
 
         await ReplaceChildrenAsync(conn, tx, "sale_items", "sale_local_id", store, saleId, r, "items", UpsertSaleItemAsync, ct);
         await ReplaceChildrenAsync(conn, tx, "sale_payments", "sale_local_id", store, saleId, r, "payments", UpsertSalePaymentAsync, ct);
+
+        // Keep denormalized COGS for fast dashboard aggregations.
+        await using (var cogsCmd = new MySqlCommand(
+                         """
+                         UPDATE sales s
+                         SET cogs = (
+                           SELECT COALESCE(SUM(
+                             si.quantity * COALESCE(
+                               NULLIF(b.purchase_price, 0),
+                               NULLIF(m.purchase_price, 0),
+                               0)
+                           ), 0)
+                           FROM sale_items si
+                           LEFT JOIN medicine_batches b
+                             ON b.store_id = si.store_id AND b.local_id = si.medicine_batch_local_id
+                           LEFT JOIN medicines m
+                             ON m.store_id = si.store_id AND m.local_id = si.medicine_local_id
+                           WHERE si.store_id = s.store_id AND si.sale_local_id = s.local_id AND si.is_deleted = 0
+                         )
+                         WHERE s.store_id = @store_id AND s.local_id = @local_id
+                         """,
+                         conn,
+                         tx))
+        {
+            Add(cogsCmd, "@store_id", store);
+            Add(cogsCmd, "@local_id", saleId);
+            try { await cogsCmd.ExecuteNonQueryAsync(ct); }
+            catch { /* older DBs without cogs column */ }
+        }
     }
 
     private static async Task UpsertSaleItemAsync(MySqlConnection conn, MySqlTransaction tx, string store, JsonElement i, CancellationToken ct)

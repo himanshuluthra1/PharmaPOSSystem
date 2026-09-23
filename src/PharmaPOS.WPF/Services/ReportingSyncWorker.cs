@@ -32,6 +32,9 @@ public sealed class ReportingSyncWorker : BackgroundService
         {
             try
             {
+                // Pick up Preferences / file changes without requiring app restart.
+                _settings.Load();
+
                 if (!_gate.IsEnabled)
                 {
                     await Task.Delay(DisabledDelay, stoppingToken);
@@ -52,12 +55,22 @@ public sealed class ReportingSyncWorker : BackgroundService
         }
     }
 
+    private DateTime _lastCatchUpUtc = DateTime.MinValue;
+
     private async Task<int> ProcessBatchAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         var publisher = scope.ServiceProvider.GetRequiredService<IMySqlReportingPublisher>();
         var clock = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>();
+        var reportingSync = scope.ServiceProvider.GetRequiredService<IReportingSyncService>();
+
+        // Recover sales created while sync was disabled / misconfigured (throttle).
+        if (_lastCatchUpUtc < clock.UtcNow.AddMinutes(-2))
+        {
+            await reportingSync.CatchUpMissingSalesAsync(14, ct);
+            _lastCatchUpUtc = clock.UtcNow;
+        }
 
         var now = clock.UtcNow;
         var pending = await uow.Repository<SyncOutboxEntry>().Query()

@@ -4,6 +4,7 @@
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:salesVm="clr-namespace:PharmaPOS.WPF.ViewModels.Sales"
              xmlns:behaviors="clr-namespace:PharmaPOS.WPF.Behaviors"
+             xmlns:svc="clr-namespace:PharmaPOS.WPF.Services"
              d:DataContext="{d:DesignInstance Type=salesVm:SalesViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -328,6 +329,7 @@
                 </Border>
 
                 <DataGrid x:Name="CartGrid" ItemsSource="{Binding Cart}"
+                          svc:DataGridLayout.PersistKey="Sales"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="True"
                           HeadersVisibility="Column" GridLinesVisibility="All"
@@ -339,7 +341,7 @@
                           PreviewKeyDown="CartGrid_PreviewKeyDown"
                           MouseDoubleClick="CartGrid_MouseDoubleClick"
                           BeginningEdit="CartGrid_BeginningEdit"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           ScrollViewer.VerticalScrollBarVisibility="Auto"
                           IsReadOnly="{Binding IsBillReadOnly}">
                     <DataGrid.Columns>

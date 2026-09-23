@@ -9,6 +9,7 @@ public interface IBillShareSettingsService
     void Load();
     void Save(BillShareSettings settings);
     bool IsVpsUploadConfigured { get; }
+    bool IsWhatsAppApiConfigured { get; }
 }
 
 public sealed class BillShareSettingsService : IBillShareSettingsService
@@ -53,6 +54,20 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
         }
     }
 
+    public bool IsWhatsAppApiConfigured
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current.EnableWhatsApp
+                       && _current.EnableWhatsAppApi
+                       && !string.IsNullOrWhiteSpace(_current.WhatsAppAccessToken)
+                       && !string.IsNullOrWhiteSpace(_current.WhatsAppPhoneNumberId);
+            }
+        }
+    }
+
     public void Load()
     {
         lock (_gate)
@@ -69,10 +84,18 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
                 _current = JsonSerializer.Deserialize<BillShareSettings>(json, JsonOptions)
                            ?? new BillShareSettings();
                 if (_current.SftpPort <= 0) _current.SftpPort = 22;
+                if (string.IsNullOrWhiteSpace(_current.WhatsAppApiVersion))
+                    _current.WhatsAppApiVersion = "v21.0";
+                if (string.IsNullOrWhiteSpace(_current.WhatsAppBillTemplateLanguage))
+                    _current.WhatsAppBillTemplateLanguage = "en";
 
                 // Old settings files omit enableTinyUrl (deserializes as false) — default ON.
                 if (json.IndexOf("enableTinyUrl", StringComparison.OrdinalIgnoreCase) < 0)
                     _current.EnableTinyUrl = true;
+
+                // Old files omit WhatsAppApiDesktopFallback — default ON.
+                if (json.IndexOf("whatsAppApiDesktopFallback", StringComparison.OrdinalIgnoreCase) < 0)
+                    _current.WhatsAppApiDesktopFallback = true;
             }
             catch
             {
@@ -106,6 +129,17 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
         SftpRemoteDirectory = string.IsNullOrWhiteSpace(s.SftpRemoteDirectory)
             ? "/var/www/html/bills"
             : s.SftpRemoteDirectory.Trim(),
-        EnableTinyUrl = s.EnableTinyUrl
+        EnableTinyUrl = s.EnableTinyUrl,
+        EnableWhatsAppApi = s.EnableWhatsAppApi,
+        WhatsAppAccessToken = s.WhatsAppAccessToken?.Trim() ?? string.Empty,
+        WhatsAppPhoneNumberId = s.WhatsAppPhoneNumberId?.Trim() ?? string.Empty,
+        WhatsAppApiVersion = string.IsNullOrWhiteSpace(s.WhatsAppApiVersion)
+            ? "v21.0"
+            : s.WhatsAppApiVersion.Trim(),
+        WhatsAppBillTemplateName = s.WhatsAppBillTemplateName?.Trim() ?? string.Empty,
+        WhatsAppBillTemplateLanguage = string.IsNullOrWhiteSpace(s.WhatsAppBillTemplateLanguage)
+            ? "en"
+            : s.WhatsAppBillTemplateLanguage.Trim(),
+        WhatsAppApiDesktopFallback = s.WhatsAppApiDesktopFallback
     };
 }

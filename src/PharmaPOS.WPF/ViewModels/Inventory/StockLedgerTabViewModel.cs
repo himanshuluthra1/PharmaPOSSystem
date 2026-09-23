@@ -25,6 +25,7 @@ public class StockLedgerTabViewModel : ObservableObject
         _branchId = currentUser.CurrentUser?.BranchId;
         RefreshCommand = new AsyncRelayCommand(_ => RefreshAsync(), _ => !IsBusy);
         ClearFilterCommand = new RelayCommand(_ => ClearFilter());
+        _ = RefreshAsync();
     }
 
     public ObservableCollection<StockLedgerRowDto> Items { get; } = new();

@@ -163,6 +163,8 @@ public sealed class UiLayoutService : IUiLayoutService
 
     public void SetGridColumnWidths(string viewKey, IReadOnlyDictionary<string, double> widths)
     {
+        if (string.IsNullOrWhiteSpace(viewKey)) return;
+
         var copy = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var (key, value) in widths)
         {
@@ -172,10 +174,13 @@ public sealed class UiLayoutService : IUiLayoutService
 
         lock (_gate)
         {
+            _current.GridColumnsByView[viewKey] = copy;
+
+            // Keep legacy fields in sync for older readers / partial upgrades.
             if (IsSales(viewKey))
-                _current.SalesGridColumns = copy;
+                _current.SalesGridColumns = new Dictionary<string, double>(copy, StringComparer.Ordinal);
             else if (IsPurchase(viewKey))
-                _current.PurchaseGridColumns = copy;
+                _current.PurchaseGridColumns = new Dictionary<string, double>(copy, StringComparer.Ordinal);
         }
         ScheduleSave();
     }
@@ -184,10 +189,18 @@ public sealed class UiLayoutService : IUiLayoutService
     {
         lock (_gate)
         {
+            if (!string.IsNullOrWhiteSpace(viewKey)
+                && _current.GridColumnsByView.TryGetValue(viewKey, out var byView)
+                && byView.Count > 0)
+            {
+                return new Dictionary<string, double>(byView, StringComparer.Ordinal);
+            }
+
+            // Legacy fallback before GridColumnsByView existed.
             var source = IsSales(viewKey) ? _current.SalesGridColumns
                 : IsPurchase(viewKey) ? _current.PurchaseGridColumns
                 : null;
-            return source is null
+            return source is null || source.Count == 0
                 ? new Dictionary<string, double>(StringComparer.Ordinal)
                 : new Dictionary<string, double>(source, StringComparer.Ordinal);
         }
@@ -202,13 +215,36 @@ public sealed class UiLayoutService : IUiLayoutService
     private static double ClampSideWidth(double width) =>
         Math.Clamp(double.IsFinite(width) ? width : 250, 180, 480);
 
-    private static UiLayoutSettings Normalize(UiLayoutSettings s) => new()
+    private static UiLayoutSettings Normalize(UiLayoutSettings s)
     {
-        SalesSidePanelWidth = ClampSideWidth(s.SalesSidePanelWidth),
-        PurchaseSidePanelWidth = ClampSideWidth(s.PurchaseSidePanelWidth),
-        SalesGridColumns = new Dictionary<string, double>(s.SalesGridColumns ?? new(), StringComparer.Ordinal),
-        PurchaseGridColumns = new Dictionary<string, double>(s.PurchaseGridColumns ?? new(), StringComparer.Ordinal)
-    };
+        var byView = new Dictionary<string, Dictionary<string, double>>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (viewKey, cols) in s.GridColumnsByView ?? new())
+        {
+            if (string.IsNullOrWhiteSpace(viewKey) || cols is null || cols.Count == 0) continue;
+            byView[viewKey] = new Dictionary<string, double>(cols, StringComparer.Ordinal);
+        }
+
+        // Migrate legacy Sales / Purchase maps into the unified dictionary.
+        if ((s.SalesGridColumns?.Count ?? 0) > 0 && !byView.ContainsKey(SalesKey))
+            byView[SalesKey] = new Dictionary<string, double>(s.SalesGridColumns!, StringComparer.Ordinal);
+        if ((s.PurchaseGridColumns?.Count ?? 0) > 0 && !byView.ContainsKey(PurchaseKey))
+            byView[PurchaseKey] = new Dictionary<string, double>(s.PurchaseGridColumns!, StringComparer.Ordinal);
+
+        return new UiLayoutSettings
+        {
+            SalesSidePanelWidth = ClampSideWidth(s.SalesSidePanelWidth),
+            PurchaseSidePanelWidth = ClampSideWidth(s.PurchaseSidePanelWidth),
+            SalesGridColumns = byView.TryGetValue(SalesKey, out var sales)
+                ? new Dictionary<string, double>(sales, StringComparer.Ordinal)
+                : new Dictionary<string, double>(StringComparer.Ordinal),
+            PurchaseGridColumns = byView.TryGetValue(PurchaseKey, out var purchase)
+                ? new Dictionary<string, double>(purchase, StringComparer.Ordinal)
+                : new Dictionary<string, double>(StringComparer.Ordinal),
+            GridColumnsByView = byView
+        };
+    }
 
     private static UiLayoutSettings Clone(UiLayoutSettings s) => Normalize(s);
 }

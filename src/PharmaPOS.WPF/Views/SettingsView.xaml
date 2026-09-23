@@ -609,6 +609,37 @@
                                       IsChecked="{Binding AskShareAfterSave}"
                                       Margin="0,0,0,12" />
 
+                            <TextBlock Text="WhatsApp Cloud API (direct send)" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,4" />
+                            <TextBlock Text="Sends the bill from Meta WhatsApp Business Cloud API when you tap WhatsApp on a sale — no Desktop paste. Needs a Meta Business app token and phone number ID. Outside the 24-hour chat window, set an approved utility template."
+                                       Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <CheckBox Content="Send via WhatsApp Cloud API (direct)"
+                                      IsChecked="{Binding EnableWhatsAppApi}"
+                                      Margin="0,0,0,8"
+                                      FontWeight="SemiBold" />
+                            <TextBlock Text="Access token" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     materialDesign:HintAssist.Hint="EAAG… permanent / system-user token"
+                                     Text="{Binding WhatsAppAccessToken, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Phone number ID" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     materialDesign:HintAssist.Hint="From Meta WhatsApp → API Setup"
+                                     Text="{Binding WhatsAppPhoneNumberId, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="API version" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     materialDesign:HintAssist.Hint="v21.0"
+                                     Text="{Binding WhatsAppApiVersion, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Bill template name (optional)" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     materialDesign:HintAssist.Hint="e.g. sale_bill — body {{1}} customer {{2}} invoice {{3}} amount {{4}} link"
+                                     Text="{Binding WhatsAppBillTemplateName, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Text="Template language" Style="{StaticResource FieldCaption}" />
+                            <TextBox Style="{StaticResource FieldBox}"
+                                     materialDesign:HintAssist.Hint="en or en_US"
+                                     Text="{Binding WhatsAppBillTemplateLanguage, UpdateSourceTrigger=PropertyChanged}" />
+                            <CheckBox Content="If API fails, open WhatsApp Desktop as fallback"
+                                      IsChecked="{Binding WhatsAppApiDesktopFallback}"
+                                      Margin="0,4,0,12" />
+
                             <TextBlock Text="VPS bill PDF upload (SFTP)" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,4" />
                             <TextBlock Text="Upload each bill PDF, then put the public HTTPS link in WhatsApp. Public base URL must be the exact browser prefix where those files open — not the Linux folder path."
                                        Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8" />

@@ -34,6 +34,13 @@ public class PreferencesTabViewModel : ObservableObject
     private bool _enableWhatsAppShare = true;
     private bool _enableSmsShare = true;
     private bool _askShareAfterSave = true;
+    private bool _enableWhatsAppApi;
+    private string _whatsAppAccessToken = string.Empty;
+    private string _whatsAppPhoneNumberId = string.Empty;
+    private string _whatsAppApiVersion = "v21.0";
+    private string _whatsAppBillTemplateName = string.Empty;
+    private string _whatsAppBillTemplateLanguage = "en";
+    private bool _whatsAppApiDesktopFallback = true;
     private bool _enableVpsUpload;
     private string _publicBaseUrl = string.Empty;
     private string _sftpHost = string.Empty;
@@ -153,6 +160,50 @@ public class PreferencesTabViewModel : ObservableObject
     {
         get => _askShareAfterSave;
         set => SetProperty(ref _askShareAfterSave, value);
+    }
+
+    public bool EnableWhatsAppApi
+    {
+        get => _enableWhatsAppApi;
+        set => SetProperty(ref _enableWhatsAppApi, value);
+    }
+
+    public string WhatsAppAccessToken
+    {
+        get => _whatsAppAccessToken;
+        set => SetProperty(ref _whatsAppAccessToken, value ?? string.Empty);
+    }
+
+    public string WhatsAppPhoneNumberId
+    {
+        get => _whatsAppPhoneNumberId;
+        set => SetProperty(ref _whatsAppPhoneNumberId, value ?? string.Empty);
+    }
+
+    public string WhatsAppApiVersion
+    {
+        get => _whatsAppApiVersion;
+        set => SetProperty(ref _whatsAppApiVersion,
+            string.IsNullOrWhiteSpace(value) ? "v21.0" : value.Trim());
+    }
+
+    public string WhatsAppBillTemplateName
+    {
+        get => _whatsAppBillTemplateName;
+        set => SetProperty(ref _whatsAppBillTemplateName, value ?? string.Empty);
+    }
+
+    public string WhatsAppBillTemplateLanguage
+    {
+        get => _whatsAppBillTemplateLanguage;
+        set => SetProperty(ref _whatsAppBillTemplateLanguage,
+            string.IsNullOrWhiteSpace(value) ? "en" : value.Trim());
+    }
+
+    public bool WhatsAppApiDesktopFallback
+    {
+        get => _whatsAppApiDesktopFallback;
+        set => SetProperty(ref _whatsAppApiDesktopFallback, value);
     }
 
     public bool EnableVpsUpload
@@ -347,6 +398,13 @@ public class PreferencesTabViewModel : ObservableObject
         EnableWhatsAppShare = s.EnableWhatsApp;
         EnableSmsShare = s.EnableSms;
         AskShareAfterSave = s.AskAfterSave;
+        EnableWhatsAppApi = s.EnableWhatsAppApi;
+        WhatsAppAccessToken = s.WhatsAppAccessToken;
+        WhatsAppPhoneNumberId = s.WhatsAppPhoneNumberId;
+        WhatsAppApiVersion = s.WhatsAppApiVersion;
+        WhatsAppBillTemplateName = s.WhatsAppBillTemplateName;
+        WhatsAppBillTemplateLanguage = s.WhatsAppBillTemplateLanguage;
+        WhatsAppApiDesktopFallback = s.WhatsAppApiDesktopFallback;
         EnableVpsUpload = s.EnableVpsUpload;
         PublicBaseUrl = s.PublicBaseUrl;
         SftpHost = s.SftpHost;
@@ -431,6 +489,13 @@ public class PreferencesTabViewModel : ObservableObject
                 EnableWhatsApp = EnableWhatsAppShare,
                 EnableSms = EnableSmsShare,
                 AskAfterSave = AskShareAfterSave,
+                EnableWhatsAppApi = EnableWhatsAppApi,
+                WhatsAppAccessToken = WhatsAppAccessToken.Trim(),
+                WhatsAppPhoneNumberId = WhatsAppPhoneNumberId.Trim(),
+                WhatsAppApiVersion = WhatsAppApiVersion.Trim(),
+                WhatsAppBillTemplateName = WhatsAppBillTemplateName.Trim(),
+                WhatsAppBillTemplateLanguage = WhatsAppBillTemplateLanguage.Trim(),
+                WhatsAppApiDesktopFallback = WhatsAppApiDesktopFallback,
                 EnableVpsUpload = EnableVpsUpload,
                 PublicBaseUrl = PublicBaseUrl.Trim(),
                 SftpHost = SftpHost.Trim(),
@@ -447,6 +512,8 @@ public class PreferencesTabViewModel : ObservableObject
 
             StatusMessage = EnableMySqlSync && _mySqlSyncSettings.IsConfigured
                 ? "Preferences saved. Reporting sync will upload queued events to MySQL in the background."
+                : _billShareSettings.IsWhatsAppApiConfigured
+                    ? "Preferences saved. Sale WhatsApp will send via Cloud API."
                 : EnableVpsUpload && _billShareSettings.IsVpsUploadConfigured
                     ? "Preferences saved. Bill PDFs will upload to your VPS and a short link will be shared on WhatsApp."
                     : "Preferences saved.";

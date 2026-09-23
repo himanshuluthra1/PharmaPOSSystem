@@ -1284,7 +1284,7 @@ public partial class ReportsService
         var medIds = lines.Select(l => l.MedicineId).Distinct().ToList();
         var medicines = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
             .Where(m => medIds.Contains(m.Id))
-            .Select(m => new { m.Id, m.Name, m.GenericName })
+            .Select(m => new { m.Id, m.Name, m.GenericName, m.PurchasePrice })
             .ToDictionaryAsync(m => m.Id, ct);
 
         var batchIds = lines
@@ -1302,9 +1302,11 @@ public partial class ReportsService
             .Select(l =>
             {
                 medicines.TryGetValue(l.MedicineId, out var med);
-                var cost = l.MedicineBatchId is int bid && batchCosts.TryGetValue(bid, out var price)
-                    ? l.Quantity * price
-                    : 0m;
+                var batchPp = l.MedicineBatchId is int bid && batchCosts.TryGetValue(bid, out var price)
+                    ? price
+                    : (decimal?)null;
+                var unitCost = ResolveUnitCost(batchPp, med?.PurchasePrice ?? 0m);
+                var cost = l.Quantity * unitCost;
                 return new MedicinesSoldByDateRowDto(
                     l.InvoiceDate.Date,
                     l.InvoiceNumber,

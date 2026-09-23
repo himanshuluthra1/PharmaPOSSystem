@@ -25,6 +25,7 @@
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
                   CanUserAddRows="False"
+                  CanUserResizeColumns="True"
                   HeadersVisibility="Column"
                   GridLinesVisibility="All"
                   AlternatingRowBackground="#0A000000"
@@ -36,8 +37,9 @@
                 <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity, StringFormat=0.##}" Width="70" />
                 <DataGridTextColumn Header="Balance" Binding="{Binding BalanceAfter, StringFormat=0.##}" Width="80" />
                 <DataGridTextColumn Header="Unit cost" Binding="{Binding UnitCost, StringFormat=N2}" Width="80" />
-                <DataGridTextColumn Header="Reference" Binding="{Binding ReferenceNumber}" Width="120" />
-                <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" />
+                <DataGridTextColumn Header="Reference" Binding="{Binding ReferenceDisplay}"
+                                    Width="260" MinWidth="140" />
+                <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="100" />
             </DataGrid.Columns>
         </DataGrid>
     </DockPanel>

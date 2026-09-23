@@ -400,34 +400,53 @@ export async function listStock(
 ) {
   const { ids, ph } = stores(user);
   if (ids.length === 0) return [];
-  const params: unknown[] = [...ids];
-  let where = `b.store_id IN (${ph}) AND b.is_deleted=0`;
+  const searchParams: unknown[] = [];
+  let where = `b.store_id IN (${ph}) AND b.is_deleted=0 AND b.quantity_available > 0`;
   if (filter === "near") {
     where += ` AND b.expiry_date IS NOT NULL AND b.expiry_date >= CURDATE()
-               AND b.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 90 DAY) AND b.quantity_available > 0`;
+               AND b.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 90 DAY)`;
   } else if (filter === "expired") {
-    where += ` AND b.expiry_date IS NOT NULL AND b.expiry_date < CURDATE() AND b.quantity_available > 0`;
+    where += ` AND b.expiry_date IS NOT NULL AND b.expiry_date < CURDATE()`;
   } else if (filter === "low") {
     where += ` AND m.reorder_level > 0 AND tot.qty <= m.reorder_level`;
   }
   if (q?.trim()) {
     where += ` AND (m.name LIKE ? OR b.batch_number LIKE ? OR b.rack_number LIKE ?)`;
-    params.push(`%${q.trim()}%`, `%${q.trim()}%`, `%${q.trim()}%`);
+    searchParams.push(`%${q.trim()}%`, `%${q.trim()}%`, `%${q.trim()}%`);
   }
+
+  // Avoid a full-table aggregate join on every stock page load (was ~60s+).
+  // Only compute per-medicine totals when the low-stock filter needs them.
+  if (filter === "low") {
+    return query<RowDataPacket[]>(
+      `SELECT b.store_id, b.local_id, b.medicine_local_id, b.batch_number, b.expiry_date, b.quantity_available,
+              b.purchase_price, b.mrp, b.rack_number, m.name AS medicine_name, m.generic_name,
+              m.reorder_level, tot.qty AS medicine_total_qty
+       FROM medicine_batches b
+       JOIN medicines m ON m.store_id=b.store_id AND m.local_id=b.medicine_local_id AND m.is_deleted=0
+       JOIN (
+         SELECT store_id, medicine_local_id, SUM(quantity_available) AS qty
+         FROM medicine_batches
+         WHERE store_id IN (${ph}) AND is_deleted=0
+         GROUP BY store_id, medicine_local_id
+       ) tot ON tot.store_id=b.store_id AND tot.medicine_local_id=b.medicine_local_id
+       WHERE ${where}
+       ORDER BY m.name, b.expiry_date
+       LIMIT 500`,
+      [...ids, ...ids, ...searchParams]
+    );
+  }
+
   return query<RowDataPacket[]>(
-    `SELECT b.store_id, b.local_id, b.batch_number, b.expiry_date, b.quantity_available,
+    `SELECT b.store_id, b.local_id, b.medicine_local_id, b.batch_number, b.expiry_date, b.quantity_available,
             b.purchase_price, b.mrp, b.rack_number, m.name AS medicine_name, m.generic_name,
-            m.reorder_level, tot.qty AS medicine_total_qty
+            m.reorder_level, b.quantity_available AS medicine_total_qty
      FROM medicine_batches b
      JOIN medicines m ON m.store_id=b.store_id AND m.local_id=b.medicine_local_id AND m.is_deleted=0
-     LEFT JOIN (
-       SELECT store_id, medicine_local_id, SUM(quantity_available) AS qty
-       FROM medicine_batches WHERE is_deleted=0 GROUP BY store_id, medicine_local_id
-     ) tot ON tot.store_id=b.store_id AND tot.medicine_local_id=b.medicine_local_id
      WHERE ${where}
      ORDER BY m.name, b.expiry_date
-     LIMIT 500`,
-    params
+     LIMIT 200`,
+    [...ids, ...searchParams]
   );
 }
 
@@ -488,13 +507,32 @@ export async function listReturns(user: StoreScopedUser) {
 
 export async function listTenantStores(tenantId: number) {
   return query<RowDataPacket[]>(
-    `SELECT ts.store_id, ts.display_name, sa.store_code, sa.machine_name, sa.is_approved
+    `SELECT ts.store_id, ts.display_name, sa.store_code, sa.machine_name, sa.is_approved,
+            (
+              EXISTS(SELECT 1 FROM sales s WHERE s.store_id=ts.store_id AND s.is_deleted=0 LIMIT 1)
+              OR EXISTS(SELECT 1 FROM purchases p WHERE p.store_id=ts.store_id AND p.is_deleted=0 LIMIT 1)
+              OR EXISTS(SELECT 1 FROM medicine_batches b WHERE b.store_id=ts.store_id AND b.is_deleted=0 LIMIT 1)
+            ) AS has_data
      FROM tenant_stores ts
      LEFT JOIN store_activations sa ON sa.store_id = ts.store_id
      WHERE ts.tenant_id=?
-     ORDER BY COALESCE(ts.display_name, ts.store_id)`,
+     ORDER BY has_data DESC, COALESCE(ts.display_name, ts.store_id)`,
     [tenantId]
   );
+}
+
+/** Latest POS sync timestamps for dashboard staleness banner. */
+export async function latestSyncAtUtc(): Promise<Date | null> {
+  const rows = await query<RowDataPacket[]>(
+    `SELECT MAX(t) AS last_sync FROM (
+       SELECT MAX(synced_at_utc) AS t FROM sales
+       UNION ALL SELECT MAX(synced_at_utc) FROM purchases
+       UNION ALL SELECT MAX(synced_at_utc) FROM medicine_batches
+     ) x`
+  );
+  const v = rows[0]?.last_sync;
+  if (!v) return null;
+  return v instanceof Date ? v : new Date(String(v));
 }
 
 export async function listAvailableStores() {

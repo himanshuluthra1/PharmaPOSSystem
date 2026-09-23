@@ -1,225 +1,340 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { requirePermission } from "@/lib/auth";
-import { getDashboardKpis } from "@/lib/data";
 import { PERMISSIONS } from "@/lib/session";
-import { DataTable, KpiCard, PageHeader } from "@/components/Ui";
-import { fmtDate, inr, paymentMethodLabel } from "@/lib/format";
+import { Card, KpiCard, DataTable } from "@/components/Ui";
+import { DrillValue, StockValue } from "@/components/DrillDown";
+import { SimpleBarChart, SimpleDonut } from "@/components/Charts";
+import { paymentMethodLabel, rupeeShort } from "@/lib/format";
+import { dayRange, fyRange, monthBoundsFromYm, monthRange } from "@/lib/periods";
+import type { DrillMetric } from "@/lib/drilldown-types";
+import {
+  metricsForRange,
+  monthlySalesPurchase,
+  paymodeForRange,
+  shopComparison,
+  vendorOutstanding,
+} from "@/lib/medwin/aggregates";
 
 export const dynamic = "force-dynamic";
 
-function profitClass(n: number) {
-  if (n > 0) return "text-emerald-700 font-semibold";
-  if (n < 0) return "text-rose-700 font-semibold";
-  return "font-semibold text-slate-700";
+function PeriodBox({
+  title,
+  hrefPrev,
+  hrefNext,
+  from,
+  to,
+  m,
+}: {
+  title: string;
+  hrefPrev: string;
+  hrefNext: string;
+  from: string;
+  to: string;
+  m: Awaited<ReturnType<typeof metricsForRange>>;
+}) {
+  const netProfit = m.grossMargin - m.expense;
+  const drill = (metric: DrillMetric, label: string) => ({
+    metric,
+    from,
+    to,
+    title: label,
+  });
+  const rows: {
+    k: string;
+    metric?: DrillMetric;
+    value: ReactNode;
+    sub?: ReactNode;
+  }[] = [
+    {
+      k: "Sale",
+      metric: "sale",
+      value: rupeeShort(m.sale),
+      sub: (
+        <DrillValue metric="saleBills" from={from} to={to} title="Sale bills">
+          {`${m.saleBills} bills`}
+        </DrillValue>
+      ),
+    },
+    { k: "Profit (excl. GST cost)", metric: "grossMargin", value: rupeeShort(m.grossMargin) },
+    { k: "GST", metric: "gst", value: rupeeShort(m.gst) },
+    {
+      k: "Purchase",
+      metric: "purchaseNet",
+      value: rupeeShort(m.purchaseNet),
+      sub:
+        m.purchaseReturns > 0 ? (
+          <DrillValue metric="purchaseReturns" from={from} to={to} title="Purchase returns">
+            {`Ret ${rupeeShort(m.purchaseReturns)}`}
+          </DrillValue>
+        ) : undefined,
+    },
+    { k: "Collection", metric: "collection", value: rupeeShort(m.collection) },
+    { k: "Expense", metric: "expense", value: rupeeShort(m.expense) },
+    { k: "Net profit", metric: "netProfit", value: rupeeShort(netProfit) },
+    {
+      k: "Stock (cost)",
+      value: (
+        <StockValue filter="all" title="Stock details">
+          {rupeeShort(m.stockCost)}
+        </StockValue>
+      ),
+      sub: (
+        <StockValue filter="all" title="Stock details">
+          {`MRP ${rupeeShort(m.stockMrp)}`}
+        </StockValue>
+      ),
+    },
+    {
+      k: "Near expiry",
+      value: (
+        <StockValue filter="near3m" title="Near expiry — 3 months">
+          {String(m.nearExpiry)}
+        </StockValue>
+      ),
+      sub: (
+        <StockValue filter="near3m" title="Near expiry — 3 months">
+          {rupeeShort(m.nearExpiryCost)}
+        </StockValue>
+      ),
+    },
+  ];
+  return (
+    <Card
+      title={title}
+      actions={
+        <div className="print-hide flex gap-1 text-sm">
+          <Link href={hrefPrev} className="rounded border border-slate-200 px-2 py-0.5 hover:bg-white">
+            ‹
+          </Link>
+          <Link href={hrefNext} className="rounded border border-slate-200 px-2 py-0.5 hover:bg-white">
+            ›
+          </Link>
+        </div>
+      }
+    >
+      <dl className="space-y-2 text-sm">
+        {rows.map((row) => (
+          <div key={row.k} className="flex items-start justify-between gap-3">
+            <dt className="text-slate-500">{row.k}</dt>
+            <dd className="text-right">
+              <div className="font-semibold text-slate-900">
+                {row.metric ? (
+                  <DrillValue {...drill(row.metric, row.k)}>{row.value}</DrillValue>
+                ) : (
+                  row.value
+                )}
+              </div>
+              {row.sub ? <div className="text-xs text-slate-400">{row.sub}</div> : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
 }
 
-export default async function DashboardPage() {
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await requirePermission(PERMISSIONS.dashboard);
-  const kpis = await getDashboardKpis(user);
-  const shopRows = kpis.shopProfitToday;
-  const maxRevenue = Math.max(...shopRows.map((s) => s.revenue), 1);
+  const sp = await searchParams;
+  const fyOff = Number(sp.fy ?? 0) || 0;
+  const moOff = Number(sp.mo ?? 0) || 0;
+  const dayOff = Number(sp.day ?? 0) || 0;
 
-  const totals = shopRows.reduce(
-    (acc, s) => {
-      acc.revenue += s.revenue;
-      acc.cost += s.cost;
-      acc.profit += s.profit;
-      acc.bills += s.bills;
-      return acc;
-    },
-    { revenue: 0, cost: 0, profit: 0, bills: 0 }
-  );
-  const totalMarginPct =
-    totals.revenue > 0 ? Math.round((totals.profit / totals.revenue) * 1000) / 10 : 0;
+  const fy = fyRange(fyOff);
+  const mo = monthRange(moOff);
+  const day = dayRange(dayOff);
+
+  const [fyM0, moM0, dayM, monthly, paymode, shops, vendorDue] = await Promise.all([
+    metricsForRange(user, fy, { includeStock: false }),
+    metricsForRange(user, mo, { includeStock: false }),
+    metricsForRange(user, day, { includeStock: true }),
+    monthlySalesPurchase(user, 12),
+    paymodeForRange(user, mo),
+    shopComparison(user, day),
+    vendorOutstanding(user),
+  ]);
+
+  // Stock is a snapshot — reuse today's stock figures on FY/Month boxes.
+  const fyM = {
+    ...fyM0,
+    stockCost: dayM.stockCost,
+    stockMrp: dayM.stockMrp,
+    expired: dayM.expired,
+    nearExpiry: dayM.nearExpiry,
+    nearExpiryCost: dayM.nearExpiryCost,
+  };
+  const moM = {
+    ...moM0,
+    stockCost: dayM.stockCost,
+    stockMrp: dayM.stockMrp,
+    expired: dayM.expired,
+    nearExpiry: dayM.nearExpiry,
+    nearExpiryCost: dayM.nearExpiryCost,
+  };
+
+  const payColors = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626"];
 
   return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        subtitle={
-          kpis.lastSyncAt
-            ? `Last sale sync ${fmtDate(kpis.lastSyncAt)}`
-            : "Waiting for store sync"
-        }
-      />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard
-          label="Today sales"
-          value={kpis.todaySales}
-          hint={`${kpis.todayBills} bills`}
-          href="/sales"
+    <div className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <PeriodBox
+          title={fy.label}
+          hrefPrev={`/?fy=${fyOff - 1}&mo=${moOff}&day=${dayOff}`}
+          hrefNext={`/?fy=${fyOff + 1}&mo=${moOff}&day=${dayOff}`}
+          from={fy.from}
+          to={fy.to}
+          m={fyM}
         />
-        <KpiCard
-          label="Profit today"
-          value={kpis.todayProfit}
-          hint={`Cost ${inr(kpis.todayCost)} · margin ${
-            kpis.todaySales > 0
-              ? `${((kpis.todayProfit / kpis.todaySales) * 100).toFixed(1)}%`
-              : "—"
-          }`}
-          href="/sales"
+        <PeriodBox
+          title={mo.label}
+          hrefPrev={`/?fy=${fyOff}&mo=${moOff - 1}&day=${dayOff}`}
+          hrefNext={`/?fy=${fyOff}&mo=${moOff + 1}&day=${dayOff}`}
+          from={mo.from}
+          to={mo.to}
+          m={moM}
         />
-        <KpiCard label="MTD sales" value={kpis.mtdSales} href="/sales" />
-        <KpiCard
-          label="Today purchase"
-          value={kpis.todayPurchases}
-          href="/purchases"
-        />
-        <KpiCard label="MTD purchase" value={kpis.mtdPurchases} href="/purchases" />
-        <KpiCard
-          label="Stock value (cost)"
-          value={kpis.stockValue}
-          hint={`At purchase cost · MRP ${inr(kpis.stockValueMrp)}`}
-          href="/stock"
-        />
-        <KpiCard
-          label="Low / near / expired"
-          value={`${kpis.lowStock} / ${kpis.nearExpiry} / ${kpis.expired}`}
-          href="/stock"
-        />
-        <KpiCard label="Customer dues" value={kpis.customerDues} href="/payments" />
-        <KpiCard
-          label="Supplier payables"
-          value={kpis.supplierPayables}
-          href="/payments"
+        <PeriodBox
+          title={day.label}
+          hrefPrev={`/?fy=${fyOff}&mo=${moOff}&day=${dayOff - 1}`}
+          hrefNext={`/?fy=${fyOff}&mo=${moOff}&day=${dayOff + 1}`}
+          from={day.from}
+          to={day.to}
+          m={dayM}
         />
       </div>
 
-      <div className="mt-6">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-800">
-              Profit today — all shops
-            </h2>
-            <p className="text-xs text-slate-500">
-              Sale − stock cost (batch purchase price). Same layout as Medwin shop comparison.
-            </p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiCard
+          label="Vendor outstanding"
+          value={vendorDue}
+          tone="warning"
+          drill={{ metric: "purchase", from: "2015-04-01", to: day.to, title: "Purchase (outstanding)" }}
+        />
+        <KpiCard
+          label="This month expense"
+          value={moM.expense}
+          tone="orange"
+          drill={{ metric: "expense", from: mo.from, to: mo.to, title: "Expense" }}
+        />
+        <KpiCard
+          label="Net profit today"
+          value={dayM.grossMargin - dayM.expense}
+          tone="success"
+          drill={{ metric: "netProfit", from: day.from, to: day.to, title: "Net profit" }}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Monthly revenue vs purchase" padded={false}>
+          <div className="p-4">
+            <SimpleBarChart
+              labels={monthly.map((m) => m.month)}
+              series={[
+                { name: "Sales", values: monthly.map((m) => m.sales), color: "#2563eb" },
+                { name: "Purchase", values: monthly.map((m) => m.purchases), color: "#f59e0b" },
+              ]}
+            />
           </div>
-        </div>
+          <DataTable
+            embedded
+            dense
+            columns={[
+              { key: "month", label: "Month" },
+              { key: "sales", label: "Sales", className: "text-right" },
+              { key: "purchase", label: "Purchase", className: "text-right" },
+            ]}
+            rows={monthly.map((x) => {
+              const b = monthBoundsFromYm(x.month);
+              return {
+                month: x.month,
+                sales: (
+                  <DrillValue metric="sale" from={b.from} to={b.to} title="Sale">
+                    {rupeeShort(x.sales)}
+                  </DrillValue>
+                ),
+                purchase: (
+                  <DrillValue metric="purchase" from={b.from} to={b.to} title="Purchase">
+                    {rupeeShort(x.purchases)}
+                  </DrillValue>
+                ),
+              };
+            })}
+          />
+        </Card>
+        <Card title={`Payment mode — ${mo.label}`}>
+          <SimpleDonut
+            slices={paymode.map((p, i) => ({
+              label: paymentMethodLabel(p.method),
+              value: p.amount,
+              color: payColors[i % payColors.length],
+            }))}
+          />
+          <div className="mt-4">
+            <DataTable
+              dense
+              columns={[
+                { key: "mode", label: "Mode" },
+                { key: "amount", label: "Amount", className: "text-right" },
+              ]}
+              rows={paymode.map((p) => ({
+                mode: paymentMethodLabel(p.method),
+                amount: (
+                  <DrillValue metric="sale" from={mo.from} to={mo.to} title="Sale">
+                    {rupeeShort(p.amount)}
+                  </DrillValue>
+                ),
+              }))}
+            />
+          </div>
+        </Card>
+      </div>
+
+      <Card title={`Shop comparison — ${day.label}`} padded={false}>
         <DataTable
+          embedded
           columns={[
             { key: "shop", label: "Shop" },
             { key: "revenue", label: "Revenue", className: "text-right" },
-            { key: "profit", label: "Profit", className: "text-right" },
-            { key: "margin", label: "Margin %", className: "text-right" },
+            { key: "margin", label: "Margin", className: "text-right" },
+            { key: "pct", label: "Margin %", className: "text-right" },
             { key: "bills", label: "Bills", className: "text-right" },
-            { key: "avgBill", label: "Avg bill", className: "text-right" },
-            { key: "avgProfit", label: "Avg bill profit", className: "text-right" },
+            { key: "avg", label: "Avg bill", className: "text-right" },
           ]}
-          rows={[
-            ...shopRows.map((s) => {
-              const barW = Math.round((s.revenue / maxRevenue) * 100);
-              return {
-                shop: (
-                  <div>
-                    <div className="font-medium text-slate-800">{s.shopName}</div>
-                    <div className="mt-1 h-1 w-28 overflow-hidden rounded bg-slate-100">
-                      <div
-                        className="h-full rounded bg-teal-600"
-                        style={{ width: `${barW}%` }}
-                      />
-                    </div>
-                  </div>
-                ),
-                revenue: inr(s.revenue),
-                profit: <span className={profitClass(s.profit)}>{inr(s.profit)}</span>,
-                margin: (
-                  <span
-                    className={
-                      s.marginPct >= 20
-                        ? "text-emerald-700"
-                        : s.marginPct >= 10
-                          ? "text-amber-600"
-                          : "text-rose-600"
-                    }
-                  >
-                    {s.marginPct.toFixed(1)}%
-                  </span>
-                ),
-                bills: s.bills,
-                avgBill: inr(s.avgBill),
-                avgProfit: (
-                  <span className={profitClass(s.avgBillProfit)}>{inr(s.avgBillProfit)}</span>
-                ),
-              };
-            }),
-            ...(shopRows.length > 1
-              ? [
-                  {
-                    shop: <span className="font-semibold">All shops</span>,
-                    revenue: <span className="font-semibold">{inr(totals.revenue)}</span>,
-                    profit: (
-                      <span className={`font-semibold ${profitClass(totals.profit)}`}>
-                        {inr(totals.profit)}
-                      </span>
-                    ),
-                    margin: (
-                      <span className="font-semibold">{totalMarginPct.toFixed(1)}%</span>
-                    ),
-                    bills: <span className="font-semibold">{totals.bills}</span>,
-                    avgBill: (
-                      <span className="font-semibold">
-                        {inr(totals.bills > 0 ? totals.revenue / totals.bills : 0)}
-                      </span>
-                    ),
-                    avgProfit: (
-                      <span className={`font-semibold ${profitClass(totals.bills > 0 ? totals.profit / totals.bills : 0)}`}>
-                        {inr(totals.bills > 0 ? totals.profit / totals.bills : 0)}
-                      </span>
-                    ),
-                  },
-                ]
-              : []),
-          ]}
+          rows={shops.map((s) => ({
+            shop: s.shopName,
+            revenue: (
+              <DrillValue metric="sale" from={day.from} to={day.to} title="Sale">
+                {rupeeShort(s.revenue)}
+              </DrillValue>
+            ),
+            margin: (
+              <DrillValue metric="grossMargin" from={day.from} to={day.to} title="Gross margin">
+                {rupeeShort(s.margin)}
+              </DrillValue>
+            ),
+            pct: (
+              <DrillValue metric="grossMargin" from={day.from} to={day.to} title="Gross margin">
+                {`${s.marginPct.toFixed(1)}%`}
+              </DrillValue>
+            ),
+            bills: (
+              <DrillValue metric="saleBills" from={day.from} to={day.to} title="Sale bills">
+                {s.bills}
+              </DrillValue>
+            ),
+            avg: (
+              <DrillValue metric="sale" from={day.from} to={day.to} title="Sale">
+                {rupeeShort(s.avgBill)}
+              </DrillValue>
+            ),
+          }))}
         />
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            Today payment mix
-          </h2>
-          <ul className="space-y-2 text-sm">
-            {kpis.paymentMix.length === 0 ? (
-              <li className="text-slate-500">No payments today</li>
-            ) : (
-              kpis.paymentMix.map((p) => (
-                <li key={p.method} className="flex justify-between">
-                  <span>{paymentMethodLabel(p.method)}</span>
-                  <span className="font-medium">{inr(p.amount)}</span>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-        <div className="lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            Recent sales
-          </h2>
-          <DataTable
-            columns={[
-              { key: "invoice", label: "Invoice" },
-              { key: "customer", label: "Customer" },
-              { key: "date", label: "Date" },
-              { key: "amount", label: "Amount", className: "text-right" },
-            ]}
-            rows={kpis.recentSales.map((s) => ({
-              invoice: (
-                <Link
-                  className="font-medium text-teal-700 hover:underline"
-                  href={`/sales/${s.store_id}/${s.local_id}`}
-                >
-                  {String(s.invoice_number)}
-                </Link>
-              ),
-              customer: String(s.billing_customer_name || "Walk-in"),
-              date: fmtDate(s.invoice_date as string),
-              amount: inr(Number(s.grand_total)),
-            }))}
-          />
-        </div>
-      </div>
+      </Card>
     </div>
   );
 }

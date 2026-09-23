@@ -148,7 +148,7 @@
                                       SelectedItem="{Binding SelectedItem}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
-                                                        Width="375" MinWidth="120" MaxWidth="375"
+                                                        Width="280" MinWidth="120"
                                                         ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Generic" Binding="{Binding GenericName}" Width="*" MinWidth="100" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" />
@@ -201,12 +201,13 @@
                                     <DataGridTextColumn Header="Date" Binding="{Binding MovementDateLabel}" Width="130" />
                                     <DataGridTextColumn Header="Type" Binding="{Binding MovementTypeLabel}" Width="100" />
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
-                                                        Width="375" MinWidth="120" MaxWidth="375"
+                                                        Width="280" MinWidth="120"
                                                         ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="80" />
                                     <DataGridTextColumn Header="Quantity" Binding="{Binding Quantity}" Width="55" />
                                     <DataGridTextColumn Header="Balance" Binding="{Binding BalanceAfter}" Width="55" />
-                                    <DataGridTextColumn Header="Ref" Binding="{Binding ReferenceNumber}" Width="115" />
+                                    <DataGridTextColumn Header="Ref" Binding="{Binding ReferenceDisplay}"
+                                                        Width="260" MinWidth="140" />
                                     <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" MinWidth="100" />
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -268,7 +269,7 @@
                                       ItemsSource="{Binding Lines}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
-                                                        Width="375" MinWidth="120" MaxWidth="375" IsReadOnly="True"
+                                                        Width="280" MinWidth="120" IsReadOnly="True"
                                                         ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" IsReadOnly="True" />
                                     <DataGridTextColumn Header="System" Binding="{Binding SystemQuantity}" Width="65" IsReadOnly="True" />
@@ -368,7 +369,7 @@
                                       ItemsSource="{Binding Lines}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
-                                                        Width="375" MinWidth="120" MaxWidth="375" IsReadOnly="True"
+                                                        Width="280" MinWidth="120" IsReadOnly="True"
                                                         ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="85" IsReadOnly="True" />
                                     <DataGridTextColumn Header="Expiry" Binding="{Binding ExpiryDisplay}" Width="70" IsReadOnly="True" />
@@ -464,7 +465,7 @@
                                               ItemsSource="{Binding SelectedTransferLines}">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
-                                                                Width="375" MinWidth="120" MaxWidth="375"
+                                                                Width="280" MinWidth="120"
                                                                 ElementStyle="{StaticResource MedicineNameCell}" />
                                             <DataGridTextColumn Header="Barcode" Binding="{Binding MedicineBarcode}" Width="110" />
                                             <DataGridTextColumn Header="Batch" Binding="{Binding BatchNumber}" Width="90" />
@@ -540,7 +541,7 @@
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="When" Binding="{Binding RecordedAtLabel}" Width="140" />
                                     <DataGridTextColumn Header="Medicine" Binding="{Binding MedicineName}"
-                                                        Width="375" MinWidth="120" MaxWidth="375"
+                                                        Width="280" MinWidth="120"
                                                         ElementStyle="{StaticResource MedicineNameCell}" />
                                     <DataGridTextColumn Header="Wanted" Binding="{Binding RequestedQuantity, StringFormat=0.##}" Width="70" />
                                     <DataGridTextColumn Header="Had" Binding="{Binding AvailableQuantity, StringFormat=0.##}" Width="60" />

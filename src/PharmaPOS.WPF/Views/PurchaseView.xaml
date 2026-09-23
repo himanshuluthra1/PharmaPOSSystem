@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:purchaseVm="clr-namespace:PharmaPOS.WPF.ViewModels.Purchases"
+             xmlns:svc="clr-namespace:PharmaPOS.WPF.Services"
              d:DataContext="{d:DesignInstance Type=purchaseVm:PurchaseViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -234,6 +235,7 @@
 
                 <DataGrid x:Name="PurchaseGrid" Grid.Row="1"
                           ItemsSource="{Binding Lines}"
+                          svc:DataGridLayout.PersistKey="Purchase"
                           AutoGenerateColumns="False" CanUserAddRows="False"
                           CanUserResizeColumns="True"
                           HeadersVisibility="Column" GridLinesVisibility="All"

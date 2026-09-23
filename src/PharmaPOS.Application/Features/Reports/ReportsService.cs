@@ -237,14 +237,17 @@ public partial class ReportsService : IReportsService
             .Where(s => s.InvoiceDate >= start && s.InvoiceDate < end)
             .Include(s => s.Items)
             .ThenInclude(i => i.MedicineBatch)
+            .Include(s => s.Items)
+            .ThenInclude(i => i.Medicine)
             .OrderByDescending(s => s.InvoiceDate)
             .ToListAsync(ct);
 
         var rows = sales.Select(s =>
         {
             var revenue = s.GrandTotal;
-            var cost = s.Items.Sum(i =>
-                i.Quantity * (i.MedicineBatch?.PurchasePrice ?? 0m));
+            // MedWin / historical sales often lack MedicineBatchId when the sold batch is gone —
+            // fall back to medicine master purchase price so profit is not overstated as ~100%.
+            var cost = s.Items.Sum(ResolveLineCost);
             return new ProfitReportRowDto(
                 s.Id,
                 s.InvoiceNumber,
@@ -297,7 +300,7 @@ public partial class ReportsService : IReportsService
         var medIds = lines.Select(l => l.MedicineId).Distinct().ToList();
         var medicines = await _uow.Repository<Medicine>().QueryIncludingDeleted().AsNoTracking()
             .Where(m => medIds.Contains(m.Id))
-            .Select(m => new { m.Id, m.Name, m.GenericName })
+            .Select(m => new { m.Id, m.Name, m.GenericName, m.PurchasePrice })
             .ToDictionaryAsync(m => m.Id, ct);
 
         var batchIds = lines
@@ -320,12 +323,11 @@ public partial class ReportsService : IReportsService
                 var generic = med?.GenericName;
                 var qty = g.Sum(x => x.Quantity);
                 var revenue = g.Sum(x => x.LineTotal);
+                var medCost = med?.PurchasePrice ?? 0m;
                 var cost = g.Sum(x =>
-                {
-                    if (x.MedicineBatchId is int bid && batchCosts.TryGetValue(bid, out var price))
-                        return x.Quantity * price;
-                    return 0m;
-                });
+                    x.Quantity * ResolveUnitCost(
+                        x.MedicineBatchId is int bid && batchCosts.TryGetValue(bid, out var bp) ? bp : null,
+                        medCost));
                 return new MedicineSalesRowDto(g.Key, name, generic, qty, revenue, cost, revenue - cost);
             })
             .OrderByDescending(r => r.Revenue)
@@ -701,6 +703,23 @@ public partial class ReportsService : IReportsService
         var end = to.Date.AddDays(1);
         if (end < start) end = start.AddDays(1);
         return (start, end);
+    }
+
+    /// <summary>
+    /// Unit cost for a sale line: batch purchase price when available (&gt; 0), else medicine master price.
+    /// Historical MedWin lines often have no batch FK after the sold batch left stock.
+    /// </summary>
+    private static decimal ResolveUnitCost(decimal? batchPurchasePrice, decimal medicinePurchasePrice)
+    {
+        if (batchPurchasePrice is > 0m) return batchPurchasePrice.Value;
+        return medicinePurchasePrice > 0m ? medicinePurchasePrice : 0m;
+    }
+
+    private static decimal ResolveLineCost(SaleItem item)
+    {
+        var batchPp = item.MedicineBatch?.PurchasePrice;
+        var medPp = item.Medicine?.PurchasePrice ?? 0m;
+        return item.Quantity * ResolveUnitCost(batchPp, medPp);
     }
 
     private static ReportSummaryDto BuildSummary(int count, decimal total, decimal tax, decimal discount)

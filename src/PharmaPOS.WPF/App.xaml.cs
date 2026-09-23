@@ -60,6 +60,11 @@ public partial class App : System.Windows.Application
         services.AddSingleton<IBillShareSettingsService, BillShareSettingsService>();
         services.AddSingleton<IBillPdfUploadService, BillPdfUploadService>();
         services.AddSingleton<IUrlShortenerService, TinyUrlShortenerService>();
+        services.AddHttpClient(WhatsAppDirectApiService.HttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(45);
+        });
+        services.AddSingleton<IWhatsAppDirectApiService, WhatsAppDirectApiService>();
         services.AddSingleton<IBillShareService, BillShareService>();
         services.AddSingleton<MySqlSyncSettingsService>();
         services.AddSingleton<IMySqlSyncSettingsService>(sp => sp.GetRequiredService<MySqlSyncSettingsService>());
@@ -148,6 +153,7 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         FocusHighlight.Register();
+        DataGridLayout.Register();
 
         DispatcherUnhandledException += (_, args) =>
         {

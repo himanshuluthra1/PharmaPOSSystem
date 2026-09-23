@@ -492,8 +492,8 @@ public sealed class ReportingSyncService : IReportingSyncService
 
     private async Task EnqueueAsync(string entityType, string storeId, int localId, object payload, CancellationToken ct)
     {
-        if (!_gate.IsEnabled) return;
-
+        // Always queue when store identity exists. The background worker only publishes
+        // while MySQL sync is enabled — so turning sync back on still uploads missed bills.
         var entry = new SyncOutboxEntry
         {
             EntityType = entityType,
@@ -514,9 +514,6 @@ public sealed class ReportingSyncService : IReportingSyncService
     /// <summary>Resolves the unique StoreId used as the VPS tenant key for all sync rows.</summary>
     private Task<string?> ResolveStoreIdAsync(int? branchId, CancellationToken ct)
     {
-        if (!_gate.IsEnabled)
-            return Task.FromResult<string?>(null);
-
         if (!string.IsNullOrWhiteSpace(_storeIdentity.StoreId))
             return Task.FromResult<string?>(_storeIdentity.StoreId.Trim().ToUpperInvariant());
 
@@ -536,4 +533,30 @@ public sealed class ReportingSyncService : IReportingSyncService
             // Never fail POS operations because reporting enqueue failed.
         }
     }
+
+    public Task CatchUpMissingSalesAsync(int lookbackDays = 7, CancellationToken ct = default)
+        => SafeAsync(async () =>
+        {
+            var store = await ResolveStoreIdAsync(null, ct);
+            if (store is null) return;
+
+            var since = _clock.UtcNow.AddDays(-Math.Clamp(lookbackDays, 1, 90));
+            var saleIds = await _uow.Repository<Sale>().Query().AsNoTracking()
+                .Where(s => !s.IsDeleted && s.CreatedAtUtc >= since)
+                .Select(s => s.Id)
+                .ToListAsync(ct);
+            if (saleIds.Count == 0) return;
+
+            var alreadyQueued = await _uow.Repository<SyncOutboxEntry>().Query().AsNoTracking()
+                .Where(e => e.EntityType == ReportingSyncEntityTypes.Sale
+                            && e.StoreCode == store
+                            && saleIds.Contains(e.LocalId))
+                .Select(e => e.LocalId)
+                .Distinct()
+                .ToListAsync(ct);
+            var queued = alreadyQueued.ToHashSet();
+
+            foreach (var saleId in saleIds.Where(id => !queued.Contains(id)))
+                await EnqueueSaleAsync(saleId, ct);
+        });
 }

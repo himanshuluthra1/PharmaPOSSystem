@@ -59,9 +59,11 @@ public class InventoryViewModel : ObservableObject
         get => _selectedTab;
         set
         {
-            if (!SetProperty(ref _selectedTab, value)) return;
+            var changed = SetProperty(ref _selectedTab, value);
+            // Always refresh Ledger when opening/re-selecting it (cached nav can keep SelectedTab=1).
             if (value == 1)
                 _ = StockLedger.RefreshAsync();
+            if (!changed) return;
             if (value == 4)
                 _ = StockTransfer.RefreshHistoryAsync();
             if (value == 5)

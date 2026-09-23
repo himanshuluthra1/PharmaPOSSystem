@@ -68,7 +68,8 @@ public record StockLedgerRowDto(
     decimal BalanceAfter,
     decimal UnitCost,
     string? ReferenceNumber,
-    string? Remarks)
+    string? Remarks,
+    string? PartyName = null)
 {
     public string MovementDateLabel => MovementDateUtc.ToLocalTime().ToString("dd/MM/yyyy hh:mm tt");
 
@@ -90,6 +91,19 @@ public record StockLedgerRowDto(
     };
 
     public bool IsInbound => Quantity > 0;
+
+    /// <summary>Bill/reference number with customer or supplier name when available.</summary>
+    public string ReferenceDisplay
+    {
+        get
+        {
+            var bill = string.IsNullOrWhiteSpace(ReferenceNumber) ? null : ReferenceNumber.Trim();
+            var party = string.IsNullOrWhiteSpace(PartyName) ? null : PartyName.Trim();
+            if (bill is null) return party ?? string.Empty;
+            if (party is null) return bill;
+            return $"{bill} · {party}";
+        }
+    }
 }
 
 public class StockAdjustmentLineRequest

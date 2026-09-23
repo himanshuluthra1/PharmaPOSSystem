@@ -45,7 +45,6 @@ public partial class SalesView : UserControl
 
     private SalesViewModel? ViewModel => DataContext as SalesViewModel;
     private IUiLayoutService? _layout;
-    private DataGridLayoutTracker? _gridLayoutTracker;
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -53,16 +52,12 @@ public partial class SalesView : UserControl
         if (_layout is null) return;
 
         SideColumn.Width = new GridLength(_layout.GetSidePanelWidth(UiLayoutService.SalesKey));
-        _gridLayoutTracker?.Dispose();
-        _gridLayoutTracker = new DataGridLayoutTracker(CartGrid, UiLayoutService.SalesKey, _layout);
         OnRequestItemFocus(ViewModel?.Cart.FirstOrDefault());
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         PersistSidePanelWidth();
-        _gridLayoutTracker?.Dispose();
-        _gridLayoutTracker = null;
     }
 
     private void SideSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)

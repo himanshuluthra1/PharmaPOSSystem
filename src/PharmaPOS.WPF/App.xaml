@@ -221,6 +221,21 @@
             <Style TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}" />
             <Style TargetType="PasswordBox" BasedOn="{StaticResource MaterialDesignOutlinedPasswordBox}" />
 
+            <!-- Column-edge grippers so users can drag to resize (required named parts). -->
+            <Style x:Key="PharmaColumnHeaderGripper" TargetType="Thumb">
+                <Setter Property="Width" Value="8" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Cursor" Value="SizeWE" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border Background="{TemplateBinding Background}"
+                                    Padding="{TemplateBinding Padding}" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Compact grids app-wide with sky-blue selected row (same feel as bill dropdown). -->
             <Style x:Key="PharmaDataGridColumnHeader" TargetType="DataGridColumnHeader"
                    BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
@@ -239,16 +254,23 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="DataGridColumnHeader">
-                            <Border Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    Padding="{TemplateBinding Padding}"
-                                    SnapsToDevicePixels="True">
-                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  RecognizesAccessKey="True"
-                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
-                            </Border>
+                            <Grid SnapsToDevicePixels="True">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                      RecognizesAccessKey="True"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                                </Border>
+                                <Thumb x:Name="PART_LeftHeaderGripper"
+                                       HorizontalAlignment="Left"
+                                       Style="{StaticResource PharmaColumnHeaderGripper}" />
+                                <Thumb x:Name="PART_RightHeaderGripper"
+                                       HorizontalAlignment="Right"
+                                       Style="{StaticResource PharmaColumnHeaderGripper}" />
+                            </Grid>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
@@ -317,6 +339,8 @@
             <Style x:Key="PharmaDataGrid" TargetType="DataGrid" BasedOn="{StaticResource MaterialDesignDataGrid}">
                 <Setter Property="RowHeight" Value="28" />
                 <Setter Property="ColumnHeaderHeight" Value="34" />
+                <Setter Property="CanUserResizeColumns" Value="True" />
+                <Setter Property="CanUserReorderColumns" Value="False" />
                 <Setter Property="GridLinesVisibility" Value="All" />
                 <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource GridLineBrush}" />
                 <Setter Property="VerticalGridLinesBrush" Value="{StaticResource GridLineBrush}" />

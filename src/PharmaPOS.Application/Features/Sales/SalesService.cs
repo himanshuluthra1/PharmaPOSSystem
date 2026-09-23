@@ -1112,7 +1112,8 @@ public class SalesService : ISalesService
                 BalanceAfter = batch.QuantityAvailable,
                 UnitCost = batch.PurchasePrice,
                 ReferenceType = nameof(Sale),
-                ReferenceId = sale.Id,
+                ReferenceId = sale.Id > 0 ? sale.Id : null,
+                ReferenceNumber = sale.InvoiceNumber,
                 MovementDateUtc = _clock.UtcNow,
                 Remarks = $"Reversal for edit {sale.InvoiceNumber}"
             }, ct);
@@ -1140,11 +1141,11 @@ public class SalesService : ISalesService
         };
         ApplyInvoiceLock(sale);
 
+        sale.InvoiceNumber = await GenerateInvoiceNumberAsync(branchId, ct);
+
         await ApplySaleLinesAsync(sale, request.Lines, branchId, ct);
         ApplySalePayments(sale, request.Payments);
-
         sale.CustomerId = await ResolveCustomerForSaleAsync(request, sale, ct);
-        sale.InvoiceNumber = await GenerateInvoiceNumberAsync(branchId, ct);
 
         await _uow.Repository<Sale>().AddAsync(sale, ct);
 
@@ -1233,6 +1234,7 @@ public class SalesService : ISalesService
                 UnitCost = batch.PurchasePrice,
                 ReferenceType = nameof(Sale),
                 ReferenceId = sale.Id > 0 ? sale.Id : null,
+                ReferenceNumber = sale.InvoiceNumber,
                 MovementDateUtc = _clock.UtcNow,
                 Remarks = medicine?.Name
             }, ct);
@@ -1486,6 +1488,7 @@ public class SalesService : ISalesService
 
         string customerName = sale.BillingCustomerName ?? "Walk-in Customer";
         string? customerPhone = sale.BillingCustomerPhone;
+        string? customerAddress = sale.BillingCustomerAddress;
         if (sale.CustomerId is int cid)
         {
             var c = await _uow.Repository<Customer>().GetByIdAsync(cid, ct);
@@ -1497,6 +1500,8 @@ public class SalesService : ISalesService
                     customerName = sale.BillingCustomerName ?? c.Name;
                 if (string.IsNullOrWhiteSpace(customerPhone))
                     customerPhone = c.Phone;
+                if (string.IsNullOrWhiteSpace(customerAddress))
+                    customerAddress = c.Address;
             }
         }
 
@@ -1537,6 +1542,7 @@ public class SalesService : ISalesService
             InvoicePaperSize = company?.InvoicePaperSize ?? InvoicePaperSize.A4,
             CustomerName = customerName,
             CustomerPhone = customerPhone,
+            CustomerAddress = customerAddress,
             DoctorName = doctorName,
             RoundOff = sale.RoundOff,
             GrandTotal = sale.GrandTotal,

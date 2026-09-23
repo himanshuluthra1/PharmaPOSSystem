@@ -26,4 +26,32 @@ public sealed class BillShareSettings
 
     /// <summary>When true, shorten the public PDF URL via TinyURL before WhatsApp/SMS.</summary>
     public bool EnableTinyUrl { get; set; } = true;
+
+    /// <summary>
+    /// When true and Cloud API credentials are set, WhatsApp sends via Meta Graph API
+    /// (no WhatsApp Desktop). Otherwise the app opens WhatsApp chat as before.
+    /// </summary>
+    public bool EnableWhatsAppApi { get; set; }
+
+    /// <summary>Meta permanent / system-user access token for WhatsApp Cloud API.</summary>
+    public string WhatsAppAccessToken { get; set; } = string.Empty;
+
+    /// <summary>WhatsApp Business phone number ID from Meta Developer Console.</summary>
+    public string WhatsAppPhoneNumberId { get; set; } = string.Empty;
+
+    /// <summary>Graph API version, e.g. v21.0</summary>
+    public string WhatsAppApiVersion { get; set; } = "v21.0";
+
+    /// <summary>
+    /// Optional approved utility template name for bills (required to message customers
+    /// outside the 24-hour window). Body params: {{1}} customer, {{2}} invoice,
+    /// {{3}} amount, {{4}} PDF link or "—".
+    /// </summary>
+    public string WhatsAppBillTemplateName { get; set; } = string.Empty;
+
+    /// <summary>Template language code, e.g. en or en_US.</summary>
+    public string WhatsAppBillTemplateLanguage { get; set; } = "en";
+
+    /// <summary>If API send fails, fall back to opening WhatsApp Desktop.</summary>
+    public bool WhatsAppApiDesktopFallback { get; set; } = true;
 }

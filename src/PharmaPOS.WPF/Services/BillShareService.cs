@@ -50,6 +50,7 @@ public sealed class BillShareService : IBillShareService
     private readonly IInvoicePrintService _printService;
     private readonly IBillPdfUploadService _uploader;
     private readonly IUrlShortenerService _urlShortener;
+    private readonly IWhatsAppDirectApiService _whatsAppApi;
     private readonly IDialogService _dialog;
 
     public BillShareService(
@@ -57,12 +58,14 @@ public sealed class BillShareService : IBillShareService
         IInvoicePrintService printService,
         IBillPdfUploadService uploader,
         IUrlShortenerService urlShortener,
+        IWhatsAppDirectApiService whatsAppApi,
         IDialogService dialog)
     {
         _settings = settings;
         _printService = printService;
         _uploader = uploader;
         _urlShortener = urlShortener;
+        _whatsAppApi = whatsAppApi;
         _dialog = dialog;
     }
 
@@ -197,20 +200,26 @@ public sealed class BillShareService : IBillShareService
     {
         try
         {
-            await RunOnUiAsync(async () =>
+            if (channel.HasFlag(BillShareChannel.WhatsApp) && cfg.EnableWhatsApp)
             {
-                if (channel.HasFlag(BillShareChannel.WhatsApp) && cfg.EnableWhatsApp)
+                var sentViaApi = await TrySendWhatsAppApiAsync(phone, message, cfg).ConfigureAwait(false);
+                if (!sentViaApi)
                 {
-                    await OpenWhatsAppAndPasteAsync(phone, message).ConfigureAwait(true);
-                    _dialog.ShowInfo(
-                        "WhatsApp chat is open with the message.\nReview and tap Send.\n\n" +
-                        "If the box is empty, click the message box and press Ctrl+V.",
-                        "WhatsApp");
+                    await RunOnUiAsync(async () =>
+                    {
+                        await OpenWhatsAppAndPasteAsync(phone, message).ConfigureAwait(true);
+                        _dialog.ShowInfo(
+                            "WhatsApp chat is open with the message.\nReview and tap Send.\n\n" +
+                            "If the box is empty, click the message box and press Ctrl+V.",
+                            "WhatsApp");
+                    }).ConfigureAwait(false);
                 }
+            }
 
-                if (channel.HasFlag(BillShareChannel.Sms) && cfg.EnableSms)
-                    OpenSms(phone, message);
-            }).ConfigureAwait(false);
+            if (channel.HasFlag(BillShareChannel.Sms) && cfg.EnableSms)
+            {
+                await RunOnUiAsync(() => OpenSms(phone, message)).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
@@ -291,27 +300,33 @@ public sealed class BillShareService : IBillShareService
                 if (channel.HasFlag(BillShareChannel.WhatsApp) && cfg.EnableWhatsApp)
                 {
                     var waMessage = BuildWhatsAppMessage(receipt, publicUrl);
-                    if (publicUrl is not null)
+                    var sentViaApi = await TrySendWhatsAppBillApiAsync(
+                        phone, receipt, publicUrl, waMessage, cfg).ConfigureAwait(true);
+
+                    if (!sentViaApi)
                     {
-                        await OpenWhatsAppAndPasteAsync(phone, waMessage).ConfigureAwait(true);
-                        _dialog.ShowInfo(
-                            "Bill PDF uploaded.\n\n" +
-                            "WhatsApp chat is open with the bill message and PDF link.\n" +
-                            "Review and tap Send.\n\n" +
-                            "If the box is empty, click the message box and press Ctrl+V.\n\n" +
-                            $"Link:\n{publicUrl}",
-                            "WhatsApp bill link");
-                    }
-                    else if (pdfPath is not null)
-                    {
-                        ShareWhatsAppWithLocalPdf(phone, waMessage, pdfPath);
-                        _dialog.ShowInfo(
-                            "VPS upload is not configured, so the PDF was prepared for manual attach.\n\n" +
-                            "1. WhatsApp chat is open.\n" +
-                            "2. Press Ctrl+V (or drag from Explorer) to attach the PDF.\n" +
-                            "3. Tap Send.\n\n" +
-                            "To send a link instead, configure VPS upload in Settings → Preferences.",
-                            "WhatsApp bill PDF");
+                        if (publicUrl is not null)
+                        {
+                            await OpenWhatsAppAndPasteAsync(phone, waMessage).ConfigureAwait(true);
+                            _dialog.ShowInfo(
+                                "Bill PDF uploaded.\n\n" +
+                                "WhatsApp chat is open with the bill message and PDF link.\n" +
+                                "Review and tap Send.\n\n" +
+                                "If the box is empty, click the message box and press Ctrl+V.\n\n" +
+                                $"Link:\n{publicUrl}",
+                                "WhatsApp bill link");
+                        }
+                        else if (pdfPath is not null)
+                        {
+                            ShareWhatsAppWithLocalPdf(phone, waMessage, pdfPath);
+                            _dialog.ShowInfo(
+                                "VPS upload is not configured, so the PDF was prepared for manual attach.\n\n" +
+                                "1. WhatsApp chat is open.\n" +
+                                "2. Press Ctrl+V (or drag from Explorer) to attach the PDF.\n" +
+                                "3. Tap Send.\n\n" +
+                                "To send a link instead, configure VPS upload in Settings → Preferences.",
+                                "WhatsApp bill PDF");
+                        }
                     }
                 }
 
@@ -324,6 +339,86 @@ public sealed class BillShareService : IBillShareService
             await RunOnUiAsync(() => _dialog.ShowError($"Could not share bill: {ex.Message}"))
                 .ConfigureAwait(false);
         }
+    }
+
+    /// <returns>True when the message was sent via Cloud API (caller should not open Desktop).</returns>
+    private async Task<bool> TrySendWhatsAppApiAsync(string phone, string message, BillShareSettings cfg)
+    {
+        if (!_whatsAppApi.IsConfigured) return false;
+
+        var result = await _whatsAppApi.SendTextAsync(phone, message).ConfigureAwait(false);
+        if (result.Success)
+        {
+            await RunOnUiAsync(() =>
+                _dialog.ShowInfo(
+                    "WhatsApp message sent directly via Cloud API.",
+                    "WhatsApp")).ConfigureAwait(false);
+            return true;
+        }
+
+        if (!cfg.WhatsAppApiDesktopFallback)
+        {
+            await RunOnUiAsync(() =>
+                _dialog.ShowError(
+                    "WhatsApp API could not send the message.\n\n" + (result.Error ?? "Unknown error")))
+                .ConfigureAwait(false);
+            return true; // consumed; do not also open desktop
+        }
+
+        await RunOnUiAsync(() =>
+            _dialog.ShowInfo(
+                "WhatsApp API send failed — opening WhatsApp Desktop instead.\n\n" +
+                (result.Error ?? ""),
+                "WhatsApp")).ConfigureAwait(false);
+        return false;
+    }
+
+    private async Task<bool> TrySendWhatsAppBillApiAsync(
+        string phone,
+        SaleReceiptDto receipt,
+        string? publicUrl,
+        string plainMessage,
+        BillShareSettings cfg)
+    {
+        if (!_whatsAppApi.IsConfigured) return false;
+
+        var result = await _whatsAppApi.SendBillAsync(
+            phone,
+            receipt.CustomerName,
+            receipt.InvoiceNumber,
+            receipt.GrandTotal,
+            publicUrl,
+            plainMessage).ConfigureAwait(false);
+
+        if (result.Success)
+        {
+            var extra = string.IsNullOrWhiteSpace(publicUrl)
+                ? string.Empty
+                : $"\n\nBill PDF link:\n{publicUrl}";
+            await RunOnUiAsync(() =>
+                _dialog.ShowInfo(
+                    "Sale bill sent on WhatsApp via Cloud API." + extra,
+                    "WhatsApp")).ConfigureAwait(false);
+            return true;
+        }
+
+        if (!cfg.WhatsAppApiDesktopFallback)
+        {
+            await RunOnUiAsync(() =>
+                _dialog.ShowError(
+                    "WhatsApp API could not send the bill.\n\n" +
+                    (result.Error ?? "Unknown error") +
+                    "\n\nTip: For customers outside the 24-hour window, set an approved bill template in Settings."))
+                .ConfigureAwait(false);
+            return true;
+        }
+
+        await RunOnUiAsync(() =>
+            _dialog.ShowInfo(
+                "WhatsApp API send failed — opening WhatsApp Desktop instead.\n\n" +
+                (result.Error ?? ""),
+                "WhatsApp")).ConfigureAwait(false);
+        return false;
     }
 
     private static Task RunOnUiAsync(Action action)

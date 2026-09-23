@@ -123,8 +123,16 @@ public class InvoicePrintService : IInvoicePrintService
         });
         doc.Blocks.Add(new Paragraph(new Run(r.CustomerName + (string.IsNullOrWhiteSpace(r.CustomerPhone) ? "" : "  " + r.CustomerPhone)))
         {
-            Margin = new Thickness(0, 0, 0, 6)
+            Margin = new Thickness(0, 0, 0, string.IsNullOrWhiteSpace(r.CustomerAddress) ? 6 : 1)
         });
+        if (!string.IsNullOrWhiteSpace(r.CustomerAddress))
+        {
+            doc.Blocks.Add(new Paragraph(new Run(r.CustomerAddress.Trim()))
+            {
+                Margin = new Thickness(0, 0, 0, 6),
+                FontSize = layout.FontSize - 0.5
+            });
+        }
         doc.Blocks.Add(DashedRule());
 
         foreach (var l in r.Lines)
@@ -971,6 +979,7 @@ public class InvoicePrintService : IInvoicePrintService
         {
             "Bill To: " + r.CustomerName
         };
+        if (!string.IsNullOrWhiteSpace(r.CustomerAddress)) left.Add(r.CustomerAddress.Trim());
         if (!string.IsNullOrWhiteSpace(r.CustomerPhone)) left.Add("Phone: " + r.CustomerPhone);
         if (!string.IsNullOrWhiteSpace(r.DoctorName)) left.Add("Doctor: " + r.DoctorName);
 

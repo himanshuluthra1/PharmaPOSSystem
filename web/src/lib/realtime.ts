@@ -1,18 +1,30 @@
-type Listener = (event: { storeId: string; entityType: string; localId: number }) => void;
+type RealtimeEvent = { storeId: string; entityType: string; localId: number };
+type Listener = (event: RealtimeEvent) => void;
 
-const listeners = new Set<Listener>();
+type RealtimeBus = {
+  listeners: Set<Listener>;
+};
 
-export function subscribeRealtime(listener: Listener) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+const GLOBAL_KEY = "__pharmapos_realtime_bus__";
+
+function getBus(): RealtimeBus {
+  const g = globalThis as typeof globalThis & {
+    [GLOBAL_KEY]?: RealtimeBus;
+  };
+  if (!g[GLOBAL_KEY]) {
+    g[GLOBAL_KEY] = { listeners: new Set<Listener>() };
+  }
+  return g[GLOBAL_KEY];
 }
 
-export function publishRealtime(event: {
-  storeId: string;
-  entityType: string;
-  localId: number;
-}) {
-  for (const listener of listeners) {
+export function subscribeRealtime(listener: Listener) {
+  const bus = getBus();
+  bus.listeners.add(listener);
+  return () => bus.listeners.delete(listener);
+}
+
+export function publishRealtime(event: RealtimeEvent) {
+  for (const listener of getBus().listeners) {
     try {
       listener(event);
     } catch {

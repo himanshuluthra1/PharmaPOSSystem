@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   status TINYINT NOT NULL DEFAULT 1 COMMENT '1=active 0=inactive',
   created_at_utc DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS tenant_stores (
   tenant_id INT NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS tenant_stores (
   PRIMARY KEY (tenant_id, store_id),
   KEY ix_tenant_stores_store (store_id),
   CONSTRAINT fk_tenant_stores_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS dashboard_roles (
   id INT NOT NULL AUTO_INCREMENT,
@@ -27,14 +27,14 @@ CREATE TABLE IF NOT EXISTS dashboard_roles (
   is_system TINYINT(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (id),
   UNIQUE KEY uk_dashboard_roles_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS dashboard_role_permissions (
   role_id INT NOT NULL,
   permission_key VARCHAR(80) NOT NULL,
   PRIMARY KEY (role_id, permission_key),
   CONSTRAINT fk_drp_role FOREIGN KEY (role_id) REFERENCES dashboard_roles(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS dashboard_users (
   id INT NOT NULL AUTO_INCREMENT,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS dashboard_users (
   KEY ix_dashboard_users_tenant (tenant_id),
   CONSTRAINT fk_du_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
   CONSTRAINT fk_du_role FOREIGN KEY (role_id) REFERENCES dashboard_roles(id) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sync_events (
   id BIGINT NOT NULL AUTO_INCREMENT,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS sync_events (
   created_at_utc DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY (id),
   KEY ix_sync_events_store_time (store_id, created_at_utc)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Suppliers (for purchase party names on dashboard)
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -98,7 +98,7 @@ INSERT IGNORE INTO dashboard_role_permissions (role_id, permission_key) VALUES
   (1, 'stores.manage_users'),
   (1, 'stores.manage_stores');
 
--- Manager
+-- Manager (full reporting menu except user/store admin)
 INSERT IGNORE INTO dashboard_role_permissions (role_id, permission_key) VALUES
   (2, 'dashboard.view'),
   (2, 'sales.view'),
@@ -120,6 +120,12 @@ INSERT IGNORE INTO dashboard_role_permissions (role_id, permission_key) VALUES
   (4, 'dashboard.view'),
   (4, 'sales.view'),
   (4, 'stock.view');
+
+-- Note: Medwin-style pages map to existing keys:
+-- Overview/Ledger/P&L/Net Business/Audit → dashboard.view
+-- Bills & Payments / Expense & Collection → payments.view
+-- Expiry → stock.view
+-- GST → sales.view
 
 -- Bootstrap default tenant (link stores manually or via admin UI)
 INSERT INTO tenants (id, name, status)

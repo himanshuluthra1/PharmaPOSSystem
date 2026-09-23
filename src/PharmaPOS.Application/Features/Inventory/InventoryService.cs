@@ -235,22 +235,41 @@ public class InventoryService : IInventoryService
                 (m.Remarks != null && m.Remarks.Replace(" ", "").Contains(normalized)));
         }
 
-        var rows = await q
+        var raw = await q
             .OrderByDescending(m => m.MovementDateUtc)
             .ThenByDescending(m => m.Id)
             .Take(Math.Max(take, 2000))
-            .Select(m => new StockLedgerRowDto(
+            .Select(m => new
+            {
                 m.Id,
                 m.MovementDateUtc,
                 m.MovementType,
-                m.Medicine != null ? m.Medicine.Name : $"Medicine #{m.MedicineId}",
-                m.MedicineBatch != null ? m.MedicineBatch.BatchNumber : null,
+                MedicineName = m.Medicine != null ? m.Medicine.Name : $"Medicine #{m.MedicineId}",
+                BatchNumber = m.MedicineBatch != null ? m.MedicineBatch.BatchNumber : null,
                 m.Quantity,
                 m.BalanceAfter,
                 m.UnitCost,
                 m.ReferenceNumber,
-                m.Remarks))
+                m.Remarks,
+                m.ReferenceType,
+                m.ReferenceId
+            })
             .ToListAsync(ct);
+
+        var rows = await AttachPartyNamesAsync(
+            raw.Select(m => new StockLedgerRowDto(
+                m.Id,
+                m.MovementDateUtc,
+                m.MovementType,
+                m.MedicineName,
+                m.BatchNumber,
+                m.Quantity,
+                m.BalanceAfter,
+                m.UnitCost,
+                m.ReferenceNumber,
+                m.Remarks)).ToList(),
+            raw.Select(m => (m.ReferenceType, m.ReferenceId)).ToList(),
+            ct);
 
         // MedWin import wrote Sales/Purchases but not StockMovements. For a medicine
         // ledger (Ctrl+L), merge document history so purchase/sale lines appear.
@@ -268,6 +287,204 @@ public class InventoryService : IInventoryService
         }
 
         return rows;
+    }
+
+    private async Task<List<StockLedgerRowDto>> AttachPartyNamesAsync(
+        List<StockLedgerRowDto> rows,
+        IReadOnlyList<(string? ReferenceType, int? ReferenceId)> refs,
+        CancellationToken ct)
+    {
+        if (rows.Count == 0) return rows;
+
+        var saleIds = new HashSet<int>();
+        var purchaseIds = new HashSet<int>();
+        var purchaseReturnIds = new HashSet<int>();
+        var saleReturnIds = new HashSet<int>();
+        var refNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var (refType, refId) = i < refs.Count ? refs[i] : (null, null);
+            if (refId is int id and > 0)
+            {
+                if (string.Equals(refType, nameof(Sale), StringComparison.OrdinalIgnoreCase))
+                    saleIds.Add(id);
+                else if (string.Equals(refType, nameof(Purchase), StringComparison.OrdinalIgnoreCase))
+                    purchaseIds.Add(id);
+                else if (string.Equals(refType, nameof(PurchaseReturn), StringComparison.OrdinalIgnoreCase))
+                    purchaseReturnIds.Add(id);
+                else if (string.Equals(refType, nameof(SaleReturn), StringComparison.OrdinalIgnoreCase))
+                    saleReturnIds.Add(id);
+            }
+
+            if (!string.IsNullOrWhiteSpace(rows[i].ReferenceNumber))
+                refNumbers.Add(rows[i].ReferenceNumber!);
+        }
+
+        var salesById = saleIds.Count == 0
+            ? new Dictionary<int, (string Invoice, string? Party)>()
+            : await _uow.Repository<Sale>().Query().AsNoTracking()
+                .Where(s => saleIds.Contains(s.Id))
+                .Select(s => new
+                {
+                    s.Id,
+                    s.InvoiceNumber,
+                    Party = s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null)
+                })
+                .ToDictionaryAsync(s => s.Id, s => (Invoice: s.InvoiceNumber, Party: s.Party), ct);
+
+        var purchasesById = purchaseIds.Count == 0
+            ? new Dictionary<int, (string Invoice, string? Party)>()
+            : await _uow.Repository<Purchase>().Query().AsNoTracking()
+                .Where(p => purchaseIds.Contains(p.Id))
+                .Select(p => new
+                {
+                    p.Id,
+                    p.InvoiceNumber,
+                    Party = p.Supplier != null ? p.Supplier.Name : null
+                })
+                .ToDictionaryAsync(p => p.Id, p => (Invoice: p.InvoiceNumber, Party: p.Party), ct);
+
+        var purchaseReturnsById = purchaseReturnIds.Count == 0
+            ? new Dictionary<int, (string Invoice, string? Party)>()
+            : await _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+                .Where(r => purchaseReturnIds.Contains(r.Id))
+                .Select(r => new
+                {
+                    r.Id,
+                    r.ReturnNumber,
+                    Party = r.Supplier != null ? r.Supplier.Name : null
+                })
+                .ToDictionaryAsync(r => r.Id, r => (Invoice: r.ReturnNumber, Party: r.Party), ct);
+
+        var saleReturnsById = saleReturnIds.Count == 0
+            ? new Dictionary<int, (string Invoice, string? Party)>()
+            : await _uow.Repository<SaleReturn>().Query().AsNoTracking()
+                .Where(r => saleReturnIds.Contains(r.Id))
+                .Select(r => new
+                {
+                    r.Id,
+                    r.ReturnNumber,
+                    Party = r.Customer != null
+                        ? r.Customer.Name
+                        : (r.Sale != null
+                            ? (r.Sale.BillingCustomerName ?? (r.Sale.Customer != null ? r.Sale.Customer.Name : null))
+                            : null)
+                })
+                .ToDictionaryAsync(r => r.Id, r => (Invoice: r.ReturnNumber, Party: r.Party), ct);
+
+        Dictionary<string, string?> salesByInvoice = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string?> purchasesByInvoice = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string?> purchaseReturnsByNumber = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string?> saleReturnsByNumber = new(StringComparer.OrdinalIgnoreCase);
+
+        if (refNumbers.Count > 0)
+        {
+            var saleMatches = await _uow.Repository<Sale>().Query().AsNoTracking()
+                .Where(s => refNumbers.Contains(s.InvoiceNumber))
+                .Select(s => new
+                {
+                    s.InvoiceNumber,
+                    Party = s.BillingCustomerName ?? (s.Customer != null ? s.Customer.Name : null)
+                })
+                .ToListAsync(ct);
+            foreach (var s in saleMatches)
+                salesByInvoice[s.InvoiceNumber] = s.Party;
+
+            var purchaseMatches = await _uow.Repository<Purchase>().Query().AsNoTracking()
+                .Where(p => refNumbers.Contains(p.InvoiceNumber))
+                .Select(p => new
+                {
+                    p.InvoiceNumber,
+                    Party = p.Supplier != null ? p.Supplier.Name : null
+                })
+                .ToListAsync(ct);
+            foreach (var p in purchaseMatches)
+                purchasesByInvoice[p.InvoiceNumber] = p.Party;
+
+            var prMatches = await _uow.Repository<PurchaseReturn>().Query().AsNoTracking()
+                .Where(r => refNumbers.Contains(r.ReturnNumber))
+                .Select(r => new
+                {
+                    r.ReturnNumber,
+                    Party = r.Supplier != null ? r.Supplier.Name : null
+                })
+                .ToListAsync(ct);
+            foreach (var r in prMatches)
+                purchaseReturnsByNumber[r.ReturnNumber] = r.Party;
+
+            var srMatches = await _uow.Repository<SaleReturn>().Query().AsNoTracking()
+                .Where(r => refNumbers.Contains(r.ReturnNumber))
+                .Select(r => new
+                {
+                    r.ReturnNumber,
+                    Party = r.Customer != null
+                        ? r.Customer.Name
+                        : (r.Sale != null
+                            ? (r.Sale.BillingCustomerName ?? (r.Sale.Customer != null ? r.Sale.Customer.Name : null))
+                            : null)
+                })
+                .ToListAsync(ct);
+            foreach (var r in srMatches)
+                saleReturnsByNumber[r.ReturnNumber] = r.Party;
+        }
+
+        var enriched = new List<StockLedgerRowDto>(rows.Count);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var (refType, refId) = i < refs.Count ? refs[i] : (null, null);
+            string? party = null;
+            string? billNo = row.ReferenceNumber;
+
+            if (refId is int id and > 0)
+            {
+                if (string.Equals(refType, nameof(Sale), StringComparison.OrdinalIgnoreCase)
+                    && salesById.TryGetValue(id, out var sale))
+                {
+                    party = sale.Party;
+                    if (string.IsNullOrWhiteSpace(billNo)) billNo = sale.Invoice;
+                }
+                else if (string.Equals(refType, nameof(Purchase), StringComparison.OrdinalIgnoreCase)
+                         && purchasesById.TryGetValue(id, out var purchase))
+                {
+                    party = purchase.Party;
+                    if (string.IsNullOrWhiteSpace(billNo)) billNo = purchase.Invoice;
+                }
+                else if (string.Equals(refType, nameof(PurchaseReturn), StringComparison.OrdinalIgnoreCase)
+                         && purchaseReturnsById.TryGetValue(id, out var pr))
+                {
+                    party = pr.Party;
+                    if (string.IsNullOrWhiteSpace(billNo)) billNo = pr.Invoice;
+                }
+                else if (string.Equals(refType, nameof(SaleReturn), StringComparison.OrdinalIgnoreCase)
+                         && saleReturnsById.TryGetValue(id, out var sr))
+                {
+                    party = sr.Party;
+                    if (string.IsNullOrWhiteSpace(billNo)) billNo = sr.Invoice;
+                }
+            }
+
+            if (party is null && !string.IsNullOrWhiteSpace(billNo))
+            {
+                if (salesByInvoice.TryGetValue(billNo, out var saleParty))
+                    party = saleParty;
+                else if (purchasesByInvoice.TryGetValue(billNo, out var purchaseParty))
+                    party = purchaseParty;
+                else if (purchaseReturnsByNumber.TryGetValue(billNo, out var prParty))
+                    party = prParty;
+                else if (saleReturnsByNumber.TryGetValue(billNo, out var srParty))
+                    party = srParty;
+            }
+
+            enriched.Add(row with
+            {
+                ReferenceNumber = billNo,
+                PartyName = string.IsNullOrWhiteSpace(party) ? null : party.Trim()
+            });
+        }
+
+        return enriched;
     }
 
     private async Task<List<StockLedgerRowDto>> MergeDocumentHistoryAsync(
@@ -337,7 +554,8 @@ public class InventoryService : IInventoryService
                 i.Purchase.InvoiceNumber,
                 i.BatchNumber,
                 Qty = i.Quantity + i.FreeQuantity,
-                i.PurchasePrice
+                i.PurchasePrice,
+                PartyName = i.Purchase.Supplier != null ? i.Purchase.Supplier.Name : null
             })
             .ToListAsync(ct);
 
@@ -359,7 +577,9 @@ public class InventoryService : IInventoryService
                 i.Sale.InvoiceNumber,
                 i.BatchNumber,
                 i.Quantity,
-                i.UnitPrice
+                i.UnitPrice,
+                PartyName = i.Sale.BillingCustomerName
+                    ?? (i.Sale.Customer != null ? i.Sale.Customer.Name : null)
             })
             .ToListAsync(ct);
 
@@ -380,7 +600,8 @@ public class InventoryService : IInventoryService
                 i.PurchaseReturn.ReturnNumber,
                 i.BatchNumber,
                 Qty = i.ReturnedQuantity + i.ReturnedFreeQuantity,
-                i.PurchasePrice
+                i.PurchasePrice,
+                PartyName = i.PurchaseReturn.Supplier != null ? i.PurchaseReturn.Supplier.Name : null
             })
             .ToListAsync(ct);
 
@@ -398,7 +619,8 @@ public class InventoryService : IInventoryService
                 0m,
                 p.PurchasePrice,
                 p.InvoiceNumber,
-                null));
+                null,
+                p.PartyName));
         }
 
         foreach (var s in saleRows)
@@ -415,7 +637,8 @@ public class InventoryService : IInventoryService
                 0m,
                 s.UnitPrice,
                 s.InvoiceNumber,
-                isReturn ? "Sale return (from bill)" : null));
+                isReturn ? "Sale return (from bill)" : null,
+                s.PartyName));
         }
 
         foreach (var r in returnRows.Where(x => x.Qty != 0))
@@ -430,7 +653,8 @@ public class InventoryService : IInventoryService
                 0m,
                 r.PurchasePrice,
                 r.ReturnNumber,
-                "Purchase return"));
+                "Purchase return",
+                r.PartyName));
         }
 
         return rows;
@@ -540,7 +764,8 @@ public class InventoryService : IInventoryService
                 b.QuantityAvailable,
                 b.PurchasePrice,
                 "STOCK",
-                "Current batch stock (no movement history yet)"))
+                "Current batch stock (no movement history yet)",
+                null))
             .ToListAsync(ct);
     }
 

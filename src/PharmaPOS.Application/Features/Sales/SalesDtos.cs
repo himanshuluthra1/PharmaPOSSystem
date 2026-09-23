@@ -257,6 +257,7 @@ public class SaleReceiptDto
 
     public string CustomerName { get; set; } = "Walk-in Customer";
     public string? CustomerPhone { get; set; }
+    public string? CustomerAddress { get; set; }
     public string? DoctorName { get; set; }
 
     public List<SaleReceiptLineDto> Lines { get; set; } = new();

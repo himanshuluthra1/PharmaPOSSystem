@@ -41,6 +41,8 @@ public interface IReportingSyncService
     Task EnqueuePurchaseReturnAsync(int purchaseReturnId, CancellationToken ct = default);
     Task EnqueueStockMovementAsync(int movementId, CancellationToken ct = default);
     Task EnqueueStockTransferAsync(int transferId, CancellationToken ct = default);
+    /// <summary>Enqueue recent sales that never made it into the outbox (e.g. sync was off).</summary>
+    Task CatchUpMissingSalesAsync(int lookbackDays = 7, CancellationToken ct = default);
 }
 
 /// <summary>No-op sync used when gate is off or as a safe default.</summary>
@@ -57,4 +59,5 @@ public sealed class NullReportingSyncService : IReportingSyncService
     public Task EnqueuePurchaseReturnAsync(int purchaseReturnId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueueStockMovementAsync(int movementId, CancellationToken ct = default) => Task.CompletedTask;
     public Task EnqueueStockTransferAsync(int transferId, CancellationToken ct = default) => Task.CompletedTask;
+    public Task CatchUpMissingSalesAsync(int lookbackDays = 7, CancellationToken ct = default) => Task.CompletedTask;
 }
