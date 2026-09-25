@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS pos_releases (
   notes VARCHAR(500) NULL,
   created_at_utc DATETIME(6) NOT NULL,
   PRIMARY KEY (version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS pos_update_assignments (
   id INT NOT NULL AUTO_INCREMENT,
@@ -24,7 +24,12 @@ CREATE TABLE IF NOT EXISTS pos_update_assignments (
   PRIMARY KEY (id),
   KEY ix_pos_update_store_status (store_id, status),
   KEY ix_pos_update_store_version (store_id, version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Unify collations if tables already exist with MySQL 8 defaults (utf8mb4_0900_ai_ci).
+ALTER TABLE store_activations CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE pos_update_assignments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE pos_releases CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Heartbeat + vendor console (ignore errors if columns already exist)
 ALTER TABLE store_activations ADD COLUMN is_vendor TINYINT(1) NOT NULL DEFAULT 0;

@@ -5,7 +5,7 @@
 ;   Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /DIR="C:\Program Files\PharmaPOS"
 
 #define MyAppName "PharmaPOS"
-#define MyAppVersion "1.3.10"
+#define MyAppVersion "1.3.12"
 #define MyAppPublisher "PharmaPOS"
 #define MyAppExeName "PharmaPOS.exe"
 #ifndef PublishDir

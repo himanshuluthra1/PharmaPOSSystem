@@ -504,7 +504,7 @@ public sealed class StoreIdentityService : IStoreIdentityService
               PRIMARY KEY (store_id),
               UNIQUE KEY uk_store_activations_machine (machine_id),
               KEY ix_store_activations_code (store_code)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """, conn);
         await cmd.ExecuteNonQueryAsync(ct);
     }

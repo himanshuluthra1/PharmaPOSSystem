@@ -50,8 +50,7 @@ public sealed class PosUpdateService : IPosUpdateService
 
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
 
         await ExecAsync(conn, """
             CREATE TABLE IF NOT EXISTS pos_releases (
@@ -63,7 +62,7 @@ public sealed class PosUpdateService : IPosUpdateService
               notes VARCHAR(500) NULL,
               created_at_utc DATETIME(6) NOT NULL,
               PRIMARY KEY (version)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """, ct);
 
         await ExecAsync(conn, """
@@ -79,12 +78,19 @@ public sealed class PosUpdateService : IPosUpdateService
               PRIMARY KEY (id),
               KEY ix_pos_update_store_status (store_id, status),
               KEY ix_pos_update_store_version (store_id, version)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """, ct);
 
         await TryExecAsync(conn, "ALTER TABLE store_activations ADD COLUMN is_vendor TINYINT(1) NOT NULL DEFAULT 0", ct);
         await TryExecAsync(conn, "ALTER TABLE store_activations ADD COLUMN app_version VARCHAR(20) NULL", ct);
         await TryExecAsync(conn, "ALTER TABLE store_activations ADD COLUMN last_seen_utc DATETIME(6) NULL", ct);
+        // Avoid utf8mb4_0900_ai_ci vs utf8mb4_unicode_ci join errors on store_id / version.
+        await TryExecAsync(conn,
+            "ALTER TABLE store_activations CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", ct);
+        await TryExecAsync(conn,
+            "ALTER TABLE pos_update_assignments CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", ct);
+        await TryExecAsync(conn,
+            "ALTER TABLE pos_releases CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", ct);
         await TryExecAsync(conn,
             "UPDATE store_activations SET is_vendor = 1 WHERE store_code = 'STORE-001' AND is_vendor = 0", ct);
     }
@@ -101,8 +107,7 @@ public sealed class PosUpdateService : IPosUpdateService
         try
         {
             await EnsureSchemaAsync(ct);
-            await using var conn = CreateConnection();
-            await conn.OpenAsync(ct);
+            await using var conn = await OpenConnectionAsync(ct);
             await using var cmd = new MySqlCommand(
                 "SELECT is_vendor FROM store_activations WHERE store_id = @id LIMIT 1", conn);
             cmd.Parameters.AddWithValue("@id", _identity.StoreId);
@@ -125,8 +130,7 @@ public sealed class PosUpdateService : IPosUpdateService
 
         try
         {
-            await using var conn = CreateConnection();
-            await conn.OpenAsync(ct);
+            await using var conn = await OpenConnectionAsync(ct);
             await using var cmd = new MySqlCommand(
                 """
                 UPDATE store_activations
@@ -146,8 +150,7 @@ public sealed class PosUpdateService : IPosUpdateService
     public async Task<List<PosShopRow>> ListShopsAsync(CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
 
         await using var cmd = new MySqlCommand(
             """
@@ -163,7 +166,7 @@ public sealed class PosUpdateService : IPosUpdateService
                     FROM pos_update_assignments
                     GROUP BY store_id
                 ) last ON last.max_id = x.id
-            ) p ON p.store_id = a.store_id
+            ) p ON p.store_id COLLATE utf8mb4_unicode_ci = a.store_id COLLATE utf8mb4_unicode_ci
             ORDER BY a.store_code
             """, conn);
 
@@ -191,8 +194,7 @@ public sealed class PosUpdateService : IPosUpdateService
     public async Task<List<PosReleaseRow>> ListReleasesAsync(CancellationToken ct = default)
     {
         await EnsureSchemaAsync(ct);
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
         await using var cmd = new MySqlCommand(
             "SELECT version, file_name, package_url, sha256, file_size_bytes, notes, created_at_utc FROM pos_releases ORDER BY created_at_utc DESC",
             conn);
@@ -252,8 +254,7 @@ public sealed class PosUpdateService : IPosUpdateService
         }
 
         await EnsureSchemaAsync(ct);
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
         await using var cmd = new MySqlCommand(
             """
             INSERT INTO pos_releases (version, file_name, package_url, sha256, file_size_bytes, notes, created_at_utc)
@@ -285,8 +286,7 @@ public sealed class PosUpdateService : IPosUpdateService
             throw new InvalidOperationException("Select a published version.");
 
         await EnsureSchemaAsync(ct);
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
 
         await using (var exists = new MySqlCommand("SELECT COUNT(*) FROM pos_releases WHERE version = @ver", conn))
         {
@@ -323,13 +323,13 @@ public sealed class PosUpdateService : IPosUpdateService
         if (!_identity.IsConfigured || string.IsNullOrWhiteSpace(_identity.StoreId))
             return null;
 
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
         await using var cmd = new MySqlCommand(
             """
             SELECT a.id, a.version, r.package_url, r.file_name, r.sha256, r.file_size_bytes
             FROM pos_update_assignments a
-            INNER JOIN pos_releases r ON r.version = a.version
+            INNER JOIN pos_releases r
+              ON r.version COLLATE utf8mb4_unicode_ci = a.version COLLATE utf8mb4_unicode_ci
             WHERE a.store_id = @id
               AND a.status IN ('pending','downloading','failed')
             ORDER BY a.id DESC
@@ -354,8 +354,7 @@ public sealed class PosUpdateService : IPosUpdateService
 
     public async Task MarkAssignmentAsync(int assignmentId, string status, string? error = null, CancellationToken ct = default)
     {
-        await using var conn = CreateConnection();
-        await conn.OpenAsync(ct);
+        await using var conn = await OpenConnectionAsync(ct);
         await using var cmd = new MySqlCommand(
             """
             UPDATE pos_update_assignments
@@ -430,7 +429,7 @@ public sealed class PosUpdateService : IPosUpdateService
                 var publicBase = FirstNonEmpty(
                     DeriveUpdatesPublicUrl(cfg.PublicBaseUrl),
                     _config["App:UpdatesPublicBaseUrl"],
-                    "http://50.6.251.47/bills/updates/")!;
+                    "http://bills.cloudpharma.site/bills/updates/")!;
                 return $"{publicBase.TrimEnd('/')}/{fileName}";
             }
             finally
@@ -474,7 +473,7 @@ public sealed class PosUpdateService : IPosUpdateService
 
     private static string DeriveUpdatesPublicUrl(string billsUrl)
     {
-        if (string.IsNullOrWhiteSpace(billsUrl)) return "http://50.6.251.47/bills/updates/";
+        if (string.IsNullOrWhiteSpace(billsUrl)) return "http://bills.cloudpharma.site/bills/updates/";
         var u = billsUrl.Trim().TrimEnd('/');
         return u + "/updates/";
     }
@@ -610,8 +609,19 @@ public sealed class PosUpdateService : IPosUpdateService
             Password = password,
             SslMode = MySqlSslMode.Preferred,
             ConnectionTimeout = 20,
-            AllowUserVariables = true
+            AllowUserVariables = true,
+            CharacterSet = "utf8mb4"
         }.ConnectionString);
+    }
+
+    private async Task<MySqlConnection> OpenConnectionAsync(CancellationToken ct)
+    {
+        var conn = CreateConnection();
+        await conn.OpenAsync(ct);
+        // Match reporting schema (utf8mb4_unicode_ci). MySQL 8 clients often default to 0900_ai_ci.
+        await using (var cmd = new MySqlCommand("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci", conn))
+            await cmd.ExecuteNonQueryAsync(ct);
+        return conn;
     }
 
     private static async Task ExecAsync(MySqlConnection conn, string sql, CancellationToken ct)

@@ -117,6 +117,11 @@ public class BranchesTabViewModel : ObservableObject
             StatusMessage = "Branch saved.";
             await RefreshAsync();
         }
+        catch (Exception ex)
+        {
+            var detail = ex.InnerException?.Message ?? ex.Message;
+            _dialog.ShowError("Could not save branch.\n\n" + detail);
+        }
         finally { IsBusy = false; }
     }
 }

@@ -172,7 +172,11 @@ public sealed class BillingCounterService : IBillingCounterService
     }
 
     public async Task<Result<CounterSessionDto>> OpenSessionAsync(
-        int counterId, int userId, decimal openingFloat, CancellationToken ct = default)
+        int counterId,
+        int userId,
+        decimal openingFloat,
+        bool takeOverIfOpen = false,
+        CancellationToken ct = default)
     {
         if (openingFloat < 0)
             return Result.Failure<CounterSessionDto>("Opening float cannot be negative.");
@@ -198,14 +202,25 @@ public sealed class BillingCounterService : IBillingCounterService
             if (mine is not null)
                 return Result.Success(MapSession(mine));
 
-            var otherOnCounter = await _uow.Repository<CounterSession>().Query().AsNoTracking()
+            var otherOnCounter = await _uow.Repository<CounterSession>().Query()
                 .Include(s => s.User)
                 .FirstOrDefaultAsync(s => !s.IsDeleted && s.Status == CounterSessionStatus.Open
                                           && s.CounterId == counterId, ct);
             if (otherOnCounter is not null)
             {
-                return Result.Failure<CounterSessionDto>(
-                    $"Counter {counter.Code} is already open by {otherOnCounter.User?.FullName ?? "another operator"}.");
+                if (!takeOverIfOpen)
+                {
+                    return Result.Failure<CounterSessionDto>(
+                        $"Counter {counter.Code} is already open by {otherOnCounter.User?.FullName ?? "another operator"}.");
+                }
+
+                // Stale / left-open session — close it so this operator can bill.
+                var priorName = otherOnCounter.User?.FullName ?? $"User {otherOnCounter.UserId}";
+                otherOnCounter.Status = CounterSessionStatus.Closed;
+                otherOnCounter.ClosedAtUtc = _clock.UtcNow;
+                otherOnCounter.Remarks = TruncateRemark(
+                    $"Taken over by {user.FullName} (was open by {priorName}).");
+                _uow.Repository<CounterSession>().Update(otherOnCounter);
             }
 
             // Close any other open session for this user (one counter at a time).
@@ -560,8 +575,10 @@ public sealed class BillingCounterService : IBillingCounterService
         var label = variance > 0.009m ? "excess" : variance < -0.009m ? "shortage" : "matched";
         var auto = $"Counted ₹{counted:N2}; system ₹{expected:N2}; {label} ₹{Math.Abs(variance):N2}.";
         if (string.IsNullOrWhiteSpace(remarks))
-            return auto.Length <= 500 ? auto : auto[..500];
-        var combined = auto + " " + remarks.Trim();
-        return combined.Length <= 500 ? combined : combined[..500];
+            return TruncateRemark(auto);
+        return TruncateRemark(auto + " " + remarks.Trim());
     }
+
+    private static string TruncateRemark(string text)
+        => text.Length <= 500 ? text : text[..500];
 }

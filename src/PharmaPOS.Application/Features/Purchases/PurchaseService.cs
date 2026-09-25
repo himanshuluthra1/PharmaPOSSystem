@@ -147,7 +147,8 @@ public class PurchaseService : IPurchaseService
                 p.InvoiceNumber,
                 p.InvoiceDate,
                 p.Supplier != null ? p.Supplier.Name : $"Supplier #{p.SupplierId}",
-                p.SupplierInvoiceNumber))
+                p.SupplierInvoiceNumber,
+                p.IsPartialBill))
             .ToListAsync(ct);
     }
 
@@ -198,6 +199,7 @@ public class PurchaseService : IPurchaseService
             IsLocked = purchase.IsLocked,
             LockedBy = purchase.LockedBy,
             LockedAtUtc = purchase.LockedAtUtc,
+            IsPartialBill = purchase.IsPartialBill,
             Lines = purchase.Items.Select(i =>
             {
                 medNames.TryGetValue(i.MedicineId, out var medicineName);
@@ -359,7 +361,10 @@ public class PurchaseService : IPurchaseService
             return Result.Failure<PurchaseReceiptDto>("Add at least one item to the purchase.");
 
         var prefs = await _settings.GetPreferencesAsync(ct);
-        if (!prefs.AllowEditPurchaseBills && !CanManagePurchases())
+        var existingForGate = await _uow.Repository<Purchase>().Query().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == request.PurchaseId && p.Status == PurchaseStatus.Received, ct);
+        var allowBecausePartial = existingForGate?.IsPartialBill == true || request.IsPartialBill;
+        if (!prefs.AllowEditPurchaseBills && !CanManagePurchases() && !allowBecausePartial)
             return Result.Failure<PurchaseReceiptDto>(
                 "Editing purchase bills is turned off. An admin can enable it under Settings → Preferences.");
 
@@ -442,7 +447,11 @@ public class PurchaseService : IPurchaseService
         AdjustSupplierBalance(oldSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: true);
         await ReverseLinkedReturnCreditAsync(purchase, ct);
 
-        await RestorePurchaseStockAsync(purchase, branchId, ct);
+        // Stock is adjusted by delta in ApplyPurchaseLinesAsync (prior received vs new lines).
+        // Full reverse+reapply fails when any original batch was already sold.
+        var previousReceivedByKey = purchase.Items
+            .GroupBy(i => BatchKey(i.MedicineId, i.BatchNumber))
+            .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity + i.FreeQuantity));
 
         foreach (var oldItem in purchase.Items.ToList())
             _uow.Repository<PurchaseItem>().Remove(oldItem);
@@ -457,14 +466,16 @@ public class PurchaseService : IPurchaseService
         purchase.SupplierInvoiceNumber = request.SupplierInvoiceNumber;
         purchase.InvoiceDate = request.InvoiceDate == default ? purchase.InvoiceDate : request.InvoiceDate;
         purchase.Remarks = request.Remarks;
+        purchase.IsPartialBill = request.IsPartialBill;
 
-        var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
+        var totals = await ApplyPurchaseLinesAsync(
+            purchase, request.Lines, branchId, ct, previousReceivedByKey);
         ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
         await ApplyPartialPaymentReasonAsync(purchase, request, ct);
 
         AdjustSupplierBalance(newSupplier, purchase.GrandTotal, purchase.PaidAmount, reverse: false);
 
-        ApplyInvoiceLock(purchase);
+        ApplyOrClearInvoiceLock(purchase);
         _uow.Repository<Purchase>().Update(purchase);
         if (newSupplier.Id != oldSupplier.Id)
             _uow.Repository<Supplier>().Update(oldSupplier);
@@ -473,46 +484,71 @@ public class PurchaseService : IPurchaseService
         return purchase;
     }
 
-    private async Task RestorePurchaseStockAsync(Purchase purchase, int? branchId, CancellationToken ct)
+    private async Task ApplyPurchaseStockDeltasAsync(
+        Purchase purchase,
+        int? branchId,
+        IReadOnlyDictionary<(int MedicineId, string BatchNumber), decimal> previousReceivedByKey,
+        IReadOnlyDictionary<(int MedicineId, string BatchNumber), decimal> newReceivedByKey,
+        CancellationToken ct)
     {
-        foreach (var item in purchase.Items)
+        var keys = previousReceivedByKey.Keys.Union(newReceivedByKey.Keys).ToList();
+        foreach (var key in keys)
         {
-            var receivedQty = item.Quantity + item.FreeQuantity;
-            if (receivedQty <= 0) continue;
+            var oldQty = previousReceivedByKey.GetValueOrDefault(key);
+            var newQty = newReceivedByKey.GetValueOrDefault(key);
+            var delta = newQty - oldQty;
+            if (delta == 0m) continue;
 
-            if (item.MedicineBatchId is not int batchId)
-                continue;
-
-            var batch = await _uow.Repository<MedicineBatch>().GetByIdAsync(batchId, ct);
-            if (batch is null) continue;
-
-            if (batch.QuantityAvailable < receivedQty)
+            var batch = await _uow.Repository<MedicineBatch>().Query()
+                .FirstOrDefaultAsync(b => b.MedicineId == key.MedicineId
+                                          && b.BranchId == branchId
+                                          && b.BatchNumber == key.BatchNumber, ct);
+            if (batch is null)
             {
-                var medicine = await _uow.Repository<Medicine>().GetByIdAsync(item.MedicineId, ct);
-                throw new PurchaseException(
-                    $"Cannot edit: insufficient stock to reverse {medicine?.Name ?? "item"} batch {item.BatchNumber}.");
+                if (delta < 0m)
+                {
+                    var medicine = await _uow.Repository<Medicine>().GetByIdAsync(key.MedicineId, ct);
+                    throw new PurchaseException(
+                        $"Cannot edit: batch {key.BatchNumber} for {medicine?.Name ?? "item"} is missing and cannot be reversed.");
+                }
+
+                continue;
             }
 
-            batch.QuantityAvailable -= receivedQty;
+            if (delta < 0m && batch.QuantityAvailable < -delta)
+            {
+                var medicine = await _uow.Repository<Medicine>().GetByIdAsync(key.MedicineId, ct);
+                throw new PurchaseException(
+                    $"Cannot edit: insufficient stock to reverse {medicine?.Name ?? "item"} batch {key.BatchNumber} " +
+                    $"(need {-delta:0.####}, available {batch.QuantityAvailable:0.####}). " +
+                    "Reduce only what is still in stock, or restore stock first.");
+            }
+
+            batch.QuantityAvailable += delta;
             _uow.Repository<MedicineBatch>().Update(batch);
 
             await _uow.Repository<StockMovement>().AddAsync(new StockMovement
             {
                 BranchId = branchId,
-                MedicineId = item.MedicineId,
-                MedicineBatchId = batchId,
-                MovementType = StockMovementType.PurchaseReturn,
-                Quantity = receivedQty,
+                MedicineId = key.MedicineId,
+                MedicineBatchId = batch.Id,
+                MovementType = delta > 0m ? StockMovementType.PurchaseIn : StockMovementType.PurchaseReturn,
+                Quantity = Math.Abs(delta),
                 BalanceAfter = batch.QuantityAvailable,
-                UnitCost = item.PurchasePrice,
+                UnitCost = batch.PurchasePrice,
                 ReferenceType = nameof(Purchase),
                 ReferenceId = purchase.Id,
                 ReferenceNumber = purchase.InvoiceNumber,
                 MovementDateUtc = _clock.UtcNow,
-                Remarks = $"Reversal for edit {purchase.InvoiceNumber}"
+                Remarks = delta > 0m
+                    ? $"Edit increase {purchase.InvoiceNumber}"
+                    : $"Edit decrease {purchase.InvoiceNumber}"
             }, ct);
         }
     }
+
+    private static (int MedicineId, string BatchNumber) BatchKey(int medicineId, string? batchNumber)
+        => (medicineId, (batchNumber ?? string.Empty).Trim());
 
     private static void AdjustSupplierBalance(Supplier supplier, decimal grandTotal, decimal paidAmount, bool reverse)
     {
@@ -549,9 +585,10 @@ public class PurchaseService : IPurchaseService
             SupplierInvoiceNumber = request.SupplierInvoiceNumber,
             Remarks = request.Remarks,
             Status = PurchaseStatus.Received,
-            PurchaseOrderId = request.PurchaseOrderId is int linkedPo and > 0 ? linkedPo : null
+            PurchaseOrderId = request.PurchaseOrderId is int linkedPo and > 0 ? linkedPo : null,
+            IsPartialBill = request.IsPartialBill
         };
-        ApplyInvoiceLock(purchase);
+        ApplyOrClearInvoiceLock(purchase);
 
         var totals = await ApplyPurchaseLinesAsync(purchase, request.Lines, branchId, ct);
         ApplyPurchaseTotals(purchase, totals, request.PaidAmount);
@@ -611,9 +648,15 @@ public class PurchaseService : IPurchaseService
     private sealed record PurchaseTotals(decimal SubTotal, decimal Discount, decimal Taxable, decimal Tax);
 
     private async Task<PurchaseTotals> ApplyPurchaseLinesAsync(
-        Purchase purchase, IReadOnlyList<PurchaseLineRequest> lines, int? branchId, CancellationToken ct)
+        Purchase purchase,
+        IReadOnlyList<PurchaseLineRequest> lines,
+        int? branchId,
+        CancellationToken ct,
+        IReadOnlyDictionary<(int MedicineId, string BatchNumber), decimal>? previousReceivedByKey = null)
     {
         decimal subTotal = 0m, totalDiscount = 0m, totalTaxable = 0m, totalTax = 0m;
+        var isEdit = previousReceivedByKey is not null;
+        var newReceivedByKey = new Dictionary<(int MedicineId, string BatchNumber), decimal>();
 
         foreach (var line in lines)
         {
@@ -631,11 +674,13 @@ public class PurchaseService : IPurchaseService
             var taxAmount = Math.Round(taxable * line.GstPercent / 100m, 2);
             var lineTotal = taxable + taxAmount;
             var receivedQty = line.Quantity + line.FreeQuantity;
+            var key = BatchKey(line.MedicineId, line.BatchNumber);
+            newReceivedByKey[key] = newReceivedByKey.GetValueOrDefault(key) + receivedQty;
 
             var batch = await _uow.Repository<MedicineBatch>().Query()
                 .FirstOrDefaultAsync(b => b.MedicineId == line.MedicineId &&
                                           b.BranchId == branchId &&
-                                          b.BatchNumber == line.BatchNumber, ct);
+                                          b.BatchNumber == line.BatchNumber.Trim(), ct);
 
             if (batch is null)
             {
@@ -643,10 +688,11 @@ public class PurchaseService : IPurchaseService
                 {
                     MedicineId = line.MedicineId,
                     BranchId = branchId,
-                    BatchNumber = line.BatchNumber,
+                    BatchNumber = line.BatchNumber.Trim(),
                     ManufacturingDate = line.ManufacturingDate,
                     ExpiryDate = line.ExpiryDate,
-                    QuantityAvailable = receivedQty,
+                    // On edit, qty is applied via delta after all lines; on create, receive immediately.
+                    QuantityAvailable = isEdit ? 0m : receivedQty,
                     PurchasePrice = line.PurchasePrice,
                     Mrp = line.Mrp,
                     SellingPrice = line.SellingPrice > 0 ? line.SellingPrice : line.Mrp,
@@ -658,7 +704,8 @@ public class PurchaseService : IPurchaseService
             }
             else
             {
-                batch.QuantityAvailable += receivedQty;
+                if (!isEdit)
+                    batch.QuantityAvailable += receivedQty;
                 batch.PurchasePrice = line.PurchasePrice;
                 batch.Mrp = line.Mrp;
                 if (line.SellingPrice > 0) batch.SellingPrice = line.SellingPrice;
@@ -672,7 +719,7 @@ public class PurchaseService : IPurchaseService
             {
                 MedicineId = line.MedicineId,
                 MedicineBatchId = batch.Id,
-                BatchNumber = line.BatchNumber,
+                BatchNumber = line.BatchNumber.Trim(),
                 ManufacturingDate = line.ManufacturingDate,
                 ExpiryDate = line.ExpiryDate,
                 Quantity = line.Quantity,
@@ -688,21 +735,24 @@ public class PurchaseService : IPurchaseService
                 LineTotal = lineTotal
             });
 
-            await _uow.Repository<StockMovement>().AddAsync(new StockMovement
+            if (!isEdit)
             {
-                BranchId = branchId,
-                MedicineId = line.MedicineId,
-                MedicineBatchId = batch.Id,
-                MovementType = StockMovementType.PurchaseIn,
-                Quantity = receivedQty,
-                BalanceAfter = batch.QuantityAvailable,
-                UnitCost = line.PurchasePrice,
-                ReferenceType = nameof(Purchase),
-                ReferenceId = purchase.Id > 0 ? purchase.Id : null,
-                ReferenceNumber = purchase.InvoiceNumber,
-                MovementDateUtc = _clock.UtcNow,
-                Remarks = medicine.Name
-            }, ct);
+                await _uow.Repository<StockMovement>().AddAsync(new StockMovement
+                {
+                    BranchId = branchId,
+                    MedicineId = line.MedicineId,
+                    MedicineBatchId = batch.Id,
+                    MovementType = StockMovementType.PurchaseIn,
+                    Quantity = receivedQty,
+                    BalanceAfter = batch.QuantityAvailable,
+                    UnitCost = line.PurchasePrice,
+                    ReferenceType = nameof(Purchase),
+                    ReferenceId = purchase.Id > 0 ? purchase.Id : null,
+                    ReferenceNumber = purchase.InvoiceNumber,
+                    MovementDateUtc = _clock.UtcNow,
+                    Remarks = medicine.Name
+                }, ct);
+            }
 
             medicine.PurchasePrice = line.PurchasePrice;
             if (line.Mrp > 0) medicine.Mrp = line.Mrp;
@@ -713,6 +763,12 @@ public class PurchaseService : IPurchaseService
             totalDiscount += discountAmount;
             totalTaxable += taxable;
             totalTax += taxAmount;
+        }
+
+        if (isEdit)
+        {
+            await ApplyPurchaseStockDeltasAsync(
+                purchase, branchId, previousReceivedByKey!, newReceivedByKey, ct);
         }
 
         return new PurchaseTotals(subTotal, totalDiscount, totalTaxable, totalTax);
@@ -892,7 +948,8 @@ public class PurchaseService : IPurchaseService
             PaidAmount = purchase.PaidAmount,
             BalanceDue = purchase.GrandTotal > purchase.PaidAmount ? purchase.GrandTotal - purchase.PaidAmount : 0m,
             ReturnCreditApplied = purchase.ReturnCreditApplied,
-            PartialPaymentReason = purchase.PartialPaymentReason
+            PartialPaymentReason = purchase.PartialPaymentReason,
+            IsPartialBill = purchase.IsPartialBill
         };
 
         return Result.Success(receipt);
@@ -912,6 +969,14 @@ public class PurchaseService : IPurchaseService
         var user = _currentUser.CurrentUser;
         if (user is null) return "system";
         return string.IsNullOrWhiteSpace(user.Username) ? user.FullName : user.Username;
+    }
+
+    private void ApplyOrClearInvoiceLock(Purchase purchase)
+    {
+        if (purchase.IsPartialBill)
+            ClearInvoiceLock(purchase);
+        else
+            ApplyInvoiceLock(purchase);
     }
 
     private void ApplyInvoiceLock(Purchase purchase)

@@ -147,40 +147,68 @@ public class SettingsService : ISettingsService
             return Result.Failure<int>("Branch name is required.");
 
         var code = dto.Code.Trim().ToUpperInvariant();
-        var codeTaken = await _uow.Repository<Branch>().Query()
-            .AnyAsync(b => b.Code == code && b.Id != dto.Id, ct);
-        if (codeTaken)
+
+        // Include soft-deleted rows — unique index on Code still applies to them.
+        var clash = await _uow.Repository<Branch>().Query()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(b => b.Code == code && b.Id != dto.Id, ct);
+        if (clash is not null && !clash.IsDeleted)
             return Result.Failure<int>($"Branch code '{code}' is already in use.");
 
-        Branch entity;
-        if (dto.Id > 0)
+        try
         {
-            var existingEntity = await _uow.Repository<Branch>().GetByIdAsync(dto.Id, ct);
-            if (existingEntity is null)
-                return Result.Failure<int>("Branch not found.");
-            entity = existingEntity;
-        }
-        else
-        {
-            entity = new Branch();
-            await _uow.Repository<Branch>().AddAsync(entity, ct);
-        }
+            Branch entity;
+            if (dto.Id > 0)
+            {
+                var existingEntity = await _uow.Repository<Branch>().GetByIdAsync(dto.Id, ct);
+                if (existingEntity is null)
+                    return Result.Failure<int>("Branch not found.");
+                entity = existingEntity;
+            }
+            else if (clash is not null && clash.IsDeleted)
+            {
+                // Revive soft-deleted branch with this code instead of hitting unique index.
+                entity = clash;
+                entity.IsDeleted = false;
+                entity.DeletedAtUtc = null;
+                entity.DeletedBy = null;
+                dto.Id = clash.Id;
+            }
+            else
+            {
+                entity = new Branch();
+                await _uow.Repository<Branch>().AddAsync(entity, ct);
+            }
 
-        if (dto.IsHeadOffice)
-        {
-            var others = await _uow.Repository<Branch>().Query()
-                .Where(b => b.IsHeadOffice && b.Id != dto.Id)
-                .ToListAsync(ct);
-            foreach (var other in others)
-                other.IsHeadOffice = false;
-        }
+            if (dto.IsHeadOffice)
+            {
+                var others = await _uow.Repository<Branch>().Query()
+                    .Where(b => b.IsHeadOffice && b.Id != dto.Id)
+                    .ToListAsync(ct);
+                foreach (var other in others)
+                    other.IsHeadOffice = false;
+            }
 
-        ApplyBranch(entity, dto, code);
-        if (dto.Id > 0)
-            _uow.Repository<Branch>().Update(entity);
-        await _uow.SaveChangesAsync(ct);
-        await _reportingSync.EnqueueBranchAsync(entity.Id, ct);
-        return Result.Success(entity.Id);
+            ApplyBranch(entity, dto, code);
+            if (dto.Id > 0 || (clash is not null && clash.IsDeleted))
+                _uow.Repository<Branch>().Update(entity);
+            await _uow.SaveChangesAsync(ct);
+            await _reportingSync.EnqueueBranchAsync(entity.Id, ct);
+            return Result.Success(entity.Id);
+        }
+        catch (DbUpdateException ex)
+        {
+            var detail = ex.InnerException?.Message ?? ex.Message;
+            if (detail.Contains("IX_Branches_Code", StringComparison.OrdinalIgnoreCase)
+                || detail.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase))
+            {
+                return Result.Failure<int>(
+                    $"Branch code '{code}' is already in use (including a deleted branch). " +
+                    "Edit the existing branch, or pick a different code.");
+            }
+
+            return Result.Failure<int>("Could not save branch.\n\n" + detail);
+        }
     }
 
     public async Task<List<UserListDto>> ListUsersAsync(string term, CancellationToken ct = default)

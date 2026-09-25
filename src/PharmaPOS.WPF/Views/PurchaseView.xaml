@@ -425,6 +425,12 @@
                         <TextBlock Text="{Binding BalanceDue, Converter={StaticResource Currency}}"
                                    HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="#E53935" FontSize="12" />
                     </DockPanel>
+
+                    <CheckBox Margin="0,12,0,0"
+                              IsChecked="{Binding IsPartialBill}"
+                              IsEnabled="{Binding CanModifyBill}"
+                              Content="Partial bill — more medicines later"
+                              ToolTip="Tick when you only enter some items now (e.g. urgent sale). Stock is received for these lines; the bill stays unlocked so you can add the rest later. Untick and save when the full supplier invoice is entered." />
                 </StackPanel>
             </DockPanel>
         </materialDesign:Card>

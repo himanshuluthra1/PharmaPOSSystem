@@ -159,10 +159,20 @@ public sealed class CounterSelectViewModel : ObservableObject
         var user = _currentUser.CurrentUser;
         if (user is null) return;
 
+        var takeOver = false;
         if (SelectedCounter.HasOpenSession && SelectedCounter.OpenSessionUserId != user.UserId)
         {
-            ErrorMessage = $"Counter {SelectedCounter.Code} is open by {SelectedCounter.OpenOperatorName}.";
-            return;
+            var other = SelectedCounter.OpenOperatorName ?? "another operator";
+            takeOver = _dialog.Confirm(
+                $"Counter {SelectedCounter.Code} is currently open by {other}.\n\n" +
+                "Their session was probably left open (logout / crash). Take over this counter now?\n\n" +
+                "Their earlier bills stay on their session; you start a new session.",
+                "Take over counter");
+            if (!takeOver)
+            {
+                ErrorMessage = $"Counter {SelectedCounter.Code} is open by {other}.";
+                return;
+            }
         }
 
         // Same counter already active — just keep it.
@@ -178,7 +188,8 @@ public sealed class CounterSelectViewModel : ObservableObject
         ErrorMessage = null;
         try
         {
-            var result = await _counters.OpenSessionAsync(SelectedCounter.Id, user.UserId, OpeningFloat);
+            var result = await _counters.OpenSessionAsync(
+                SelectedCounter.Id, user.UserId, OpeningFloat, takeOver);
             if (result.IsFailure || result.Value is null)
             {
                 ErrorMessage = result.Error ?? "Could not open counter.";

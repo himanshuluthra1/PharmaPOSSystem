@@ -6,7 +6,7 @@ namespace PharmaPOS.Shared.Constants;
 public static class AppConstants
 {
     public const string ApplicationName = "PharmaPOS";
-    public const string ApplicationVersion = "1.3.10";
+    public const string ApplicationVersion = "1.3.12";
 
     public static class Roles
     {

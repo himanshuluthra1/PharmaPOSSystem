@@ -93,7 +93,15 @@ public interface IBillingCounterService
     Task EnsureDefaultCountersAsync(int? branchId, CancellationToken ct = default);
 
     Task<List<CounterPickDto>> ListForPickerAsync(int? branchId, CancellationToken ct = default);
-    Task<Result<CounterSessionDto>> OpenSessionAsync(int counterId, int userId, decimal openingFloat, CancellationToken ct = default);
+    /// <param name="takeOverIfOpen">
+    /// When true, auto-close another operator's open session on this counter and open for <paramref name="userId"/>.
+    /// </param>
+    Task<Result<CounterSessionDto>> OpenSessionAsync(
+        int counterId,
+        int userId,
+        decimal openingFloat,
+        bool takeOverIfOpen = false,
+        CancellationToken ct = default);
     Task<Result> CloseSessionAsync(int sessionId, decimal? declaredClosingCash, string? remarks, CancellationToken ct = default);
     Task<CounterSessionDto?> GetOpenSessionForUserAsync(int userId, CancellationToken ct = default);
 

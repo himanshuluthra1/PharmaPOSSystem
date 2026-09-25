@@ -40,6 +40,12 @@ public class Purchase : BranchEntity
     public DateTime? LockedAtUtc { get; set; }
     public string? LockedBy { get; set; }
 
+    /// <summary>
+    /// True when only some medicines from the supplier invoice were entered;
+    /// bill stays unlocked so remaining lines can be added later.
+    /// </summary>
+    public bool IsPartialBill { get; set; }
+
     /// <summary>Required when cash/bank paid is less than grand total.</summary>
     public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
     public string? PartialPaymentNotes { get; set; }

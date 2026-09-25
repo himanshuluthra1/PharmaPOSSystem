@@ -45,6 +45,7 @@ public class PurchaseViewModel : ObservableObject
     private bool _allowEditPurchaseBills;
     private bool _isInvoiceLocked;
     private string? _lockedBy;
+    private bool _isPartialBill;
 
     private PurchaseListItemDto? _selectedPurchase;
     private bool _suppressPurchaseSelection;
@@ -195,16 +196,16 @@ public class PurchaseViewModel : ObservableObject
     public bool CanModifyBill =>
         CanCreate
         && _financialYear.CanEditTransactions
-        && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked))
+        && (!IsEditing || (CanEditInvoices && !IsInvoiceLocked && (InvoiceEditEnabled || IsPartialBill)))
         && !IsBusy;
 
     public bool IsBillReadOnly =>
         !_financialYear.CanEditTransactions
-        || (IsEditing && !(InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
+        || (IsEditing && !(CanEditInvoices && !IsInvoiceLocked && (InvoiceEditEnabled || IsPartialBill)));
 
     public bool ShowSaveButton =>
         CanCreate && _financialYear.CanEditTransactions
-        && (!IsEditing || (InvoiceEditEnabled && CanEditInvoices && !IsInvoiceLocked));
+        && (!IsEditing || (CanEditInvoices && !IsInvoiceLocked && (InvoiceEditEnabled || IsPartialBill)));
 
     public bool CanUnlockBill =>
         IsEditing && IsInvoiceLocked && InvoiceEditEnabled && CanUnlockInvoices
@@ -297,6 +298,17 @@ public class PurchaseViewModel : ObservableObject
     {
         get => _invoiceDate;
         set => SetProperty(ref _invoiceDate, value);
+    }
+
+    /// <summary>Save only some medicines now; leave unlocked to add the rest later.</summary>
+    public bool IsPartialBill
+    {
+        get => _isPartialBill;
+        set
+        {
+            if (SetProperty(ref _isPartialBill, value))
+                NotifyBillEditStateChanged();
+        }
     }
 
     public void MoveSupplierSelection(int delta)
@@ -500,6 +512,7 @@ public class PurchaseViewModel : ObservableObject
         _editingPurchaseId = purchase.PurchaseId;
         IsInvoiceLocked = purchase.IsLocked;
         LockedBy = purchase.LockedBy;
+        IsPartialBill = purchase.IsPartialBill;
         NotifyBillEditStateChanged();
 
         _headerGrandTotal = purchase.GrandTotal;
@@ -535,6 +548,8 @@ public class PurchaseViewModel : ObservableObject
             return $"Viewing purchase {invoiceNumber} (your role cannot edit purchase invoices).";
         if (IsInvoiceLocked)
             return $"Purchase {invoiceNumber} is locked. Click Unlock to edit.";
+        if (IsPartialBill)
+            return $"Partial purchase {invoiceNumber} — add remaining medicines, then uncheck Partial bill and save.";
         return $"Editing purchase {invoiceNumber}. Save to update (re-locks on save).";
     }
 
@@ -944,6 +959,8 @@ public class PurchaseViewModel : ObservableObject
         }
 
         IsBusy = true;
+        int? savedPurchaseId = null;
+        var keepOpenAsPartial = false;
         try
         {
             await _purchaseGate.WaitAsync();
@@ -963,6 +980,7 @@ public class PurchaseViewModel : ObservableObject
                         PartialPaymentReason = partialReason,
                         PartialPaymentNotes = partialNotes,
                         LinkedPurchaseReturnId = linkedReturnId,
+                        IsPartialBill = IsPartialBill,
                         Lines = lineRequests
                     }, _currentUser.CurrentUser?.BranchId);
                 }
@@ -979,6 +997,7 @@ public class PurchaseViewModel : ObservableObject
                         PartialPaymentNotes = partialNotes,
                         LinkedPurchaseReturnId = linkedReturnId,
                         PurchaseOrderId = LinkedPurchaseOrderId,
+                        IsPartialBill = IsPartialBill,
                         Lines = lineRequests
                     }, _currentUser.CurrentUser?.BranchId);
                 }
@@ -990,32 +1009,46 @@ public class PurchaseViewModel : ObservableObject
                 }
 
                 var r = result.Value;
-                var savedId = r.PurchaseId;
+                savedPurchaseId = r.PurchaseId;
                 var wasEditing = _editingPurchaseId.HasValue;
+                keepOpenAsPartial = r.IsPartialBill;
 
-                StatusMessage = wasEditing
-                    ? $"Updated purchase {r.InvoiceNumber}. {r.ItemCount} item(s)."
-                    : $"Saved purchase {r.InvoiceNumber}. {r.ItemCount} item(s), stock received.";
+                StatusMessage = keepOpenAsPartial
+                    ? $"Partial purchase {r.InvoiceNumber} saved with {r.ItemCount} item(s). Add remaining medicines when ready."
+                    : wasEditing
+                        ? $"Updated purchase {r.InvoiceNumber}. {r.ItemCount} item(s)."
+                        : $"Saved purchase {r.InvoiceNumber}. {r.ItemCount} item(s), stock received.";
 
                 var creditLine = r.ReturnCreditApplied > 0
                     ? $"\nReturn credit applied: ₹{r.ReturnCreditApplied:N2}"
                     : string.Empty;
+                var partialLine = keepOpenAsPartial
+                    ? "\n\nMarked as partial — bill stays unlocked so you can add the rest later."
+                    : string.Empty;
                 _dialog.ShowInfo(
                     $"Purchase {r.InvoiceNumber} saved.\n\n" +
                     $"Items: {r.ItemCount}\nGrand total: ₹{r.GrandTotal:N2}\n" +
-                    $"Paid (incl. credit): ₹{r.PaidAmount:N2}{creditLine}\nBalance due: ₹{r.BalanceDue:N2}",
+                    $"Paid (incl. credit): ₹{r.PaidAmount:N2}{creditLine}\nBalance due: ₹{r.BalanceDue:N2}" +
+                    partialLine,
                     "Purchase saved");
 
                 await RefreshPurchaseHistoryCoreAsync(
-                    selectNewPurchase: !wasEditing,
-                    selectPurchaseId: wasEditing ? savedId : null);
+                    selectNewPurchase: !wasEditing && !keepOpenAsPartial,
+                    selectPurchaseId: (wasEditing || keepOpenAsPartial) ? savedPurchaseId : null);
             }
             finally
             {
                 _purchaseGate.Release();
             }
 
-            if (_editingPurchaseId is int editingId)
+            if (keepOpenAsPartial && savedPurchaseId is int partialId)
+            {
+                _lastDropdownPurchaseId = null;
+                var bill = PurchaseHistory.FirstOrDefault(p => p.PurchaseId == partialId);
+                if (bill is not null)
+                    await LoadPurchaseFromDropdownAsync(bill, focusGridAfterLoad: true);
+            }
+            else if (_editingPurchaseId is int editingId)
             {
                 _lastDropdownPurchaseId = null;
                 var bill = PurchaseHistory.FirstOrDefault(p => p.PurchaseId == editingId);
@@ -1059,6 +1092,7 @@ public class PurchaseViewModel : ObservableObject
         InvoiceDate = DateTime.Today;
         PaymentMethod = PaymentMethod.Cash;
         PaidAmount = 0;
+        IsPartialBill = false;
         _headerGrandTotal = 0;
         _editingPurchaseId = null;
         IsInvoiceLocked = false;

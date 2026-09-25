@@ -57,6 +57,12 @@ public class CreatePurchaseRequest
     /// <summary>When set, GRN receipt bumps ReceivedQuantity on the linked PO.</summary>
     public int? PurchaseOrderId { get; set; }
 
+    /// <summary>
+    /// Enter only some lines now (e.g. sell urgently); leave unchecked when the full bill is entered.
+    /// Partial bills stay unlocked for adding remaining medicines later.
+    /// </summary>
+    public bool IsPartialBill { get; set; }
+
     public List<PurchaseLineRequest> Lines { get; set; } = new();
 }
 
@@ -100,6 +106,7 @@ public class PurchaseReceiptDto
     public decimal BalanceDue { get; set; }
     public decimal ReturnCreditApplied { get; set; }
     public PurchasePartialPaymentReason? PartialPaymentReason { get; set; }
+    public bool IsPartialBill { get; set; }
 }
 
 /// <summary>A row in the purchase invoice history dropdown.</summary>
@@ -108,11 +115,14 @@ public record PurchaseListItemDto(
     string InvoiceNumber,
     DateTime InvoiceDate,
     string SupplierName,
-    string? SupplierInvoiceNumber = null)
+    string? SupplierInvoiceNumber = null,
+    bool IsPartialBill = false)
 {
     public string DisplayLabel => PurchaseId == 0
         ? $"{InvoiceNumber} (New)"
-        : $"{InvoiceNumber} - {InvoiceDate:dd/MM/yyyy hh:mm tt} - {SupplierName}";
+        : IsPartialBill
+            ? $"{InvoiceNumber} - {InvoiceDate:dd/MM/yyyy hh:mm tt} - {SupplierName} · Partial"
+            : $"{InvoiceNumber} - {InvoiceDate:dd/MM/yyyy hh:mm tt} - {SupplierName}";
 
     public bool IsNewPurchase => PurchaseId == 0;
 
@@ -151,6 +161,7 @@ public class PurchaseLoadDto
     public bool IsLocked { get; set; }
     public string? LockedBy { get; set; }
     public DateTime? LockedAtUtc { get; set; }
+    public bool IsPartialBill { get; set; }
     public List<PurchaseLoadLineDto> Lines { get; set; } = new();
 }
 
