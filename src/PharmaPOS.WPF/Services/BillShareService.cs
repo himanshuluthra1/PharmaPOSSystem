@@ -18,7 +18,8 @@ public enum BillShareChannel
     None = 0,
     WhatsApp = 1,
     Sms = 2,
-    Both = WhatsApp | Sms
+    Both = WhatsApp | Sms,
+    Telegram = 4
 }
 
 public interface IBillShareService
@@ -26,7 +27,7 @@ public interface IBillShareService
     bool ShouldOfferAfterSave(SaleReceiptDto receipt);
     void OfferShareAfterSave(SaleReceiptDto receipt);
 
-    /// <summary>One-click WhatsApp / SMS reminder for customer outstanding dues.</summary>
+    /// <summary>One-click WhatsApp / SMS / Telegram reminder for customer outstanding dues.</summary>
     void OfferDuesReminder(
         string customerName,
         string? phone,
@@ -39,10 +40,9 @@ public interface IBillShareService
 }
 
 /// <summary>
-/// Shares sale bills via WhatsApp / SMS.
-/// Preferred WhatsApp path: upload PDF to VPS over SFTP and include the public link in the message.
-/// Fallback (no VPS): copy PDF to clipboard + Explorer for manual attach.
-/// PDF upload and link open run in the background so the POS UI stays usable.
+/// Shares sale bills via WhatsApp / SMS / Telegram.
+/// Preferred path: upload PDF to VPS over SFTP and include the public link in the message.
+/// Fallback (no VPS): WhatsApp local PDF attach; Telegram opens share picker with text.
 /// </summary>
 public sealed class BillShareService : IBillShareService
 {
@@ -51,6 +51,7 @@ public sealed class BillShareService : IBillShareService
     private readonly IBillPdfUploadService _uploader;
     private readonly IUrlShortenerService _urlShortener;
     private readonly IWhatsAppDirectApiService _whatsAppApi;
+    private readonly ITelegramBotApiService _telegramApi;
     private readonly IDialogService _dialog;
 
     public BillShareService(
@@ -59,6 +60,7 @@ public sealed class BillShareService : IBillShareService
         IBillPdfUploadService uploader,
         IUrlShortenerService urlShortener,
         IWhatsAppDirectApiService whatsAppApi,
+        ITelegramBotApiService telegramApi,
         IDialogService dialog)
     {
         _settings = settings;
@@ -66,6 +68,7 @@ public sealed class BillShareService : IBillShareService
         _uploader = uploader;
         _urlShortener = urlShortener;
         _whatsAppApi = whatsAppApi;
+        _telegramApi = telegramApi;
         _dialog = dialog;
     }
 
@@ -73,7 +76,7 @@ public sealed class BillShareService : IBillShareService
     {
         var cfg = _settings.Current;
         if (!cfg.AskAfterSave) return false;
-        if (!cfg.EnableWhatsApp && !cfg.EnableSms) return false;
+        if (!cfg.EnableWhatsApp && !cfg.EnableSms && !cfg.EnableTelegram) return false;
         return receipt is not null;
     }
 
@@ -86,7 +89,8 @@ public sealed class BillShareService : IBillShareService
             receipt.InvoiceNumber,
             receipt.CustomerPhone,
             cfg.EnableWhatsApp,
-            cfg.EnableSms);
+            cfg.EnableSms,
+            cfg.EnableTelegram);
 
         var owner = System.Windows.Application.Current?.MainWindow;
         if (owner is not null && owner.IsLoaded && owner.IsVisible && !ReferenceEquals(owner, window))
@@ -101,15 +105,15 @@ public sealed class BillShareService : IBillShareService
         if (window.ShowDialog() != true || window.SelectedChannel == BillShareChannel.None)
             return;
 
+        var channel = window.SelectedChannel;
         var phone = NormalizePhone(window.EnteredPhone);
-        if (string.IsNullOrWhiteSpace(phone))
+        if (RequiresMobile(channel) && string.IsNullOrWhiteSpace(phone))
         {
             _dialog.ShowError("Enter a valid 10-digit mobile number to send the bill.");
             return;
         }
 
-        var channel = window.SelectedChannel;
-        _ = ShareInBackgroundAsync(receipt, channel, phone, cfg);
+        _ = ShareInBackgroundAsync(receipt, channel, phone ?? string.Empty, window.EnteredPhone, cfg);
     }
 
     public void OfferDuesReminder(
@@ -120,7 +124,7 @@ public sealed class BillShareService : IBillShareService
         IReadOnlyList<(string InvoiceNumber, decimal BalanceDue)>? openBills = null)
     {
         var cfg = _settings.Current;
-        if (!cfg.EnableWhatsApp && !cfg.EnableSms)
+        if (!cfg.EnableWhatsApp && !cfg.EnableSms && !cfg.EnableTelegram)
         {
             _dialog.ShowError("Enable WhatsApp or SMS sharing in Settings → Preferences.");
             return;
@@ -133,26 +137,28 @@ public sealed class BillShareService : IBillShareService
             hint: $"Outstanding: ₹ {outstanding:N2}. Send a polite payment reminder.",
             customerPhone: phone,
             enableWhatsApp: cfg.EnableWhatsApp,
-            enableSms: cfg.EnableSms);
+            enableSms: cfg.EnableSms,
+            enableTelegram: cfg.EnableTelegram);
 
         if (!ShowSharePrompt(window))
             return;
 
+        var channel = window.SelectedChannel;
         var normalized = NormalizePhone(window.EnteredPhone);
-        if (string.IsNullOrWhiteSpace(normalized))
+        if (RequiresMobile(channel) && string.IsNullOrWhiteSpace(normalized))
         {
             _dialog.ShowError("Enter a valid 10-digit mobile number.");
             return;
         }
 
         var message = BuildDuesReminderMessage(shop, customerName, outstanding, openBills);
-        _ = SendTextShareAsync(window.SelectedChannel, normalized, message, cfg);
+        _ = SendTextShareAsync(channel, normalized ?? string.Empty, window.EnteredPhone, message, cfg);
     }
 
     public void OfferCollectionShare(CustomerCollectionReceiptDto receipt)
     {
         var cfg = _settings.Current;
-        if (!cfg.EnableWhatsApp && !cfg.EnableSms)
+        if (!cfg.EnableWhatsApp && !cfg.EnableSms && !cfg.EnableTelegram)
             return;
 
         var window = new BillSharePromptWindow(
@@ -161,21 +167,26 @@ public sealed class BillShareService : IBillShareService
             hint: "WhatsApp / SMS the payment acknowledgment to the customer.",
             customerPhone: receipt.CustomerPhone,
             enableWhatsApp: cfg.EnableWhatsApp,
-            enableSms: cfg.EnableSms);
+            enableSms: cfg.EnableSms,
+            enableTelegram: cfg.EnableTelegram);
 
         if (!ShowSharePrompt(window))
             return;
 
+        var channel = window.SelectedChannel;
         var normalized = NormalizePhone(window.EnteredPhone);
-        if (string.IsNullOrWhiteSpace(normalized))
+        if (RequiresMobile(channel) && string.IsNullOrWhiteSpace(normalized))
         {
             _dialog.ShowError("Enter a valid 10-digit mobile number.");
             return;
         }
 
         var message = BuildCollectionMessage(receipt);
-        _ = SendTextShareAsync(window.SelectedChannel, normalized, message, cfg);
+        _ = SendTextShareAsync(channel, normalized ?? string.Empty, window.EnteredPhone, message, cfg);
     }
+
+    private static bool RequiresMobile(BillShareChannel channel)
+        => channel.HasFlag(BillShareChannel.WhatsApp) || channel.HasFlag(BillShareChannel.Sms);
 
     private bool ShowSharePrompt(BillSharePromptWindow window)
     {
@@ -195,6 +206,7 @@ public sealed class BillShareService : IBillShareService
     private async Task SendTextShareAsync(
         BillShareChannel channel,
         string phone,
+        string rawRecipient,
         string message,
         BillShareSettings cfg)
     {
@@ -219,6 +231,11 @@ public sealed class BillShareService : IBillShareService
             if (channel.HasFlag(BillShareChannel.Sms) && cfg.EnableSms)
             {
                 await RunOnUiAsync(() => OpenSms(phone, message)).ConfigureAwait(false);
+            }
+
+            if (channel.HasFlag(BillShareChannel.Telegram) && cfg.EnableTelegram)
+            {
+                await SendTelegramTextAsync(rawRecipient, message, cfg).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -272,6 +289,7 @@ public sealed class BillShareService : IBillShareService
         SaleReceiptDto receipt,
         BillShareChannel channel,
         string phone,
+        string rawRecipient,
         BillShareSettings cfg)
     {
         try
@@ -279,7 +297,8 @@ public sealed class BillShareService : IBillShareService
             string? pdfPath = null;
             string? publicUrl = null;
 
-            var needsPdf = channel.HasFlag(BillShareChannel.WhatsApp) && cfg.EnableWhatsApp
+            var needsPdf = (channel.HasFlag(BillShareChannel.WhatsApp) && cfg.EnableWhatsApp)
+                           || (channel.HasFlag(BillShareChannel.Telegram) && cfg.EnableTelegram)
                            || (channel.HasFlag(BillShareChannel.Sms) && cfg.EnableSms && _settings.IsVpsUploadConfigured);
 
             if (needsPdf)
@@ -301,7 +320,7 @@ public sealed class BillShareService : IBillShareService
                 {
                     var waMessage = BuildWhatsAppMessage(receipt, publicUrl);
                     var sentViaApi = await TrySendWhatsAppBillApiAsync(
-                        phone, receipt, publicUrl, waMessage, cfg).ConfigureAwait(true);
+                        phone, receipt, publicUrl, pdfPath, waMessage, cfg).ConfigureAwait(true);
 
                     if (!sentViaApi)
                     {
@@ -332,6 +351,12 @@ public sealed class BillShareService : IBillShareService
 
                 if (channel.HasFlag(BillShareChannel.Sms) && cfg.EnableSms)
                     OpenSms(phone, BuildMessage(receipt, publicUrl));
+
+                if (channel.HasFlag(BillShareChannel.Telegram) && cfg.EnableTelegram)
+                {
+                    var tgMessage = BuildWhatsAppMessage(receipt, publicUrl);
+                    await SendTelegramBillAsync(rawRecipient, tgMessage, publicUrl, cfg).ConfigureAwait(true);
+                }
             }).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -339,6 +364,103 @@ public sealed class BillShareService : IBillShareService
             await RunOnUiAsync(() => _dialog.ShowError($"Could not share bill: {ex.Message}"))
                 .ConfigureAwait(false);
         }
+    }
+
+    private async Task SendTelegramTextAsync(string rawRecipient, string message, BillShareSettings cfg)
+    {
+        var chatId = ResolveTelegramChatId(rawRecipient);
+        if (_telegramApi.IsConfigured && !string.IsNullOrWhiteSpace(chatId))
+        {
+            var result = await _telegramApi.SendTextAsync(chatId, message).ConfigureAwait(false);
+            if (result.Success)
+            {
+                await RunOnUiAsync(() =>
+                    _dialog.ShowInfo("Message sent on Telegram via Bot API.", "Telegram"))
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            await RunOnUiAsync(() =>
+                _dialog.ShowInfo(
+                    "Telegram Bot API send failed — opening Telegram share instead.\n\n" +
+                    (result.Error ?? ""),
+                    "Telegram")).ConfigureAwait(false);
+        }
+
+        await RunOnUiAsync(() =>
+        {
+            OpenTelegramShare(message, billUrl: null);
+            _dialog.ShowInfo(
+                "Telegram is open with the message.\nPick the customer chat and tap Send.",
+                "Telegram");
+        }).ConfigureAwait(false);
+    }
+
+    private async Task SendTelegramBillAsync(
+        string rawRecipient,
+        string message,
+        string? publicUrl,
+        BillShareSettings cfg)
+    {
+        var chatId = ResolveTelegramChatId(rawRecipient);
+        if (_telegramApi.IsConfigured && !string.IsNullOrWhiteSpace(chatId))
+        {
+            var result = await _telegramApi.SendTextAsync(chatId, message).ConfigureAwait(false);
+            if (result.Success)
+            {
+                var extra = string.IsNullOrWhiteSpace(publicUrl)
+                    ? string.Empty
+                    : $"\n\nBill PDF link:\n{publicUrl}";
+                _dialog.ShowInfo("Sale bill sent on Telegram via Bot API." + extra, "Telegram");
+                return;
+            }
+
+            _dialog.ShowInfo(
+                "Telegram Bot API send failed — opening Telegram share instead.\n\n" +
+                (result.Error ?? ""),
+                "Telegram");
+        }
+
+        OpenTelegramShare(message, publicUrl);
+        _dialog.ShowInfo(
+            publicUrl is null
+                ? "Telegram is open with the bill message.\nPick the customer chat and tap Send.\n\n" +
+                  "Tip: enable VPS upload in Preferences to include a PDF download link."
+                : "Telegram is open with the bill message and PDF link.\nPick the customer chat and tap Send.",
+            "Telegram");
+    }
+
+    /// <summary>
+    /// Bot API needs a chat id or @username. A plain Indian mobile number is not enough —
+    /// those fall through to the Telegram share picker.
+    /// </summary>
+    internal static string? ResolveTelegramChatId(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var value = raw.Trim();
+        if (value.StartsWith('@') && value.Length > 1)
+            return value;
+        // Numeric Telegram chat ids (users / groups / channels), including negative group ids.
+        if (Regex.IsMatch(value, @"^-?\d{5,}$"))
+            return value;
+        return null;
+    }
+
+    private static void OpenTelegramShare(string message, string? billUrl)
+    {
+        // t.me/share prefers url= for link previews; put remaining text in text=.
+        var urlPart = string.IsNullOrWhiteSpace(billUrl) ? string.Empty : billUrl.Trim();
+        var textPart = message ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(urlPart)
+            && textPart.Contains(urlPart, StringComparison.OrdinalIgnoreCase))
+        {
+            // Avoid duplicating the URL in both query params.
+        }
+
+        var shareUrl =
+            "https://t.me/share/url?url=" + Uri.EscapeDataString(string.IsNullOrWhiteSpace(urlPart) ? " " : urlPart)
+            + "&text=" + Uri.EscapeDataString(textPart);
+        OpenUrl(shareUrl);
     }
 
     /// <returns>True when the message was sent via Cloud API (caller should not open Desktop).</returns>
@@ -377,6 +499,7 @@ public sealed class BillShareService : IBillShareService
         string phone,
         SaleReceiptDto receipt,
         string? publicUrl,
+        string? pdfPath,
         string plainMessage,
         BillShareSettings cfg)
     {
@@ -388,16 +511,23 @@ public sealed class BillShareService : IBillShareService
             receipt.InvoiceNumber,
             receipt.GrandTotal,
             publicUrl,
-            plainMessage).ConfigureAwait(false);
+            plainMessage,
+            pdfPath).ConfigureAwait(false);
 
         if (result.Success)
         {
-            var extra = string.IsNullOrWhiteSpace(publicUrl)
+            var pdfNote = result.PdfAttached
+                ? "\n\nBill PDF attached."
+                : pdfPath is null
+                    ? string.Empty
+                    : "\n\nBill PDF could not be attached" +
+                      (string.IsNullOrWhiteSpace(result.PdfError) ? "." : $": {result.PdfError}");
+            var linkNote = string.IsNullOrWhiteSpace(publicUrl)
                 ? string.Empty
                 : $"\n\nBill PDF link:\n{publicUrl}";
             await RunOnUiAsync(() =>
                 _dialog.ShowInfo(
-                    "Sale bill sent on WhatsApp via Cloud API." + extra,
+                    "Sale bill sent on WhatsApp via Cloud API." + pdfNote + linkNote,
                     "WhatsApp")).ConfigureAwait(false);
             return true;
         }

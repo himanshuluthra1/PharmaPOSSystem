@@ -5,11 +5,12 @@ public sealed class BillShareSettings
 {
     public bool EnableWhatsApp { get; set; } = true;
     public bool EnableSms { get; set; } = true;
+    public bool EnableTelegram { get; set; } = false;
     public bool AskAfterSave { get; set; } = true;
 
     /// <summary>
     /// When true, bill PDFs are uploaded to the VPS over SFTP and the public URL
-    /// is included in the WhatsApp / SMS text (customer opens the link).
+    /// is included in the WhatsApp / SMS / Telegram text (customer opens the link).
     /// </summary>
     public bool EnableVpsUpload { get; set; }
 
@@ -24,7 +25,7 @@ public sealed class BillShareSettings
     /// <summary>Remote folder on the VPS, e.g. /var/www/bills</summary>
     public string SftpRemoteDirectory { get; set; } = "/var/www/html/bills";
 
-    /// <summary>When true, shorten the public PDF URL via TinyURL before WhatsApp/SMS.</summary>
+    /// <summary>When true, shorten the public PDF URL via TinyURL before WhatsApp/SMS/Telegram.</summary>
     public bool EnableTinyUrl { get; set; } = true;
 
     /// <summary>
@@ -54,4 +55,13 @@ public sealed class BillShareSettings
 
     /// <summary>If API send fails, fall back to opening WhatsApp Desktop.</summary>
     public bool WhatsAppApiDesktopFallback { get; set; } = true;
+
+    /// <summary>
+    /// When true and a bot token is set, Telegram sends via Bot API when the recipient
+    /// field is a chat id / @username. Otherwise Telegram share picker opens.
+    /// </summary>
+    public bool EnableTelegramBot { get; set; }
+
+    /// <summary>Bot token from @BotFather (e.g. 123456:ABC…).</summary>
+    public string TelegramBotToken { get; set; } = string.Empty;
 }

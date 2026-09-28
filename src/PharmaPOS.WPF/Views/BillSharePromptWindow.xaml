@@ -39,6 +39,10 @@
             <Button x:Name="SmsButton" Margin="6,0,0,6" Padding="12,8" Height="40"
                     Style="{StaticResource MaterialDesignOutlinedButton}"
                     Click="Sms_Click" Content="SMS" />
+            <Button x:Name="TelegramButton" Margin="0,6,6,0" Padding="12,8" Height="40"
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Click="Telegram_Click" Content="Telegram"
+                    Visibility="Collapsed" />
             <Button x:Name="BothButton" Margin="0,6,6,0" Padding="12,8" Height="40"
                     Style="{StaticResource MaterialDesignOutlinedButton}"
                     Click="Both_Click" Content="Both" />

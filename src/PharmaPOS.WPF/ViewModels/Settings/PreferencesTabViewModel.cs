@@ -33,6 +33,7 @@ public class PreferencesTabViewModel : ObservableObject
     private string _geminiModel = "gemini-flash-lite-latest";
     private bool _enableWhatsAppShare = true;
     private bool _enableSmsShare = true;
+    private bool _enableTelegramShare;
     private bool _askShareAfterSave = true;
     private bool _enableWhatsAppApi;
     private string _whatsAppAccessToken = string.Empty;
@@ -41,6 +42,8 @@ public class PreferencesTabViewModel : ObservableObject
     private string _whatsAppBillTemplateName = string.Empty;
     private string _whatsAppBillTemplateLanguage = "en";
     private bool _whatsAppApiDesktopFallback = true;
+    private bool _enableTelegramBot;
+    private string _telegramBotToken = string.Empty;
     private bool _enableVpsUpload;
     private string _publicBaseUrl = string.Empty;
     private string _sftpHost = string.Empty;
@@ -156,6 +159,12 @@ public class PreferencesTabViewModel : ObservableObject
         set => SetProperty(ref _enableSmsShare, value);
     }
 
+    public bool EnableTelegramShare
+    {
+        get => _enableTelegramShare;
+        set => SetProperty(ref _enableTelegramShare, value);
+    }
+
     public bool AskShareAfterSave
     {
         get => _askShareAfterSave;
@@ -204,6 +213,18 @@ public class PreferencesTabViewModel : ObservableObject
     {
         get => _whatsAppApiDesktopFallback;
         set => SetProperty(ref _whatsAppApiDesktopFallback, value);
+    }
+
+    public bool EnableTelegramBot
+    {
+        get => _enableTelegramBot;
+        set => SetProperty(ref _enableTelegramBot, value);
+    }
+
+    public string TelegramBotToken
+    {
+        get => _telegramBotToken;
+        set => SetProperty(ref _telegramBotToken, value ?? string.Empty);
     }
 
     public bool EnableVpsUpload
@@ -397,6 +418,7 @@ public class PreferencesTabViewModel : ObservableObject
         var s = _billShareSettings.Current;
         EnableWhatsAppShare = s.EnableWhatsApp;
         EnableSmsShare = s.EnableSms;
+        EnableTelegramShare = s.EnableTelegram;
         AskShareAfterSave = s.AskAfterSave;
         EnableWhatsAppApi = s.EnableWhatsAppApi;
         WhatsAppAccessToken = s.WhatsAppAccessToken;
@@ -405,6 +427,8 @@ public class PreferencesTabViewModel : ObservableObject
         WhatsAppBillTemplateName = s.WhatsAppBillTemplateName;
         WhatsAppBillTemplateLanguage = s.WhatsAppBillTemplateLanguage;
         WhatsAppApiDesktopFallback = s.WhatsAppApiDesktopFallback;
+        EnableTelegramBot = s.EnableTelegramBot;
+        TelegramBotToken = s.TelegramBotToken;
         EnableVpsUpload = s.EnableVpsUpload;
         PublicBaseUrl = s.PublicBaseUrl;
         SftpHost = s.SftpHost;
@@ -488,6 +512,7 @@ public class PreferencesTabViewModel : ObservableObject
             {
                 EnableWhatsApp = EnableWhatsAppShare,
                 EnableSms = EnableSmsShare,
+                EnableTelegram = false,
                 AskAfterSave = AskShareAfterSave,
                 EnableWhatsAppApi = EnableWhatsAppApi,
                 WhatsAppAccessToken = WhatsAppAccessToken.Trim(),
@@ -496,6 +521,8 @@ public class PreferencesTabViewModel : ObservableObject
                 WhatsAppBillTemplateName = WhatsAppBillTemplateName.Trim(),
                 WhatsAppBillTemplateLanguage = WhatsAppBillTemplateLanguage.Trim(),
                 WhatsAppApiDesktopFallback = WhatsAppApiDesktopFallback,
+                EnableTelegramBot = false,
+                TelegramBotToken = string.Empty,
                 EnableVpsUpload = EnableVpsUpload,
                 PublicBaseUrl = PublicBaseUrl.Trim(),
                 SftpHost = SftpHost.Trim(),

@@ -9,14 +9,16 @@ public partial class BillSharePromptWindow : Window
         string invoiceNumber,
         string? customerPhone,
         bool enableWhatsApp,
-        bool enableSms)
+        bool enableSms,
+        bool enableTelegram = false)
         : this(
             title: "Send bill to customer",
             headline: $"Invoice {invoiceNumber}",
             hint: "WhatsApp / SMS the bill. Enter the customer mobile if it is blank.",
             customerPhone: customerPhone,
             enableWhatsApp: enableWhatsApp,
-            enableSms: enableSms)
+            enableSms: enableSms,
+            enableTelegram: enableTelegram)
     {
     }
 
@@ -26,7 +28,8 @@ public partial class BillSharePromptWindow : Window
         string hint,
         string? customerPhone,
         bool enableWhatsApp,
-        bool enableSms)
+        bool enableSms,
+        bool enableTelegram = false)
     {
         InitializeComponent();
         Title = title;
@@ -36,6 +39,7 @@ public partial class BillSharePromptWindow : Window
 
         WhatsAppButton.Visibility = enableWhatsApp ? Visibility.Visible : Visibility.Collapsed;
         SmsButton.Visibility = enableSms ? Visibility.Visible : Visibility.Collapsed;
+        TelegramButton.Visibility = enableTelegram ? Visibility.Visible : Visibility.Collapsed;
         BothButton.Visibility = enableWhatsApp && enableSms ? Visibility.Visible : Visibility.Collapsed;
 
         Loaded += (_, _) =>
@@ -53,6 +57,8 @@ public partial class BillSharePromptWindow : Window
 
     private void Sms_Click(object sender, RoutedEventArgs e) => Accept(BillShareChannel.Sms);
 
+    private void Telegram_Click(object sender, RoutedEventArgs e) => Accept(BillShareChannel.Telegram);
+
     private void Both_Click(object sender, RoutedEventArgs e) => Accept(BillShareChannel.Both);
 
     private void Skip_Click(object sender, RoutedEventArgs e)
@@ -63,7 +69,8 @@ public partial class BillSharePromptWindow : Window
 
     private void Accept(BillShareChannel channel)
     {
-        if (string.IsNullOrWhiteSpace(BillShareService.NormalizePhone(EnteredPhone)))
+        var needsMobile = channel.HasFlag(BillShareChannel.WhatsApp) || channel.HasFlag(BillShareChannel.Sms);
+        if (needsMobile && string.IsNullOrWhiteSpace(BillShareService.NormalizePhone(EnteredPhone)))
         {
             MessageBox.Show(
                 "Enter a valid 10-digit mobile number.",

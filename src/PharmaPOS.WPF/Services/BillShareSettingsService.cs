@@ -10,6 +10,7 @@ public interface IBillShareSettingsService
     void Save(BillShareSettings settings);
     bool IsVpsUploadConfigured { get; }
     bool IsWhatsAppApiConfigured { get; }
+    bool IsTelegramBotConfigured { get; }
 }
 
 public sealed class BillShareSettingsService : IBillShareSettingsService
@@ -68,6 +69,19 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
         }
     }
 
+    public bool IsTelegramBotConfigured
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current.EnableTelegram
+                       && _current.EnableTelegramBot
+                       && !string.IsNullOrWhiteSpace(_current.TelegramBotToken);
+            }
+        }
+    }
+
     public void Load()
     {
         lock (_gate)
@@ -96,6 +110,10 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
                 // Old files omit WhatsAppApiDesktopFallback — default ON.
                 if (json.IndexOf("whatsAppApiDesktopFallback", StringComparison.OrdinalIgnoreCase) < 0)
                     _current.WhatsAppApiDesktopFallback = true;
+
+                // Telegram share is disabled for now (Bot API cannot target a mobile number).
+                _current.EnableTelegram = false;
+                _current.EnableTelegramBot = false;
             }
             catch
             {
@@ -119,6 +137,7 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
     {
         EnableWhatsApp = s.EnableWhatsApp,
         EnableSms = s.EnableSms,
+        EnableTelegram = s.EnableTelegram,
         AskAfterSave = s.AskAfterSave,
         EnableVpsUpload = s.EnableVpsUpload,
         PublicBaseUrl = s.PublicBaseUrl?.Trim() ?? string.Empty,
@@ -140,6 +159,8 @@ public sealed class BillShareSettingsService : IBillShareSettingsService
         WhatsAppBillTemplateLanguage = string.IsNullOrWhiteSpace(s.WhatsAppBillTemplateLanguage)
             ? "en"
             : s.WhatsAppBillTemplateLanguage.Trim(),
-        WhatsAppApiDesktopFallback = s.WhatsAppApiDesktopFallback
+        WhatsAppApiDesktopFallback = s.WhatsAppApiDesktopFallback,
+        EnableTelegramBot = s.EnableTelegramBot,
+        TelegramBotToken = s.TelegramBotToken?.Trim() ?? string.Empty
     };
 }

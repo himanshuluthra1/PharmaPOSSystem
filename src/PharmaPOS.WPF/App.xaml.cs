@@ -65,6 +65,11 @@ public partial class App : System.Windows.Application
             client.Timeout = TimeSpan.FromSeconds(45);
         });
         services.AddSingleton<IWhatsAppDirectApiService, WhatsAppDirectApiService>();
+        services.AddHttpClient(TelegramBotApiService.HttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(45);
+        });
+        services.AddSingleton<ITelegramBotApiService, TelegramBotApiService>();
         services.AddSingleton<IBillShareService, BillShareService>();
         services.AddSingleton<MySqlSyncSettingsService>();
         services.AddSingleton<IMySqlSyncSettingsService>(sp => sp.GetRequiredService<MySqlSyncSettingsService>());
